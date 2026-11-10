@@ -1,11 +1,44 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Glitchling</title><style>body{background:#000;color:#0f6;font-family:monospace;max-width:900px;margin:auto;padding:2em}h1{color:#f04;text-shadow:3px 0 #0ff,-3px 0 #f0f}table{border-collapse:collapse}td,th{border:1px solid #0f6;padding:4px 10px}img{max-width:100%}</style></head><body>
-<h1>GLITCHLING</h1><p>A deliberately broken baby clone of Creature #1. Four engineered flaws: scrambled senses, leaky memory, backwards motors, misfiring mutations. 2 sim-days, 2 seeds per condition.</p>
-<img src="results/cursed_portrait.png" alt="cursed portrait"><img src="results/glitchling.png" alt="results plot">
-<table><tr><th>condition</th><th>forages</th><th>rewards</th><th>success</th><th>mean glucose</th><th>fat end</th><th>survived</th></tr>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><meta name="theme-color" content="#000000">
+<title>Glitchling</title>
+<meta name="description" content="Glitchling: a deliberately broken baby clone of Creature #1. Play the live browser sim or browse the one-day jam showcase.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23c58bff'/%3E%3Ccircle cx='6' cy='7' r='1.5' fill='%23000'/%3E%3Ccircle cx='10' cy='7' r='1.5' fill='%23000'/%3E%3C/svg%3E">
+<style>
+*{box-sizing:border-box}body{background:#000;color:#0f6;font-family:ui-monospace,Menlo,Consolas,monospace;max-width:900px;margin:auto;padding:1.25rem;line-height:1.55}
+h1{color:#f04;text-shadow:3px 0 #0ff,-3px 0 #f0f;font-size:clamp(2.2rem,9vw,4rem);letter-spacing:.08em;margin:.4rem 0}
+h2{color:#0ff;font-size:1rem;letter-spacing:.12em;text-transform:uppercase;margin:2rem 0 .5rem}
+a{color:#0ff}a:focus-visible{outline:2px solid #0f6;outline-offset:2px}
+.cards{display:grid;gap:.9rem;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin:1.25rem 0}
+.card{display:block;border:1px solid #0f6;border-radius:12px;padding:1rem 1.1rem;text-decoration:none;color:#0f6;background:linear-gradient(180deg,#06140c,#000);transition:transform .15s,box-shadow .15s}
+.card:hover,.card:focus-visible{transform:translateY(-2px);box-shadow:0 0 0 1px #0ff,4px 0 0 #f0f,-4px 0 0 #0ff}
+.card b{display:block;font-size:1.2rem;color:#fff;margin-bottom:.25rem}.card.play{border-color:#f0f;background:linear-gradient(180deg,#1a0418,#000)}.card.play b{color:#f6f}
+.card span{color:#9ab;font-size:.9rem}
+.note{color:#9ab;font-size:.85rem}.tag{display:inline-block;background:#b91c1c;color:#fff;border-radius:4px;padding:0 .4rem;font-size:.75rem;font-weight:700}
+.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%}td,th{border:1px solid #0f6;padding:4px 10px;text-align:right}td:first-child,th:first-child{text-align:left}
+img{max-width:100%;height:auto;display:block}.imgs{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+@media (prefers-reduced-motion:reduce){.card{transition:none}.card:hover{transform:none}}
+</style></head><body>
+<h1>GLITCHLING</h1>
+<p>A deliberately broken baby clone of Creature #1. Four engineered flaws: scrambled senses, leaky memory, backwards motors, misfiring mutations.</p>
+<nav class="cards" aria-label="Main">
+  <a class="card play" href="play/"><b>▶ Play the live sim</b><span>Toggle the four flaws, drop food, watch its 272-neuron brain light up. Runs in your browser, phone or desktop. Simplified JS port.</span></a>
+  <a class="card" href="site/"><b>Jam showcase</b><span>The full one-day jam: art, results v2, brain viz, Mini World, HDR renders, write-up.</span></a>
+  <a class="card" href="brain-viz/"><b>Brain viz (real data)</b><span>Playback of real activations from the TypeScript run (all flaws, seed 1, day 1).</span></a>
+</nav>
+<p class="note"><span class="tag">REAL vs SIMULATED</span> The <a href="play/">play</a> page is a simplified browser re-implementation for exploring the flaws; it is not the TypeScript reference run and its numbers won't match. The results below and in the showcase come from the TypeScript sim (<code>glitchling.ts</code> + <code>core/</code>). No consciousness claims.</p>
+
+<h2>Original sim page: results (v1)</h2>
+<p>2 sim-days, 2 seeds per condition.</p>
+<div class="imgs"><img src="results/cursed_portrait.png" alt="cursed portrait" width="550" height="550"><img src="results/glitchling.png" alt="results plot" width="1024" height="370"></div>
+<div class="tbl"><table><tr><th>condition</th><th>forages</th><th>rewards</th><th>success</th><th>mean glucose</th><th>fat end</th><th>survived</th></tr>
 <tr><td>baseline</td><td>174.5</td><td>63.0</td><td>0.350</td><td>3.73</td><td>364.7</td><td>2/2</td></tr>
 <tr><td>scramble</td><td>189.5</td><td>57.5</td><td>0.302</td><td>3.36</td><td>356.4</td><td>2/2</td></tr>
 <tr><td>leaky</td><td>176.5</td><td>61.0</td><td>0.349</td><td>3.43</td><td>360.8</td><td>2/2</td></tr>
 <tr><td>backwards</td><td>189.0</td><td>57.0</td><td>0.301</td><td>3.35</td><td>355.8</td><td>2/2</td></tr>
 <tr><td>misfire</td><td>183.5</td><td>58.5</td><td>0.316</td><td>3.43</td><td>357.9</td><td>2/2</td></tr>
-<tr><td>ALL FLAWS</td><td>226.5</td><td>64.0</td><td>0.291</td><td>3.67</td><td>364.4</td><td>2/2</td></tr></table>
-<p>It's broken, it's hungry, and it's still alive. n=2 seeds per condition, so treat this as a toy.</p></body></html>
+<tr><td>ALL FLAWS</td><td>226.5</td><td>64.0</td><td>0.291</td><td>3.67</td><td>364.4</td><td>2/2</td></tr></table></div>
+<p>It's broken, it's hungry, and it's still alive. n=2 seeds per condition, so treat this as a toy.</p>
+<p class="note">These are the v1 (“mild”) numbers from the original sim page. The v2 numbers (flaw defaults matching the brief) are in the <a href="site/#sim">showcase</a>. Raw data: <a href="results/summary.csv">summary.csv</a>.</p>
+<p class="note">Source: <a href="https://github.com/0thernes/glitchling-jam">github.com/0thernes/glitchling-jam</a></p>
+</body></html>

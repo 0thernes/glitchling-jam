@@ -2,7 +2,8 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Glitchling: one-day art jam showcase</title><link rel="stylesheet" href="style.css"></head>
 <body><a class="skip" href="#main">Skip to content</a>
-<header><h1>Glitchling</h1><p>A one-day jam (Sun Nov 1, 2026): a deliberately broken baby clone of Creature #1.</p></header>
+<header><h1>Glitchling</h1><p>A one-day jam (Sun Nov 1, 2026): a deliberately broken baby clone of Creature #1.</p>
+<p><a class="badge" href="../play/">▶ Play the live browser sim</a> <span class="note">(simplified JS port, not the TypeScript run)</span></p></header>
 <main id="main">
 <section aria-labelledby="intro"><h2 id="intro">About the jam</h2>
 <p>Glitchling is a deliberately broken baby clone of Creature #1. <code>core/</code> is a copy of the Creature #1 organism code from <code>Asmodensius-v40/creatures/001/organism</code>. The only change is that the copies' absolute imports were rewritten to relative paths, and the diag/trace files that needed the test suite were dropped. <code>glitchling.ts</code> subclasses <code>Organism</code> and adds four flaws you can switch on and off. The original repos are untouched.</p>
@@ -62,7 +63,7 @@ nice -n 19 bun run glitchling.ts 2 2      # days=2, seeds=2 → results/results.
 <section aria-labelledby="brain"><h2 id="brain">Brain viz (real data): Neuralese</h2>
 <p>This plays back the real activations from <code>results/activations_allflaws_seed1.json</code> (all flaws on, seed 1, day 1): 272 neurons in 14 regions, 144 frames. It runs offline and has a REAL/SIMULATED toggle. The viewer notes on screen that this region-based brain is not the Creature #1 canvas MLP layout.</p>
 <figure><img src="../brain-viz/screenshot.png" alt="Brain viz in REAL DATA mode at frame 61 of 144: 14 columns of neuron dots for the brain regions (SENS, THAL, CTX, HIP, STR, HYP, VTA, RAPHE, LC, BF, INS, SCN, MOT, ENS), with LC, INS and ENS lit bright green; a bar chart of the 16 learned site values; and a blood glucose trace at 5.854" width="1400" height="850"><figcaption>brain-viz/screenshot.png (real data, frame 61). By Neuralese.</figcaption></figure>
-<p><a href="../brain-viz/index.html">Open the interactive brain viz</a> (local HTML, no network needed)</p></section>
+<p><a href="../brain-viz/index.html">Open the interactive brain viz</a> (local HTML, no network needed) · <a href="../play/">Play the live sim</a> (simplified browser port)</p></section>
 
 <section aria-labelledby="mini"><h2 id="mini">Mini World integration: Artificial Life</h2>
 <p class="note"><strong>Version note:</strong> everything below is Artificial Life's <strong>v1 toy model</strong> (files in <code>artifacts/artificial-life/v1-toy/</code>), which is what NOTES.md describes.</p>

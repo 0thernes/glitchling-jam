@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark"><meta name="theme-color" content="#07060b">
+<title>Play Glitchling: live browser sim</title>
+<meta name="description" content="A live, playable browser port of Glitchling, a deliberately broken baby clone of Creature #1. Toggle its four flaws and watch it forage.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Ccircle cx=%278%27 cy=%278%27 r=%277%27 fill=%27%23c58bff%27/%3E%3Ccircle cx=%276%27 cy=%277%27 r=%271.5%27 fill=%27%23000%27/%3E%3Ccircle cx=%2710%27 cy=%277%27 r=%271.5%27 fill=%27%23000%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#world">Skip to the sim</a>
+<header class="top">
+  <h1 class="glitch" data-text="GLITCHLING">GLITCHLING</h1>
+  <p class="sub">Live playable browser sim · <a href="../">home</a> · <a href="../site/">jam showcase</a></p>
+  <p class="honest" role="note"><span class="tag sim">SIMPLIFIED PORT</span> This is a simplified JavaScript re-implementation that runs in your browser. It is <strong>not</strong> the TypeScript reference run (<code>glitchling.ts</code> + <code>core/organism.ts</code>), and its numbers will not match the published results. <a href="#about">What's real vs simplified</a>.</p>
+</header>
+
+<main class="grid">
+  <section class="panel world-panel" aria-labelledby="h-world">
+    <div class="panel-h"><h2 id="h-world">World</h2><span class="clock" id="clock">day 1 · 00:00</span></div>
+    <div class="canvas-wrap world-wrap"><canvas id="world" role="img" aria-label="Foraging world: 16 food sites in a 4 by 4 grid and the creature. Tap or click to drop food." tabindex="0"></canvas>
+      <div class="toast" id="toast" aria-live="polite"></div></div>
+    <p class="hint">Tap / click anywhere in the world to drop food. With <b>backwards</b> on, watch it run to the mirror site. With <b>scramble</b> on, it may smell the food somewhere else.</p>
+  </section>
+
+  <section class="panel controls" aria-labelledby="h-ctl">
+    <div class="panel-h"><h2 id="h-ctl">Controls</h2></div>
+    <div class="row transport">
+      <button id="play" class="btn primary" aria-pressed="true">❚❚ Pause</button>
+      <button id="step" class="btn" title="Advance one tick">Step</button>
+      <button id="reset" class="btn" title="Restart with this seed">Reset</button>
+    </div>
+    <div class="row">
+      <label class="lbl" for="speed">Speed <output id="speedOut">20</output> ticks/s</label>
+      <input id="speed" type="range" min="0" max="100" value="45">
+    </div>
+    <div class="row seed">
+      <label class="lbl" for="seed">Seed</label>
+      <input id="seed" type="number" inputmode="numeric" min="1" max="999999" value="1">
+      <button id="rand" class="btn" title="Random seed">🎲</button>
+    </div>
+    <div class="row presets">
+      <button class="btn small" data-preset="none">Healthy clone</button>
+      <button class="btn small" data-preset="all">All flaws</button>
+    </div>
+    <fieldset class="flaw" data-flaw="scramble"><legend><label><input type="checkbox" id="f-scramble"> <span class="fname">scramble</span></label></legend>
+      <p class="fdesc">Senses read through a random permutation + noise; new permutation every N ticks.</p>
+      <label class="lbl" for="p-scramble">period <output id="o-scramble">90</output> ticks</label>
+      <input id="p-scramble" type="range" min="5" max="600" step="5" value="90"></fieldset>
+    <fieldset class="flaw" data-flaw="leaky"><legend><label><input type="checkbox" id="f-leaky"> <span class="fname">leaky</span></label></legend>
+      <p class="fdesc">Learned site values decay toward the prior every tick; synapses shrink a little.</p>
+      <label class="lbl" for="p-leaky">leak <output id="o-leaky">6.0</output> % / tick</label>
+      <input id="p-leaky" type="range" min="0" max="30" step="0.5" value="6"></fieldset>
+    <fieldset class="flaw" data-flaw="backwards"><legend><label><input type="checkbox" id="f-backwards"> <span class="fname">backwards</span></label></legend>
+      <p class="fdesc">The 8 MOT motor neurons read out reversed, and the chosen site is mirrored (k → 15−k).</p></fieldset>
+    <fieldset class="flaw" data-flaw="misfire"><legend><label><input type="checkbox" id="f-misfire"> <span class="fname">misfire</span></label></legend>
+      <p class="fdesc">Every N ticks, one site value and 20 random synapses get a jolt.</p>
+      <label class="lbl" for="p-misfire">period <output id="o-misfire">60</output> ticks</label>
+      <input id="p-misfire" type="range" min="5" max="600" step="5" value="60"></fieldset>
+  </section>
+
+  <section class="panel stats-panel" aria-labelledby="h-stats">
+    <div class="panel-h"><h2 id="h-stats">Vitals</h2><span id="state" class="pill">foraging</span></div>
+    <dl class="stats" id="stats"></dl>
+    <div class="canvas-wrap chart-wrap"><canvas id="chart" role="img" aria-label="Live charts of blood glucose, rewards and recent success rate"></canvas></div>
+    <div class="legend"><span class="k glc">glucose</span><span class="k rew">rewards / hr</span><span class="k suc">success (last 30)</span></div>
+  </section>
+
+  <section class="panel brain-panel" aria-labelledby="h-brain">
+    <div class="panel-h"><h2 id="h-brain">Brain · 272 neurons, 14 regions</h2></div>
+    <div class="canvas-wrap brain-wrap"><canvas id="brain" role="img" aria-label="Live activity of 272 neurons grouped by brain region"></canvas></div>
+    <p class="hint">Each dot is one rate unit; brighter = more active. Magenta flash = senses rewired, orange = misfire.</p>
+  </section>
+
+  <section class="panel log-panel" aria-labelledby="h-log">
+    <div class="panel-h"><h2 id="h-log">Glitch log</h2></div>
+    <ol class="log" id="log" aria-live="off"></ol>
+  </section>
+
+  <section class="panel about" id="about" aria-labelledby="h-about">
+    <h2 id="h-about">What's real vs simplified</h2>
+    <div class="cols">
+      <div><h3><span class="tag real">KEPT FROM THE REFERENCE</span></h3><ul>
+        <li>16 food sites = 4 colours × 4 shapes; reward probability <code>0.05 + 0.25·cv[c]/3 + 0.25·sv[s]/3</code>, with sites depleting after a meal and recovering over 120 ticks.</li>
+        <li>Only half the sites (a Latin pattern) are reachable on days 1–3. 1 tick = 1 sim-minute; awake 06:00–22:00.</li>
+        <li>The brain layout: 272 neurons in the same 14 regions and sizes (SENS 16, THAL 16, CTX 64, HIP 32, STR 32, HYP 16, VTA/RAPHE/LC/BF 6, INS 8, SCN 8, MOT 8, ENS 48), wired with the reference's region-to-region connection probabilities.</li>
+        <li>The four flaws, applied the way <code>glitchling.ts</code> applies them: permuted + noisy site senses re-shuffled every N ticks; 6%/tick decay of learned values toward 0.25; reversed MOT readout plus mirrored site choice; periodic jolts to one site value and 20 synapses. Seeded mulberry32 RNG, separate flaw stream.</li></ul></div>
+      <div><h3><span class="tag sim">SIMPLIFIED OR INVENTED HERE</span></h3><ul>
+        <li>Neurons are simple rate units, not the reference's spiking substrate with neuromodulators, plasticity rules and sleep stages.</li>
+        <li>Metabolism is a 3-pool toy (gut → blood glucose → fat), not the full gut/blood/liver/hormone model.</li>
+        <li>The decision is a noisy race over learned values plus a novelty bonus, not the striatal spike race with expected-free-energy terms, veto, and dreaming.</li>
+        <li>The walking body, the 2D map, travel time, and click-to-drop food are invented for play. In this port MOT encodes an 8-way heading; in the reference, site choice comes from the striatal race, not MOT.</li>
+        <li>No claims of awareness, feelings or consciousness are made. It's a small program that forages.</li></ul></div>
+    </div>
+    <p class="note">The published jam numbers (2 sim-days × 2 seeds, toy n) come from the TypeScript run: see the <a href="../site/">showcase</a> and <a href="../results/summary.csv">summary.csv</a>. Source of this page: <a href="sim.js">sim.js</a> (model) · <a href="app.js">app.js</a> (UI).</p>
+  </section>
+</main>
+<footer class="foot">Glitchling jam · browser port by Grok Bot · <a href="https://github.com/0thernes/glitchling-jam">source on GitHub</a></footer>
+<script src="sim.js"></script>
+<script src="app.js"></script>
+</body></html>
