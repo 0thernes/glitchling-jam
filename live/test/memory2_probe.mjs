@@ -1,0 +1,23 @@
+// Pass 11 memory probe: learned/grown memories vs the pass-3 fixed ones.
+// (a) HDC value map regression: 6 random reward bumps (widths 1-6 units) over the arena, 300 noisy samples seen 4 times with a
+//     sleep between passes, recall tested at 300 held-out places. Variants: pass-3 superposition (D 512), error-driven writes
+//     with a fixed encoder (D 1024), and error-driven + sleep feature resampling (D 1024), each with a well-tuned (0.35) and a
+//     mis-tuned (0.8) frequency prior.
+// (b) Hopfield on a real 600-s run (state every 0.5 s; even samples stored, odd held out; one sleep every 100 stores):
+//     completed-pattern cosine for 50%-masked + noisy cues of early stored, late stored and held-out states.
+import { Creature } from '../js/sim/creature.js'; import { HDCMap, Hopfield } from '../js/sim/memory.js'; import { mulberry, gauss } from '../js/sim/util.js';
+const corr = (a, b) => { const n = a.length, ma = a.reduce((x, y) => x + y) / n, mb = b.reduce((x, y) => x + y) / n; let s = 0, sa = 0, sb = 0; for (let i = 0; i < n; i++) { s += (a[i] - ma) * (b[i] - mb); sa += (a[i] - ma) ** 2; sb += (b[i] - mb) ** 2; } return s / Math.sqrt(sa * sb); };
+const part = process.argv[2] || 'a';
+if (part === 'a') for (const sc of [0.35, 0.8]) for (const v of ['superpose-512', 'delta-fixed-1024', 'delta-learned-1024']) { const out = [];
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) { const r = mulberry(seed * 13); const B = []; for (let i = 0; i < 6; i++) B.push([r() * 30 - 15, r() * 30 - 15, 1 + r() * 5, r() < 0.5 ? 1 : -0.6]); const f = (x, z) => B.reduce((a, [bx, bz, w, h]) => a + h * Math.exp(-((x - bx) ** 2 + (z - bz) ** 2) / (2 * w * w)), 0);
+    const m = new HDCMap(seed, v.endsWith('512') ? 512 : 1024, sc); m.fixed = v === 'delta-fixed-1024'; const tr = []; for (let i = 0; i < 300; i++) tr.push([r() * 34 - 17, r() * 34 - 17]);
+    for (let ep = 0; ep < 4; ep++) { for (const [x, z] of tr) { const y = f(x, z) + 0.15 * gauss(r); if (v.startsWith('superpose')) { if (ep === 0) m.add(x, z, y); } else m.learn(x, z, y, 0.3); } if (!v.startsWith('superpose') && ep < 3) for (let k = 0; k < 2; k++) m.sleep(m.fixed ? 0 : 0.25, 1); }
+    const te = []; for (let i = 0; i < 300; i++) te.push([r() * 34 - 17, r() * 34 - 17]); out.push(corr(te.map(([x, z]) => f(x, z)), te.map(([x, z]) => m.recall(x, z)))); }
+  console.log(`HDC prior ${sc} ${v.padEnd(19)} held-out corr mean ${(out.reduce((a, b) => a + b) / 8).toFixed(3)}  [${out.map((x) => x.toFixed(2)).join(' ')}]`); }
+if (part === 'b') { const seed = +(process.argv[3] || 2); const c = new Creature(seed); const Z = []; for (let f = 0; f < 60 * 600; f++) { c.step(); if (f % 30 === 0 && f > 600) Z.push(Float64Array.from(c.z, (v, i) => v - c.zMean[i])); }
+  const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }, nrm = (v) => { const n = Math.sqrt(dot(v, v)) || 1; return v.map((x) => x / n); };
+  for (const [name, cap, rand, learn, sleep] of [['pass-3: 256 slots, random overwrite, raw keys', 256, true, false, false], ['1024 slots + sleep merge, raw keys', 1024, false, false, true], ['1024 slots + sleep merge + learned keys', 1024, false, true, true]]) {
+    const H = new Hopfield(Z[0].length, cap, 24, seed); H.randomReplace = rand; H.learnKeys = learn; const r = mulberry(seed * 5); let n = 0; for (let t = 0; t < Z.length; t += 2) { H.store(Z[t], null, r); if (sleep && ++n % 100 === 0) H.sleep(); }
+    const rt = mulberry(99); const test = (idxs) => { let cs = 0; for (const k of idxs) { const cue = Float64Array.from(Z[k], (v) => (rt() < 0.5 ? 0 : v) + 0.05 * gauss(rt)); cs += dot(nrm(Z[k]), nrm(H.retrieve(cue).xi)); } return (cs / idxs.length).toFixed(2); };
+    const ri = mulberry(7), early = [], late = [], held = []; for (let i = 0; i < 150; i++) { early.push(2 * Math.floor(ri() * Z.length / 6)); late.push(2 * Math.floor(Z.length / 2 - 1 - ri() * Z.length / 6)); held.push(1 + 2 * Math.floor(ri() * (Z.length / 2 - 1))); }
+    console.log(`seed ${seed} ${name.padEnd(46)} slots ${String(H.X.length).padStart(4)} merged ${H.merged} | early ${test(early)} late ${test(late)} held-out ${test(held)}`); } }

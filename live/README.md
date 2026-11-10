@@ -24,7 +24,7 @@ metabolism: gut → blood → liver glycogen → fat, ketones, gluconeogenesis, 
 sleep: adenosine S + circadian C, WAKE/N1/N2/N3/REM, atonia, NREM replay, REM dreaming
 ```
 
-## Mechanisms added in passes 2–9
+## Mechanisms added in passes 2–11
 
 Each one can be switched off from the brain panel ("lesions"). The effect of each, as measured, is in CHANGELOG.md.
 
@@ -38,6 +38,7 @@ Each one can be switched off from the brain panel ("lesions"). The effect of eac
 | 7 | physical skin optics | thin-film (guanine) interference, Fresnel, GGX highlights, translucency and heartbeat capillaries in the shader |
 | 8 | thirst vs hunger, cephalic insulin | pools, drinking, probabilistic drive competition, humidity sense + HDC water map; seeing food raises the insulin set point early |
 | 9 | front arching reflex, ventral scale lift | turn commands contract front radial muscles; radial activation lowers sideways friction |
+| 11 | learned / consolidated memory | delta-rule HDC maps (1024-dim) with sleep-time feature resampling; 1024-slot Hopfield store with usage-based forgetting, sleep merging and a contrastively learned key map |
 
 ## Files
 
@@ -66,6 +67,8 @@ node test/steer_probe.mjs               # does it close the distance to a goal? 
 node test/gait_probe.mjs                # what the body does mechanically under a test-only travelling wave
 node test/forage_bench.mjs 240 1,2,3,4  # feeds, site arrivals, give-ups per seed
 node test/measure.mjs                   # distance, behaviour entropy, intact vs MOT/CPG/MN lesions
+node test/memory2_probe.mjs a           # HDC held-out regression: superposition vs delta rule vs delta rule + learned features
+node test/memory2_probe.mjs b 2         # Hopfield: pass-3 store vs 1024 slots + sleep vs + learned keys, on a real 600-s run
 node test/scale_probe.mjs               # forced-turn yaw rates (pass 9); see also righting/memory/pc/turing/growth/water probes
 CHROME=/path/to/chrome PLAYWRIGHT=/path/to/playwright-core/index.mjs node test/browser_check.mjs http://127.0.0.1:8899/live/ ./shots tag
 ```

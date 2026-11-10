@@ -313,3 +313,51 @@ Yaw rate in the commanded direction (left / right, rad/s) and straight-line spee
   - One earlier desktop run produced a black first capture with the HUD still running. The re-run rendered normally, so
     this was treated as a flaky SwiftShader frame and not investigated further.
 - Screenshots: `live-shots/s10-*.png`.
+
+## Pass 11: learned, larger, sleep-consolidated memory
+Alex flagged "memories are small and their encoders are fixed" as a weak point. Changes:
+- **HDC maps** (food, water) are 1024-dim (was 512).
+  - Error-driven writes: `M += 0.3·(y − recall)·P(x)`, instead of adding every outcome.
+  - Once per sleep bout (on entering N3), the 10% of phasor features with the least weight are re-drawn from the
+    frequencies of the most useful half (±15% jitter), and the map is refit by replaying its last 300 samples.
+  - The visit map stays a superposition, because it is a density.
+- **Hopfield store:**
+  - 1024 slots (was 256). When full, the least-retrieved slot is overwritten (was random).
+  - In N3, near-duplicates (cosine > 0.97) are merged, count-weighted.
+  - Keys go through a learned 72×72 map (starts at identity), trained in sleep with InfoNCE. A half-masked, noisy replay of
+    an episode must pick out its own key among 16.
+- **New lesion:** "memory encoder learning off". The brain panel shows slots, consolidations, merges, contrastive loss and
+  re-drawn features.
+
+Measured (`test/memory2_probe.mjs`):
+- **(a) HDC regression.** 6 random reward bumps, 300 noisy samples × 4 passes with sleeps between; correlation at 300
+  held-out places, seeds 1–8.
+
+  | frequency prior | pass-3 superposition, 512 | delta rule, fixed encoder, 1024 | delta rule + learned features, 1024 |
+  |---|---|---|---|
+  | well tuned (0.35) | 0.894 | 0.957 | 0.955 |
+  | mis-tuned (0.8) | 0.816 | 0.928 | 0.939 |
+
+  - Most of the gain is the error-driven write.
+  - Feature learning only helps when the starting spatial scale is wrong (+0.011) and is neutral otherwise.
+  - I also tried per-feature gradient descent on the frequencies. At every learning rate it was neutral or diverged
+    (held-out correlation fell to 0.03 at lr 2e-2), so it was not shipped.
+- **(b) Hopfield on real 600-s runs** (seeds 2/3/5). States every 0.5 s; even ones stored, odd ones held out. Cosine of
+  the completed pattern for 50%-masked + noisy cues (cue alone ≈ 0.48–0.55):
+
+  | store | early stored | late stored | held-out |
+  |---|---|---|---|
+  | pass-3 (256, random overwrite) | 0.76 / 0.80 / 0.75 | 0.82 / 0.86 / 0.82 | 0.66 / 0.68 / 0.71 |
+  | 1024 + forgetting + sleep merge | 0.86 / 0.86 / 0.86 | 0.85 / 0.86 / 0.83 | 0.68 / 0.69 / 0.73 |
+  | same + learned keys | 0.86 / 0.86 / 0.85 | 0.85 / 0.86 / 0.83 | 0.68 / 0.69 / 0.73 |
+
+  - Old memories are no longer lost: early-stored recall goes from 0.77 to 0.86.
+  - The learned keys train (InfoNCE loss 1.41 → 1.13 over 8 sleeps; chance is 2.77) but give **no measurable recall gain**
+    on these states. They are kept, and stated as such in the honesty panel.
+- **Foraging unchanged within noise.** `forage_bench`, 240 s, seeds 1–8, fed / arrivals: 6 / 16 (pass 9: 7 / 17).
+- **Headless Chromium:** phone 16.5 fps, desktop 11.6 fps, no console errors.
+  - Phone fps was measured while 4 Node benchmarks were running on the same machine.
+  - Motion: intact 7.9 / 7.0; MN lesioned 1.0 / 2.4; MOT lesioned 4.3 / 4.0.
+- Screenshots: `live-shots/s11-*.png`.
+- **Inactive code.** `body.js` now also contains an optional Coulomb contact model (off; only enabled by test overrides)
+  used in the turning work below.

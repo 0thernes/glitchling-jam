@@ -83,8 +83,8 @@ export class Body {
   collide(friction, dt, F) {
     const W = this.world, X = this.x, Y = this.y, Z = this.z, OX = this.ox, OY = this.oy, OZ = this.oz; const u = this.u; this.grabbing = 0;
     for (let i = 0; i < this.n; i++) { const r = this.r[i]; let hit = 0, nx = 0, ny = 1, nz = 0; const h = W.height(X[i], Z[i]);
-      if (Y[i] < h + r) { const N = W.normal(X[i], Z[i]); nx = N[0]; ny = N[1]; nz = N[2]; const pen = (h + r - Y[i]) * ny; X[i] += nx * pen; Y[i] += ny * pen; Z[i] += nz * pen; hit = 1; }
-      for (const R of W.rocks) { const dx = X[i] - R.x, dy = Y[i] - R.y, dz = Z[i] - R.z, d = Math.hypot(dx, dy, dz), m = R.r + r; if (d < m && d > 1e-6) { const p = (m - d) / d; X[i] += dx * p; Y[i] += dy * p; Z[i] += dz * p; nx = dx / d; ny = dy / d; nz = dz / d; hit = 2; } }
+      let pen = 0; if (Y[i] < h + r) { const N = W.normal(X[i], Z[i]); nx = N[0]; ny = N[1]; nz = N[2]; pen = (h + r - Y[i]) * ny; X[i] += nx * pen; Y[i] += ny * pen; Z[i] += nz * pen; hit = 1; }
+      for (const R of W.rocks) { const dx = X[i] - R.x, dy = Y[i] - R.y, dz = Z[i] - R.z, d = Math.hypot(dx, dy, dz), m = R.r + r; if (d < m && d > 1e-6) { const p = (m - d) / d; pen = Math.max(pen, m - d); X[i] += dx * p; Y[i] += dy * p; Z[i] += dz * p; nx = dx / d; ny = dy / d; nz = dz / d; hit = 2; } }
       for (const S of W.springs) { const dx = X[i] - S.x, dz = Z[i] - S.z; if (dx * dx + dz * dz < S.r * S.r) { const top = S.y + 0.3 - S.comp * 0.4; if (Y[i] < top + r) { Y[i] = top + r; if (Y[i] - OY[i] < 0) { S.v -= 0.4; OY[i] = Y[i] - 9 * dt * (0.5 + Math.max(0, S.comp)); } hit = 3; } } }
       this.contact[i] = hit; if (!hit || !friction) continue;
       // friction: remove part of the tangential displacement this step. Body scales are anisotropic (slide forward easily); feet/hands use neural grip
@@ -92,7 +92,11 @@ export class Body {
       const k = this.kind[i]; let mu;
       if (k === 'foot' || k === 'hand') { const L = this.limbs.find((l) => l.foot === i); const gp = clamp(0.5 + 0.5 * u[L.grip]); this.gripP[i] = gp; mu = 0.15 + 0.83 * gp; if (hit === 2 && gp > 0.6) this.grabbing++; }
       else { const seg = this.segOf(i); const f = F[seg].f; const along = dx * f[0] + dy * f[1] + dz * f[2]; const mAlong = along > 0 ? 0.08 : 0.55, mLat = (this.mLat ?? 0.6) * (1 - (this.scaleLift ?? 0) * Math.max(0, u[CH.radial + seg])); /* ventral scale erection: radial-muscle contraction lowers lateral grip (pass 9) */
-        const ax = along * f[0], ay = along * f[1], az = along * f[2]; X[i] -= ax * mAlong + (dx - ax) * mLat; Y[i] -= ay * mAlong + (dy - ay) * mLat; Z[i] -= az * mAlong + (dz - az) * mLat; continue; }
+        const ax = along * f[0], ay = along * f[1], az = along * f[2];
+        if (this.coulomb) { /* Coulomb contact (pass 12): friction can remove at most mu * (normal correction) of tangential motion, per direction (position-based friction, Macklin et al. 2014). Load-bearing particles grip; barely touching ones slide. */ const C = this.coulomb, lx = dx - ax, ly = dy - ay, lz = dz - az, la = Math.abs(along), ll = Math.hypot(lx, ly, lz);
+          const fa = la > 1e-12 ? Math.min(1, (along > 0 ? C.fwd : C.back) * pen / la) : 0, fl = ll > 1e-12 ? Math.min(1, C.lat * (1 - (this.scaleLift ?? 0) * Math.max(0, u[CH.radial + seg])) * pen / ll) : 0;
+          X[i] -= ax * fa + lx * fl; Y[i] -= ay * fa + ly * fl; Z[i] -= az * fa + lz * fl; continue; }
+        X[i] -= ax * mAlong + (dx - ax) * mLat; Y[i] -= ay * mAlong + (dy - ay) * mLat; Z[i] -= az * mAlong + (dz - az) * mLat; continue; }
       X[i] -= dx * mu; Y[i] -= dy * mu; Z[i] -= dz * mu; }
   }
   segOf(i) { if (this._seg) return this._seg[i]; this._seg = new Int8Array(this.n); for (let s = 0; s < NS; s++) { this._seg[this.c[s]] = s; for (const j of this.ring[s]) this._seg[j] = s; } for (const L of this.limbs) { this._seg[L.knee] = L.s; this._seg[L.foot] = L.s; } for (const S of this.stalks) { this._seg[S.mid] = NS - 1; this._seg[S.eye] = NS - 1; } return this._seg[i]; }
