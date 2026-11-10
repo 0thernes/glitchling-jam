@@ -91,7 +91,7 @@ export class Body {
       let dx = X[i] - OX[i], dy = Y[i] - OY[i], dz = Z[i] - OZ[i]; const dn = dx * nx + dy * ny + dz * nz; dx -= dn * nx; dy -= dn * ny; dz -= dn * nz;
       const k = this.kind[i]; let mu;
       if (k === 'foot' || k === 'hand') { const L = this.limbs.find((l) => l.foot === i); const gp = clamp(0.5 + 0.5 * u[L.grip]); this.gripP[i] = gp; mu = 0.15 + 0.83 * gp; if (hit === 2 && gp > 0.6) this.grabbing++; }
-      else { const seg = this.segOf(i); const f = F[seg].f; const along = dx * f[0] + dy * f[1] + dz * f[2]; const mAlong = along > 0 ? 0.08 : 0.55, mLat = this.mLat ?? 0.6;
+      else { const seg = this.segOf(i); const f = F[seg].f; const along = dx * f[0] + dy * f[1] + dz * f[2]; const mAlong = along > 0 ? 0.08 : 0.55, mLat = (this.mLat ?? 0.6) * (1 - (this.scaleLift ?? 0) * Math.max(0, u[CH.radial + seg])); /* ventral scale erection: radial-muscle contraction lowers lateral grip (pass 9) */
         const ax = along * f[0], ay = along * f[1], az = along * f[2]; X[i] -= ax * mAlong + (dx - ax) * mLat; Y[i] -= ay * mAlong + (dy - ay) * mLat; Z[i] -= az * mAlong + (dz - az) * mLat; continue; }
       X[i] -= dx * mu; Y[i] -= dy * mu; Z[i] -= dz * mu; }
   }

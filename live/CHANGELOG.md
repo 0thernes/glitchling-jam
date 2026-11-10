@@ -269,3 +269,33 @@ Measured (`test/water_probe.mjs`):
 - **Headless Chromium:** phone 20.7 fps, desktop 13.7 fps, no console errors.
   - Motion: intact 8.1 / 7.6; MN lesioned 0.2 / 1.5; MOT lesioned 6.1 / 5.3.
 - Screenshots: `live-shots/s8-*.png`.
+
+## Pass 9: turning aids (front arching reflex, ventral scale lift)
+Navigation has been the bottleneck since pass 2: forced turns gave only ~0.2–0.3 rad/s. Two physical/neural changes:
+- **Front arching reflex.** The MOT turn-left/turn-right synergies now also drive the radial muscles of segments 3–6
+  (weight 1.5 in the MOT→muscle map). This bends and lifts the front so it can swing.
+- **Ventral scale lift.** Each segment's sideways ground friction is multiplied by (1 − 0.5·max(0, radial-muscle
+  activation)). It is a friction rule in the Verlet ground contact, not modelled scales. New lesion: scale lift.
+
+Measured (`test/scale_probe.mjs`): forced MOT command for 12 s, rocks removed, motor learning frozen, seeds 1–4.
+Yaw rate in the commanded direction (left / right, rad/s) and straight-line speed:
+
+| arching reflex | scale lift | turn L | turn R | fwd speed |
+|---|---|---|---|---|
+| off | off (old behaviour) | 0.23 | 0.28 | 0.29 |
+| off | on | 0.13 | 0.27 | 0.43 |
+| on | off | 0.48 | 0.33 | 0.29 |
+| on | on (shipped) | 0.26 | 0.41 | 0.43 |
+
+- The arching reflex is what helps turning: it roughly doubles yaw with scale lift off.
+- Scale lift mainly raises forward speed (+48%) and slightly weakens turning, so the shipped combination is a trade-off.
+- **Foraging (`forage_bench`, 240 s, seeds 1–8, fed / arrivals):**
+  - shipped: 7 / 17
+  - pass-8 behaviour: 2 / 19
+  - with lift 0.8 and arch 2.5 (seeds 1–4 only): 2 / 6, upright dropped to 0.28–0.59, so the milder setting was kept
+- **Seed noise is large.** Thirst probe (300 s, seeds 1–4): no seed reached water this time (seed 1 drank 7 in pass 8).
+- **Righting:** median 2.2 s, 10/10.
+- **`measure` intact:** dist 64.4, entropy 6.07, upright 0.66. All MN lesioned: dist 5.2, entropy 0.15.
+- **Headless Chromium:** phone 24.6 fps, desktop 13.1 fps, no console errors.
+  - Motion: intact 8.3 / 7.5; MN lesioned 1.0 / 3.0; MOT lesioned 5.9 / 4.4.
+- Screenshots: `live-shots/s9-*.png`.

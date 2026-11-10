@@ -20,7 +20,7 @@ const PHI_NAMES = ['bearL', 'bearR', 'forage', 'obstacle', 'nearGoal', 'rockTouc
 export class Creature {
   constructor(seed = 1, opts = {}) {
     this.seed = seed; const r = (this.r = mulberry(seed)); this.gr = mulberry(seed * 9973 + 7); this.flaws = JSON.parse(JSON.stringify(opts.flaws || DEFAULT_FLAWS));
-    this.world = new World(seed); this.body = new Body(this.world, 0, 0, r() * Math.PI * 2); this.brain = new Brain(seed); this.G = { ...GAIT, ...(globalThis.TW?.gait || {}) }; this.cpg = new CPG(seed, this.G); this.metab = new Metab(); this.sleep = new Sleep();
+    this.world = new World(seed); this.body = new Body(this.world, 0, 0, r() * Math.PI * 2); this.brain = new Brain(seed); this.G = { ...GAIT, ...(globalThis.TW?.gait || {}) }; this.cpg = new CPG(seed, this.G); this.liftK = globalThis.TW?.lift ?? 0.5; this.metab = new Metab(); this.sleep = new Sleep();
     this.ssm = new SelectiveSSM(NY + 8, 32, seed); this.wm = new WorldModel(NZ, NY); this.z = new Float64Array(NZ); this.y = new Float64Array(NY); this.yPrev = new Float64Array(NY); this.zPrev = new Float64Array(NZ);
     this.lesion = { mot: false, cpg: false, mn: false, stdp: false, wm: false, astro: false, learnMotor: false, efe: false, veto: false, dream: false };
     this.t = 0; this.frame = 0; this.tick = 0; this.hour = 8; this.dayLen = 1440;
@@ -50,6 +50,7 @@ export class Creature {
     for (let a = 0; a < 2; a++) { wm(CH.arm + a * 3, 0, 4, 1.5); wm(CH.arm + a * 3 + 1, 0, 4, 1.2); wm(CH.arm + a * 3 + 2, 0, 3, 1.4); wm(CH.armGrip + a, 0, 5, 1.6); }
     for (let l = 0; l < 4; l++) { wm(CH.legGrip + l, 0, 5, 1.4); wm(CH.leg + l * 2 + 1, 0, 6, 2.4); } for (let i = 0; i < 7; i++) wm(CH.radial + i, 0, 6, 1.4);
     for (let s = 0; s < 2; s++) { wm(CH.stalk + s * 2, 0, 1, 0.8); wm(CH.stalk + s * 2, 1, 2, 0.8); }
+    { const kr = globalThis.TW?.radTurn ?? 1.5; for (const sg of [3, 4, 5, 6]) { wm(CH.radial + sg, 0, 1, kr); wm(CH.radial + sg, 0, 2, kr); } } // turning: front radial muscles contract (lifts scales)
     { const kg = globalThis.TW?.gripTurn ?? 0; for (let l = 0; l < 4; l++) { const left = !(l & 1); /* inner-side feet loosen their grip, outer-side feet grip harder */ wm(CH.legGrip + l, left ? 1 : 0, 1, kg); wm(CH.legGrip + l, left ? 0 : 1, 2, kg); } }
     for (let e = 0; e < 3; e++) { wp(CH.gaze + e * 2, 0, 10, 1.6); wp(CH.gaze + e * 2, 1, 10, -1.6); wp(CH.gaze + e * 2 + 1, 0, 11, 1.2); wp(CH.gaze + e * 2 + 1, 1, 11, -1.2); }
     // vestibulospinal righting reflex (innate, plastic): when lying on a side, extend the legs/arms on the DOWN side and contract the
@@ -139,7 +140,7 @@ export class Creature {
     }
     for (let c = 0; c < CH.N; c++) B.u[c] = clamp((this.muscleGain ?? 2.4) * (this.mnAct[2 * c] - this.mnAct[2 * c + 1]), -1, 1);
     B.limbs.forEach((L, k) => { const sw = L.kind === 'leg' ? CH.leg + L.idx * 2 : CH.arm + L.idx * 3; this.limbUse[k] += Math.abs(B.u[sw]) + Math.abs(B.u[sw + 1]) + 0.5 * Math.abs(B.u[L.grip]); }); this.limbUseN++;
-    B.step(1 / 120); B.step(1 / 120); const com = B.com(); this.vel = [com[0] - this.lastCom[0], com[1] - this.lastCom[1], com[2] - this.lastCom[2]]; this.stats.dist += Math.hypot(this.vel[0], this.vel[2]); this.lastCom = com;
+    B.scaleLift = this.lesion.scales ? 0 : this.liftK; B.step(1 / 120); B.step(1 / 120); const com = B.com(); this.vel = [com[0] - this.lastCom[0], com[1] - this.lastCom[1], com[2] - this.lastCom[2]]; this.stats.dist += Math.hypot(this.vel[0], this.vel[2]); this.lastCom = com;
     this.nociception *= 0.97; if (this.race) this.raceCheck(dt); this.interact();
     if (this.frame % 6 === 0) this.tenHz(); if (this.frame % 4 === 0) this.skin.step(this); if (this.frame % 15 === 0) this.minute();
     this.updateNM(dt);
