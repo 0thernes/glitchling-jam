@@ -4,6 +4,7 @@
 import { mulberry, clamp, gauss, betaIG, IG0, sig } from './util.js';
 import { World, SITES } from './world.js';
 import { Body, CH, NS } from './body.js';
+import { HDCMap, Hopfield } from './memory.js';
 import { Brain, R0, RN, NNEU } from './brain.js';
 import { CPG, NCPG } from './cpg.js';
 import { Metab } from './metab.js';
@@ -29,7 +30,7 @@ export class Creature {
     // values and beliefs over the 16 sites (names follow the reference organism)
     this.wSite = new Float32Array(SITES).fill(0.25); this.bA = new Float64Array(SITES).fill(1); this.bB = new Float64Array(SITES).fill(1); this.wAv = new Float64Array(SITES); this.visits = new Float64Array(SITES); this.featC = new Float64Array(4).fill(0.15); this.featS = new Float64Array(4).fill(0.15);
     this.senPerm = [...Array(16).keys()]; this.goal = null; this.race = null; this.goalT = 0; this.lastDist = null; this.rBar = 0; this.da = 0; this.rpe = 0; this.nociception = 0; this.stuck = 0; this.progEMA = 0; this.recent = new Float64Array(SITES); this.selfV = 0.3; this.selfW = 0.25; this.goalBest = 1e9; this.goalBestT = 0;
-    this.Vimg = new Float64Array(8); this.episodes = []; this.novelty = new Float32Array(24 * 24); this.stats = { eats: 0, rewards: 0, tries: 0, vetoes: 0, races: 0, dreams: 0, replays: 0, mirrored: 0, rewires: 0, misfires: 0, dist: 0, stings: 0, snacks: 0, urine: 0, feces: 0 };
+    this.Vimg = new Float64Array(8); this.episodes = []; this.novelty = new Float32Array(24 * 24); this.hdcVisit = new HDCMap(seed, 512, 0.45); this.hdcFood = new HDCMap(seed + 1, 512, 0.35); this.hop = new Hopfield(NZ, 256, 24); this.zMean = new Float64Array(NZ); this.familiar = 0; this.memStats = { stored: 0, retrievals: 0, dreamSim: 0, famMean: 0 }; this.stats = { eats: 0, rewards: 0, tries: 0, vetoes: 0, races: 0, dreams: 0, replays: 0, mirrored: 0, rewires: 0, misfires: 0, dist: 0, stings: 0, snacks: 0, urine: 0, feces: 0 };
     this.events = []; this.motorHist = []; this.entropy = 0; this.lastCom = this.body.com(); this.growth = 0; this.raceLog = new Float64Array(SITES * 2); this.dreamLog = [];
     this.skin = new Skin(); this.speedEMA = 0;
   }
@@ -91,7 +92,7 @@ export class Creature {
     const ph = (2 * Math.PI * this.hour) / 24; for (let i = 0; i < 8; i++) ext[R0.SCN + i] = 0.7 + 0.6 * Math.max(0, Math.cos(ph - (i * 2 * Math.PI) / 8));
     for (let i = 0; i < 6; i++) { ext[R0.VTA + i] = 0.9 + 3 * Math.max(0, this.rpe) - 1.5 * Math.max(0, -this.rpe); ext[R0.LC + i] = 0.8 + 2.5 * this.wm.surprise + 2 * clamp(this.nociception) + (awake ? 0.2 : -0.3); ext[R0.RAPHE + i] = 0.8 + 0.5 * clamp(1 - hunger) + (awake ? 0.2 : -0.2) * (this.sleep.stage === 4 ? -2 : 1); ext[R0.BF + i] = 0.8 + 0.6 * this.uncert() + (awake || this.sleep.stage === 4 ? 0.3 : -0.3); }
     const ens = clamp((M.gut.glc + M.gut.fat + M.gut.prot) / 6); for (let i = 0; i < 48; i++) ext[R0.ENS + i] = 0.6 + 0.8 * ens + 0.4 * M.para;
-    for (let i = 0; i < RN.STR; i++) ext[R0.STR + i] = 0.4; for (let i = 0; i < RN.CTX; i++) ext[R0.CTX + i] = 0.55 + 0.3 * nm.ACh; for (let i = 0; i < RN.THAL; i++) ext[R0.THAL + i] = awake ? 0.5 : this.sleep.stage === 4 ? 0.45 : 0.2; for (let i = 0; i < RN.HIP; i++) ext[R0.HIP + i] = 0.5;
+    for (let i = 0; i < RN.STR; i++) ext[R0.STR + i] = 0.4; for (let i = 0; i < RN.CTX; i++) ext[R0.CTX + i] = 0.55 + 0.3 * nm.ACh; for (let i = 0; i < RN.THAL; i++) ext[R0.THAL + i] = awake ? 0.5 : this.sleep.stage === 4 ? 0.45 : 0.2; for (let i = 0; i < RN.HIP; i++) ext[R0.HIP + i] = 0.5; if (this.familiar > 0 && this.hop.lastIdx >= 0) for (let j = 0; j < 8; j++) ext[R0.HIP + ((this.hop.lastIdx * 7 + j * 5) % RN.HIP)] += 1.4 * this.familiar; /* Hopfield recognition re-activates that memory's index assembly */
     if (this.race) this.raceDrive(ext);
     // MOT: innate sense -> drive matrix (plastic) + imagined synergy values from dreams
     for (let m = 0; m < 8; m++) { let s = 0; for (let p = 0; p < NPHI; p++) s += this.Wmot[m * NPHI + p] * P[p]; this.motDrive[m] = s; ext[R0.MOT + m] = awake ? s : -1; }
@@ -99,7 +100,7 @@ export class Creature {
   }
   uncert() { let s = 0; for (let k = 0; k < SITES; k++) s += Math.sqrt((this.bA[k] * this.bB[k]) / ((this.bA[k] + this.bB[k]) ** 2 * (this.bA[k] + this.bB[k] + 1))); return clamp((s / SITES) * 3.5); }
   // ------------------------------------------------------------------ the striatal race (D1 = STR 0..15 "go" for site k, D2 = STR 16..31 "no-go")
-  efe(k) { const P = this.world.plants[k], hd = this.body.head(); const mean = this.bA[k] / (this.bA[k] + this.bB[k]); const prag = 0.5 * this.wSite[k] + 0.5 * mean;
+  efe(k) { const P = this.world.plants[k], hd = this.body.head(); const mean = this.bA[k] / (this.bA[k] + this.bB[k]); const hdcV = this.lesion.hdc ? 0 : clamp(this.hdcFood.recall(P.x, P.z), -1, 1); const prag = this.lesion.hdc ? 0.5 * this.wSite[k] + 0.5 * mean : 0.45 * this.wSite[k] + 0.45 * mean + 0.25 * hdcV; /* + spatial generalisation from the HDC food map */
     const epi = this.lesion.efe ? 0 : 0.3 * (0.5 + this.brain.nm.ACh + 0.5 * this.brain.nm.NE) * (betaIG(this.bA[k], this.bB[k]) / IG0 - 0.5); const d = Math.hypot(P.x - hd[0], P.z - hd[2]), F = this.body.F[NS - 1]; const bear = Math.abs(Math.atan2((P.x - hd[0]) * F.s[0] + (P.z - hd[2]) * F.s[2], (P.x - hd[0]) * F.f[0] + (P.z - hd[2]) * F.f[2]));
     // cost = predicted travel time from the creature's own measured approach speed and turn rate (a learned self-model), x energy price
     const tTravel = d / Math.max(0.08, this.selfV) + bear / Math.max(0.08, this.selfW); const cost = this.lesion.selfModel ? 0.012 * d * (1 + this.metab.cortisol) : 0.018 * tTravel * (1 + this.metab.cortisol) + (P.fruit < 0.3 ? 0.4 : 0) + (this.lesion.ior ? 0 : 0.9 * this.recent[k]); /* inhibition of return: recently visited sites are discounted for ~1 min */
@@ -147,6 +148,9 @@ export class Creature {
     const u = new Float64Array(NY + 8); u.set(this.y); for (let m = 0; m < 8; m++) u[NY + m] = this.mAvg[m]; this.ssm.step(u);
     const z = this.z; this.ssm.features(z); for (let m = 0; m < 8; m++) z[64 + m] = this.mAvg[m];
     if (this.frame > 12) { this.wm.learn(this.zPrev, this.y, 0.05 * (0.5 + this.brain.nm.ACh)); } this.zPrev.set(z);
+    for (let i = 0; i < NZ; i++) this.zMean[i] += 0.01 * (z[i] - this.zMean[i]);
+    if (this.frame % 60 === 0 && this.sleep.stage === 0 && !this.lesion.hopfield) { const c = Float64Array.from(z, (v, i) => v - this.zMean[i]); const R = this.hop.retrieve(c); this.familiar = R ? clamp((R.sim - 0.4) / 0.5) : 0; this.memStats.famMean += 0.02 * (this.familiar - this.memStats.famMean); this.memStats.retrievals++;
+      this.hop.store(c, { ep: this.episodes[this.episodes.length - 1], t: this.t }, this.r); this.memStats.stored++; }
     if (this.sleep.stage === 0 && this.episodes.length < 400 ? true : this.frame % 60 === 0) { const ctx = []; for (let i = 0; i < RN.CTX; i++) if (this.brain.rate[R0.CTX + i] > 15) ctx.push(i); const ep = { z: Float64Array.from(z), y: Float64Array.from(this.y), ssm: [Float64Array.from(this.ssm.re), Float64Array.from(this.ssm.im)], ctx, vf: this.vf };
       if (this.sleep.stage === 0) { this.episodes.push(ep); if (this.episodes.length > 400) this.episodes.splice(Math.floor(this.r() * 400), 1); } }
     // reward for motor learning: progress toward the current goal, minus effort. delta = R - Rbar is the dopamine-like third factor.
@@ -173,10 +177,10 @@ export class Creature {
     for (let m = 0; m < 8; m++) { const post = this.mAvg[m] - 0.3; for (let p = 0; p < NPHI; p++) { this.Emot[m * NPHI + p] = decay * this.Emot[m * NPHI + p] + post * this.phi[p]; this.Wmot[m * NPHI + p] = clamp(this.Wmot[m * NPHI + p] + 0.3 * lr * this.Emot[m * NPHI + p], -3, 3); } } }
   // ------------------------------------------------------------------ physical interaction: eating, stings, snacks
   interact() { const hd = this.body.head(), W = this.world; const g = this.goal;
-    for (let i = W.snacks.length - 1; i >= 0; i--) { const s = W.snacks[i]; if (Math.hypot(s.x - hd[0], s.y - hd[1], s.z - hd[2]) < 0.9 && this.sleep.stage === 0) { W.snacks.splice(i, 1); this.metab.eat(s.kind, 1.2); this.outcome(null, 1); this.stats.snacks++; this.ev('eat', `ate dropped ${s.kind}`); if (g && g.type === 'snack') this.goal = null; } }
+    for (let i = W.snacks.length - 1; i >= 0; i--) { const s = W.snacks[i]; if (Math.hypot(s.x - hd[0], s.y - hd[1], s.z - hd[2]) < 0.9 && this.sleep.stage === 0) { W.snacks.splice(i, 1); this.metab.eat(s.kind, 1.2); this.hdcFood.add(s.x, s.z, 0.5); this.outcome(null, 1); this.stats.snacks++; this.ev('eat', `ate dropped ${s.kind}`); if (g && g.type === 'snack') this.goal = null; } }
     if (g && g.type === 'site') { const P = W.plants[g.k]; if (Math.hypot(P.x - hd[0], P.z - hd[2]) < (globalThis.TW?.eatR ?? 1.3)) { this.stats.tries++; let r = 0; if (P.fruit > 0.3 && this.r() < P.p * (0.6 + 0.4 * P.fruit) * 2.2) { r = 1; this.metab.eat('plant', 1); this.stats.eats++; } P.fruit = Math.max(0, P.fruit - 0.7);
         if (P.s === 3 && this.r() < 0.35) { this.nociception = 1; this.stats.stings++; this.wAv[g.k] += 0.3 * (1 - this.wAv[g.k]); this.ev('sting', `thorn plant ${g.k} stung (aversive value now ${this.wAv[g.k].toFixed(2)})`); } else this.wAv[g.k] *= 0.95;
-        this.recent[g.k] = 1; this.outcome(g.chosen ?? g.k, r); this.ev(r ? 'reward' : 'miss', `site ${g.k}: ${r ? 'fed' : 'nothing'} (true p ${P.p.toFixed(2)})`); this.goal = null; } }
+        this.recent[g.k] = 1; this.hdcFood.add(P.x, P.z, r - 0.35); this.outcome(g.chosen ?? g.k, r); this.ev(r ? 'reward' : 'miss', `site ${g.k}: ${r ? 'fed' : 'nothing'} (true p ${P.p.toFixed(2)})`); this.goal = null; } }
     if (g) { if (g !== this.goalRef) { this.goalRef = g; this.goalBest = 1e9; this.goalBestT = this.t; } if (this.lastDist !== null && this.dist < this.goalBest - 0.5) { this.goalBest = this.dist; this.goalBestT = this.t; }
       // give up when no 0.5-unit improvement for 20 s, or after 3x the self-predicted travel time (min 45 s)
       const lim = Math.max(45, 3 * ((this.goalBest < 1e8 ? this.goalBest : 10) / Math.max(0.08, this.selfV))); if (this.t - this.goalBestT > 20 || this.t - g.since > lim) { this.ev('give-up', `gave up on goal (${(this.t - g.since).toFixed(0)} s, no progress for ${(this.t - this.goalBestT).toFixed(0)} s)`); if (g.type === 'site') this.wSite[g.chosen ?? g.k] *= 0.9; this.goal = null; } } }
@@ -193,9 +197,11 @@ export class Creature {
     // decide: hungry -> striatal race over sites; dropped food in view -> innate orienting; otherwise curiosity: least-visited place
     if (stage === 0 && !this.goal && !this.race) { const hd = this.body.head(); const sn = this.world.snacks.filter((s) => Math.hypot(s.x - hd[0], s.z - hd[2]) < 14);
       if (sn.length) { const s = sn[0]; this.goal = { type: 'snack', id: s.id, since: this.t }; this.ev('orient', 'oriented to dropped food'); }
-      else if (M.hunger() > 0.18 || this.r() < 0.5) this.startRace(); else { let best = 0, bv = 1e9; for (let i = 0; i < this.novelty.length; i++) { const ex = ((i % 24) / 24 - 0.5) * 36, ez = (Math.floor(i / 24) / 24 - 0.5) * 36; const dd = Math.hypot(ex - hd[0], ez - hd[2]); const v = this.novelty[i] + this.r() * 0.5 + (dd < 4 ? 99 : 0.04 * dd); if (v < bv) { bv = v; best = i; } } this.goal = { type: 'explore', x: ((best % 24) / 24 - 0.5) * 36, z: (Math.floor(best / 24) / 24 - 0.5) * 36, since: this.t }; this.ev('explore', 'curiosity: heading to least-visited area'); } }
+      else if (M.hunger() > 0.18 || this.r() < 0.5) this.startRace(); else if (!this.lesion.hdc) { /* curiosity from the HDC visit map: sample candidate places, go where the map recalls the fewest visits */ let bx = 0, bz = 0, bv = 1e9; for (let q = 0; q < 48; q++) { const ex = (this.r() - 0.5) * 36, ez = (this.r() - 0.5) * 36; const dd = Math.hypot(ex - hd[0], ez - hd[2]); if (dd < 4) continue; const v = this.hdcVisit.recall(ex, ez) + 0.03 * dd + 0.3 * this.r(); if (v < bv) { bv = v; bx = ex; bz = ez; } }
+        this.goal = { type: 'explore', x: bx, z: bz, since: this.t }; this.ev('explore', `curiosity: heading to the place the HDC map recalls least (visit recall ${bv.toFixed(2)})`); }
+      else { let best = 0, bv = 1e9; for (let i = 0; i < this.novelty.length; i++) { const ex = ((i % 24) / 24 - 0.5) * 36, ez = (Math.floor(i / 24) / 24 - 0.5) * 36; const dd = Math.hypot(ex - hd[0], ez - hd[2]); const v = this.novelty[i] + this.r() * 0.5 + (dd < 4 ? 99 : 0.04 * dd); if (v < bv) { bv = v; best = i; } } this.goal = { type: 'explore', x: ((best % 24) / 24 - 0.5) * 36, z: (Math.floor(best / 24) / 24 - 0.5) * 36, since: this.t }; this.ev('explore', 'curiosity: heading to least-visited area'); } }
     if (this.goal && this.goal.type === 'explore') { const hd = this.body.head(); if (Math.hypot(this.goal.x - hd[0], this.goal.z - hd[2]) < 1.5) this.goal = null; }
-    const com = this.body.com(); const gi = clamp(Math.floor((com[0] / 36 + 0.5) * 24), 0, 23) + 24 * clamp(Math.floor((com[2] / 36 + 0.5) * 24), 0, 23); this.novelty[gi] += 1;
+    const com = this.body.com(); const gi = clamp(Math.floor((com[0] / 36 + 0.5) * 24), 0, 23) + 24 * clamp(Math.floor((com[2] / 36 + 0.5) * 24), 0, 23); this.novelty[gi] += 1; if (this.tick % 4 === 0) { this.hdcVisit.add(com[0], com[2], 0.25); this.hdcVisit.decay(0.9997); }
     // morphological growth: anabolic tissue gain slowly scales the body (bounded)
     const target = 1 + clamp(M.tissue * 0.4, 0, 0.35); this.body.scale += 0.01 * (target - this.body.scale);
     this.flawTick();
@@ -210,7 +216,8 @@ export class Creature {
    *  (2) offline rollouts: start from a remembered state, imagine 8 steps of each MOT synergy through the learned world model
    *  (feeding predictions back into a copy of the SSM), and store the imagined forward progress as that synergy's value prior. */
   dream() { for (let k = 0; k < SITES; k++) if (this.visits[k] === 0) { const P = this.world.plants[k]; const vh = clamp(this.featC[P.c] + this.featS[P.s]); this.bA[k] += 0.75 * (1 + 6 * vh - this.bA[k]); this.bB[k] += 0.75 * (1 + 6 * (1 - vh) - this.bB[k]); }
-    const E = this.episodes; if (E.length < 10 || this.wm.lesion) return; const e = E[Math.floor(this.r() * E.length)]; const ssm = this.ssm.clone(); const log = [];
+    const E = this.episodes; if (E.length < 10 || this.wm.lesion) return; let e = E[Math.floor(this.r() * E.length)]; if (!this.lesion.hopfield && this.hop.X.length > 8) { /* pattern completion: a noisy, half-masked cue of the current state retrieves a whole stored episode to dream from */ const cue = Float64Array.from(this.zPrev, (v, i) => (this.r() < 0.5 ? 0 : v - this.zMean[i]) + 0.1 * gauss(this.r)); const R = this.hop.retrieve(cue); const m = this.hop.meta[R.top]; if (m && m.ep) { e = m.ep; this.memStats.dreamSim = R.sim; } }
+    const ssm = this.ssm.clone(); const log = [];
     for (let m = 0; m < 8; m++) { ssm.re.set(e.ssm[0]); ssm.im.set(e.ssm[1]); const z = Float64Array.from(e.z), y = new Float64Array(NY), u = new Float64Array(NY + 8); let prog = 0;
       for (let s = 0; s < 8; s++) { for (let q = 0; q < 8; q++) z[64 + q] = q === m ? 0.9 : 0.15; this.wm.predict(z, y); prog += y[12]; u.set(y); for (let q = 0; q < 8; q++) u[NY + q] = z[64 + q]; ssm.step(u); ssm.features(z); }
       this.Vimg[m] += 0.2 * (prog / 8 - this.Vimg[m]); log.push(prog / 8); }

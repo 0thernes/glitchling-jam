@@ -89,3 +89,44 @@ Honest reading:
 - Headless Chromium (SwiftShader, CPU) at 390×844 and 1280×800: no console errors, 20.3 / 11.6 fps (auto quality "low").
   Motion over 600 steps: intact 6.8 / 6.8; all MN lesioned 0.9 / 2.3; MOT lesioned 4.7 / 4.9.
 - Screenshots: `live-shots/s2-*.png`.
+
+## Pass 3: vector-symbolic cognitive map and modern Hopfield memory
+
+New module `js/sim/memory.js`.
+
+- **HDC / VSA cognitive map.** Built on Fourier holographic reduced representations: 512 complex phasors with random
+  spatial frequencies. Fractional power encoding binds x and z into one place vector.
+  - Two maps, each a single superposed vector:
+    - FOOD: signed outcome at each site visited and each snack eaten.
+    - VISIT: where the body has been, slowly decaying.
+  - Recall at any point is a kernel-weighted sum of everything stored, so it generalises to nearby places never visited.
+  - The FOOD recall at a plant now contributes to the race's value term: 0.25 weight, next to the site value and the Beta
+    mean.
+  - Curiosity samples 48 candidate places and goes where the VISIT map recalls the least, replacing the 24×24 count grid.
+- **Modern Hopfield network** (Ramsauer et al. 2020). Each simulated second, the centred 72-dim SSM/world-model state is
+  stored; capacity is 256, with random replacement.
+  - Retrieval is one softmax-attention step.
+  - The best match's similarity becomes a familiarity signal that re-activates an 8-neuron hippocampal assembly
+    indexed by that memory.
+  - REM dreaming now starts its world-model rollouts from the episode retrieved by a half-masked, noisy cue of the
+    current state (pattern completion), not from a random episode.
+- **UI:**
+  - Brain panel shows the Hopfield count and familiarity, and the self-model speed and turn rate.
+  - New lesions: HDC map, Hopfield memory.
+
+Measured (`test/memory_probe.mjs`):
+- **HDC food map.** 6 noisy Bernoulli outcomes per plant. Correlation of recall with the true reward probability, at the
+  plant / 1.5 units away, seeds 1–4: 0.79/0.79, 0.38/0.38, 0.13/0.11, 0.65/0.66.
+  - The kernel is smooth, so nearby recall matches plant recall.
+  - Low values come from 6 samples being noisy and from overlapping neighbouring plants.
+- **Hopfield.** 219 real episode states from a 120 s run, cued with 50% of dimensions zeroed plus noise.
+  - Completed-pattern cosine to the true memory: 0.83 at β = 24, against 0.68 for the cue alone.
+  - Top-1 index accuracy: 49%. Consecutive episodes are near-duplicates, so many "misses" are a neighbouring second.
+- **Exploration coverage**, 3×3-unit cells visited in 240 s, seeds 1–4: HDC curiosity 9/10/12/11 (mean 10.5); old count
+  grid 8/6/21/15 (mean 12.5).
+  - Not better. Most of the time is spent foraging, not exploring, and the spread is wide.
+- **`forage_bench`** 240 s, seeds 1–6: 9 feeds / 24 arrivals / 35 give-ups (pass 2: 8 / 31 / 36).
+- **`measure` intact:** dist 55.3, fed 0.33, entropy 6.14, upright 0.77. All MN lesioned: dist 5.2, entropy 0.10.
+- **Headless Chromium** (SwiftShader): phone 21.9 fps, desktop 13.2 fps, no console errors.
+  - Motion over 600 steps: intact 10.1 / 9.0; MN lesioned 0.1 / 1.3; MOT lesioned 4.7 / 6.6.
+- Screenshots: `live-shots/s3-*.png`.
