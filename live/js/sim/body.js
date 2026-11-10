@@ -69,7 +69,11 @@ export class Body {
       const drag = this.kind[i] === 'stalk' || this.kind[i] === 'eye' ? 0.6 : 0.15; X[i] += vx + (gx + drag * (wx - vx / dt)) * dt * dt; Y[i] += vy + gy * dt * dt; Z[i] += vz + (gz + drag * (wz - vz / dt)) * dt * dt; }
     const u = this.u; let e = 0; for (let k = 0; k < CH.N; k++) { u[k] = lesionMuscles ? 0 : clamp(u[k], -1, 1); e += Math.abs(u[k]); } this.energy = e;
     const cons = this.cons, sc = this.scale;
-    for (let it = 0; it < iters; it++) { const fw = it % 2 === 0; for (let qq = 0; qq < cons.length; qq++) { const C = cons[fw ? qq : cons.length - 1 - qq]; /* alternate sweep direction: removes Gauss-Seidel ordering bias (it made the body drift and roll to one side) */ const a = C.a, b = C.b; let rest = C.rest * sc; if (C.m >= 0) rest *= Math.max(0.35, 1 + C.g * u[C.m]);
+    // Gauss-Seidel order is re-randomised every substep (deterministic LCG). A fixed order - even with alternating sweeps - left a
+    // measured left-yaw bias of ~0.38 rad/s under a perfectly symmetric muscle wave (test/symmetry_probe.mjs); a random order removes it.
+    const ord = this.ord || (this.ord = Uint16Array.from(cons.keys())); let rs = this.rs ?? (this.rs = 12345);
+    for (let i = ord.length - 1; i > 0; i--) { rs = (Math.imul(rs, 1664525) + 1013904223) >>> 0; const j = rs % (i + 1); const t = ord[i]; ord[i] = ord[j]; ord[j] = t; } this.rs = rs;
+    for (let it = 0; it < iters; it++) { const fw = it % 2 === 0; for (let qq = 0; qq < cons.length; qq++) { const C = cons[ord[fw ? qq : cons.length - 1 - qq]]; const a = C.a, b = C.b; let rest = C.rest * sc; if (C.m >= 0) rest *= Math.max(0.35, 1 + C.g * u[C.m]);
         const dx = X[b] - X[a], dy = Y[b] - Y[a], dz = Z[b] - Z[a]; const d = Math.hypot(dx, dy, dz) || 1e-9; const w = this.im[a] + this.im[b]; const corr = (C.k * (d - rest)) / (d * w);
         X[a] += dx * corr * this.im[a]; Y[a] += dy * corr * this.im[a]; Z[a] += dz * corr * this.im[a]; X[b] -= dx * corr * this.im[b]; Y[b] -= dy * corr * this.im[b]; Z[b] -= dz * corr * this.im[b]; }
       this.collide(it === iters - 1, dt, F); }
@@ -87,7 +91,7 @@ export class Body {
       let dx = X[i] - OX[i], dy = Y[i] - OY[i], dz = Z[i] - OZ[i]; const dn = dx * nx + dy * ny + dz * nz; dx -= dn * nx; dy -= dn * ny; dz -= dn * nz;
       const k = this.kind[i]; let mu;
       if (k === 'foot' || k === 'hand') { const L = this.limbs.find((l) => l.foot === i); const gp = clamp(0.5 + 0.5 * u[L.grip]); this.gripP[i] = gp; mu = 0.15 + 0.83 * gp; if (hit === 2 && gp > 0.6) this.grabbing++; }
-      else { const seg = this.segOf(i); const f = F[seg].f; const along = dx * f[0] + dy * f[1] + dz * f[2]; const mAlong = along > 0 ? 0.08 : 0.55, mLat = 0.6;
+      else { const seg = this.segOf(i); const f = F[seg].f; const along = dx * f[0] + dy * f[1] + dz * f[2]; const mAlong = along > 0 ? 0.08 : 0.55, mLat = this.mLat ?? 0.6;
         const ax = along * f[0], ay = along * f[1], az = along * f[2]; X[i] -= ax * mAlong + (dx - ax) * mLat; Y[i] -= ay * mAlong + (dy - ay) * mLat; Z[i] -= az * mAlong + (dz - az) * mLat; continue; }
       X[i] -= dx * mu; Y[i] -= dy * mu; Z[i] -= dz * mu; }
   }

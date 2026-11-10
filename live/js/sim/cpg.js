@@ -7,14 +7,14 @@
 import { sig, mulberry } from './util.js';
 export const NCPG = 24;
 export class CPG {
-  constructor(seed) { const r = mulberry(seed * 77 + 1), N = NCPG; this.N = N; this.x = new Float64Array(N); this.a = new Float64Array(N); this.f = new Float64Array(N); this.W = new Float64Array(N * N); this.b = new Float64Array(N).fill(-0.4);
-    this.tau = new Float64Array(N).fill(0.06); this.tauA = new Float64Array(N).fill(0.35); this.g = new Float64Array(N).fill(4.5); this.in = new Float64Array(N);
+  constructor(seed, G = { cS: 1.2, cO: 0, rS: 1.2, rO: 0, tauA: 0.35 }) { const r = mulberry(seed * 77 + 1), N = NCPG; this.N = N; this.x = new Float64Array(N); this.a = new Float64Array(N); this.f = new Float64Array(N); this.W = new Float64Array(N * N); this.b = new Float64Array(N).fill(-0.4);
+    this.tau = new Float64Array(N).fill(0.06); this.tauA = new Float64Array(N).fill(0.35); for (let i = 12; i < 24; i++) this.tauA[i] = G.tauA; this.g = new Float64Array(N).fill(4.5); this.in = new Float64Array(N);
     const w = (i, j, v) => { this.W[i * N + j] += v; }; // j -> i
     for (let o = 0; o < 12; o++) { const L = 2 * o, R = 2 * o + 1; w(L, R, -6); w(R, L, -6); }
     for (let s = 0; s < 5; s++) { // asymmetric intersegmental coupling: segment s excites segment s+1 (towards the head) on the same side -> a phase lag
       // travels along the body; on this body (anisotropic scale friction) that wave direction propels it forward (measured in test/gait_probe.mjs)
       w(2 * (s + 1), 2 * s, 1.6); w(2 * (s + 1) + 1, 2 * s + 1, 1.6); w(2 * s, 2 * (s + 1), 0.4); w(2 * s + 1, 2 * (s + 1) + 1, 0.4); }
-    const legSeg = [1, 1, 3, 3]; for (let l = 0; l < 4; l++) { const F = 12 + 2 * l, B = F + 1, s = legSeg[l]; const same = l % 2 === 0; w(F, 2 * s + (same ? 0 : 1), 1.2); w(B, 2 * s + (same ? 1 : 0), 1.2); }
+    const legSeg = [1, 1, 3, 3]; for (let l = 0; l < 4; l++) { const F = 12 + 2 * l, B = F + 1, s = legSeg[l]; const same = l % 2 === 0; const [cS, cO] = l < 2 ? [G.cS, G.cO] : [G.rS, G.rO]; w(F, 2 * s + (same ? 0 : 1), cS); w(B, 2 * s + (same ? 1 : 0), cS); w(F, 2 * s + (same ? 1 : 0), cO); w(B, 2 * s + (same ? 0 : 1), cO); }
     for (let a = 0; a < 2; a++) { const F = 20 + 2 * a, B = F + 1; w(F, 10 + a, 1.0); w(B, 11 - a, 1.0); }
     for (let i = 0; i < N; i++) { this.x[i] = r() * 0.5; this.a[i] = r() * 0.5; for (let j = 0; j < N; j++) this.W[i * N + j] += (r() - 0.5) * 0.2; }
   }

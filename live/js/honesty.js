@@ -12,8 +12,11 @@ export const REAL = [
   '<b>Metabolism:</b> gut → blood → liver glycogen → fat, ketones, gluconeogenesis, urea, muscle protein, insulin/glucagon PID, cortisol, ghrelin, leptin, ATP from oxidation (rate laws ported from the reference organism), plus water, bladder, colon and real waste objects dropped in the world. Muscle work and spikes cost ATP.',
   '<b>Spine curvature</b> is computed with exact Taylor-mode derivatives (a port of the Taylor recurrences from Tsotchke\'s Eshkol, MIT) of a spline through the body, and fed to proprioceptive neurons.',
   '<b>Skin:</b> a 64×32 excitable-medium sheet driven by cortical firing, muscle activity and neuromodulators sets chromatophore expansion and iridophore phase in the shader. Organs, heart beat (metabolic heart rate), gut peristalsis (enteric neuron firing), blood colour (blood glucose) and eye gaze (eye motor neurons) are all read from the simulation.',
+  '<b>Reflexes:</b> a vestibular righting reflex (tilt sensed from the body frame drives the down-side legs and ventral muscles through plastic weights; flipped bodies right themselves in a median 2.1 s, 0/10 with motor neurons cut) and a stance/swing reflex (swing-muscle stretch velocity gates foot grip).',
+  '<b>Self-model:</b> the creature keeps running estimates of its own approach speed and turn rate, and the striatal race prices each site by the predicted travel time; it gives up on a goal when it stops making progress.',
 ];
 export const SIMPLIFIED = [
+  'Turning is physically weak (about 0.2–0.3 rad/s at full command), so the creature reaches nearby sites far more often than distant ones.',
   'Scale: 426 spiking + 24 LTC neurons, not a biological brain. Regions are small and connections are random within the reference probabilities.',
   'The innate wiring (which sense excites which MOT neuron, which pattern-generator neuron excites which muscle) is designed by hand as a starting "genome"; learning adjusts it within bounds.',
   'The world model is a linear readout over SSM features, not a deep network. The SSM\'s input and gating projections are fixed random; only the readout learns.',
