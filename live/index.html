@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark"><meta name="theme-color" content="#05030a">
+<title>Glitchling v2 · live 3D creature</title>
+<meta name="description" content="Glitchling v2: a 3D soft-bodied creature whose every movement comes from spiking neurons, an LTC pattern generator and muscle physics, simulated live in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23c58bff'/%3E%3Ccircle cx='6' cy='7' r='1.5' fill='%23000'/%3E%3Ccircle cx='10.5' cy='6' r='1' fill='%23000'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}</script>
+</head><body>
+<canvas id="gl" aria-label="3D view of the Glitchling simulation. Drag to orbit, pinch or scroll to zoom." tabindex="0"></canvas>
+<header class="bar">
+  <a class="home" href="../" title="Back to Glitchling home">◀</a>
+  <h1>GLITCHLING <span>v2 live</span></h1>
+  <span class="chip sim" title="Everything here is computed in your browser">BROWSER SIMULATION</span>
+  <div class="hud" aria-live="off"><span id="hud-stage">WAKE</span> <span id="hud-clock">08:00</span> <span id="hud-fps">-- fps</span> <span id="hud-q">auto</span></div>
+</header>
+<nav class="tools" aria-label="Interaction tools">
+  <button data-tool="orbit" class="on" title="Orbit / zoom the camera">🎥<span>Look</span></button>
+  <button data-tool="food" title="Tap the ground to drop food">🍬<span>Food</span></button>
+  <button data-tool="poke" title="Tap the creature to poke it">👉<span>Poke</span></button>
+  <button data-tool="rock" title="Tap the ground to spawn a climbable rock">🪨<span>Rock</span></button>
+  <button data-tool="spring" title="Tap the ground to spawn a spring pad">🌀<span>Spring</span></button>
+  <button id="pause" title="Pause / resume (space)">⏸<span>Pause</span></button>
+  <button id="panel-btn" aria-expanded="false" aria-controls="panel" title="Brain, body, flaws and settings">🧠<span>Brain</span></button>
+</nav>
+<aside id="panel" class="panel" hidden>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="brain" aria-selected="true">Brain</button><button role="tab" data-tab="body">Body</button><button role="tab" data-tab="flaws">Flaws</button><button role="tab" data-tab="world">World</button><button role="tab" data-tab="lab">Lesions</button><button role="tab" data-tab="about">Real?</button>
+  </div>
+  <section data-pane="brain">
+    <div class="row"><b>Spikes</b> <small>426 neurons, rows coloured by region, newest on the right</small></div>
+    <canvas id="raster" width="360" height="213"></canvas>
+    <div id="regions" class="legend"></div>
+    <div class="grid2"><div><b>Neuromodulators</b><div id="nm"></div></div><div><b>MOT (8)</b><div id="mot"></div></div></div>
+    <div class="row"><b>Striatal race</b> <small>D1 "go" (up) vs D2 "no-go" (down) per site</small></div><canvas id="race" width="360" height="70"></canvas>
+    <div class="row"><b>LTC pattern generator</b> <small>24 liquid neurons</small></div><canvas id="cpg" width="360" height="60"></canvas>
+    <div class="row"><b>Selective SSM</b> <small>32 modes |h|, Δ</small></div><canvas id="ssm" width="360" height="40"></canvas>
+    <div class="row"><b>World model</b> <small>surprise and MSE</small></div><canvas id="wm" width="360" height="50"></canvas>
+    <div id="mindstats" class="stats"></div>
+  </section>
+  <section data-pane="body" hidden><div id="bodystats" class="stats"></div><canvas id="meta" width="360" height="90"></canvas></section>
+  <section data-pane="flaws" hidden>
+    <p class="small">The four engineered flaws act on the neural pathways, as in the reference <code>glitchling.ts</code>.</p>
+    <label class="sw"><input type="checkbox" id="f-scramble"> <b>Scramble</b> senses: SENS neurons re-permuted every <input id="f-scramble-p" type="number" min="5" max="600" value="90"> min + noise</label>
+    <label class="sw"><input type="checkbox" id="f-leaky"> <b>Leaky</b> memory: values and plastic synapses decay <input id="f-leaky-r" type="number" min="0" max="0.5" step="0.01" value="0.06"> per min</label>
+    <label class="sw"><input type="checkbox" id="f-backwards"> <b>Backwards</b> motors: 8 MOT neurons read in reverse; chosen site mirrored</label>
+    <label class="sw"><input type="checkbox" id="f-misfire"> <b>Misfire</b>: jolt 20 neurons + perturb synapses every <input id="f-misfire-p" type="number" min="5" max="600" value="60"> min</label>
+    <div class="btns"><button id="f-none">Healthy clone</button><button id="f-all">All flaws</button></div>
+  </section>
+  <section data-pane="world" hidden>
+    <label>Gravity tilt X <input type="range" id="gx" min="-0.5" max="0.5" step="0.01" value="0"></label>
+    <label>Gravity tilt Z <input type="range" id="gz" min="-0.5" max="0.5" step="0.01" value="0"></label>
+    <label>Gravity strength <input type="range" id="gs" min="2" max="20" step="0.5" value="9.8"></label>
+    <label>Sim speed <select id="speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></label>
+    <label>Quality <select id="quality"><option value="auto" selected>auto (adaptive)</option><option value="0">low</option><option value="1">medium</option><option value="2">high</option><option value="3">ultra (shadows)</option></select></label>
+    <div class="btns"><button id="rain">Rain</button><button id="gust">Gust</button><button id="sleepy">Make sleepy</button><button id="wake">Wake</button><button id="follow">Camera: follow</button><button id="reset">New seed</button></div>
+    <label>Seed <input type="number" id="seed" min="1" max="999999" value="1"></label>
+  </section>
+  <section data-pane="lab" hidden>
+    <p class="small">Lesions cut real pathways. Watch what stops working.</p>
+    <div id="lesions" class="lesions"></div>
+    <div id="lesionlog" class="stats"></div>
+  </section>
+  <section data-pane="about" hidden>
+    <h2>What's real here vs simplified</h2>
+    <p class="small">This is a <b>simulation that runs in your browser</b>. All numbers on this page are computed live by the code in <code>live/js/sim/</code>. It makes no claim of awareness, feelings, sentience or consciousness.</p>
+    <h3>Computed for real, every frame</h3><ul class="small" id="real-list"></ul>
+    <h3>Simplified or designed by hand</h3><ul class="small" id="simp-list"></ul>
+    <p class="small">Graphics: rendered by WebGL (three.js r170, bundled locally) into half-float buffers, ACES-tonemapped to your display, with bloom. Resolution adapts to hold the frame rate; it is not a fixed 4K/HDR output. Source and change log: <a href="https://github.com/0thernes/glitchling-jam/tree/main/live">github.com/0thernes/glitchling-jam/live</a>.</p>
+  </section>
+</aside>
+<div id="events" class="events" aria-live="polite"></div>
+<noscript><p class="nojs">This page needs JavaScript and WebGL. The simpler 2D version is at <a href="../play/">play/</a>.</p></noscript>
+<div id="glfail" class="nojs" hidden>WebGL could not start on this device. Try the 2D version at <a href="../play/">play/</a>.</div>
+<script type="module" src="js/app.js"></script>
+</body></html>

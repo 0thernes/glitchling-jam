@@ -1,0 +1,76 @@
+import { Creature, DEFAULT_FLAWS, MOT_NAMES } from './sim/creature.js';
+import { REGIONS, R0, RN, NNEU } from './sim/brain.js';
+import { STAGES } from './sim/mind.js';
+import { REAL, SIMPLIFIED } from './honesty.js';
+const $ = (id) => document.getElementById(id);
+const Q = new URLSearchParams(location.search); const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let seed = +(Q.get('seed') || 1) || 1; $('seed').value = seed;
+const flaws = JSON.parse(JSON.stringify(DEFAULT_FLAWS)); for (const k of (Q.get('flaws') || '').split(',').filter(Boolean)) if (flaws[k]) flaws[k].on = true;
+let cr = new Creature(seed, { flaws }); let view = null; let View;
+try { ({ View } = await import('./render.js')); view = new View($('gl'), cr, { reduced, quality: 1 }); } catch (e) { console.error(e); $('glfail').hidden = false; }
+window.glitch = { get cr() { return cr; }, get view() { return view; }, stats: { fps: 0, frames: 0, quality: 1, simMs: 0, renderMs: 0 } };
+let speed = +(Q.get('speed') || 1); $('speed').value = String(speed); let paused = false, tool = 'orbit', qMode = Q.get('q') || 'auto'; $('quality').value = qMode;
+const coarse = matchMedia('(pointer: coarse)').matches; const qMax = coarse ? 2 : 3;
+if (view) { view.setQuality(qMode === 'auto' ? (coarse ? 1 : 2) : +qMode); addEventListener('resize', () => view.resize()); }
+// ---------------------------------------------------------------- honesty lists
+$('real-list').innerHTML = REAL.map((x) => `<li>${x}</li>`).join(''); $('simp-list').innerHTML = SIMPLIFIED.map((x) => `<li>${x}</li>`).join('');
+// ---------------------------------------------------------------- tools
+document.querySelectorAll('.tools [data-tool]').forEach((b) => b.addEventListener('click', () => { tool = b.dataset.tool; document.querySelectorAll('.tools [data-tool]').forEach((x) => x.classList.toggle('on', x === b)); if (view) view.controls.enabled = tool === 'orbit'; }));
+$('pause').addEventListener('click', () => { paused = !paused; $('pause').firstChild.textContent = paused ? '▶' : '⏸'; });
+addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); $('pause').click(); } });
+$('panel-btn').addEventListener('click', () => { const p = $('panel'); p.hidden = !p.hidden; $('panel-btn').setAttribute('aria-expanded', String(!p.hidden)); });
+document.querySelectorAll('.tabs [data-tab]').forEach((b) => b.addEventListener('click', () => { document.querySelectorAll('.tabs [data-tab]').forEach((x) => x.setAttribute('aria-selected', String(x === b))); document.querySelectorAll('[data-pane]').forEach((p) => (p.hidden = p.dataset.pane !== b.dataset.tab)); }));
+$('gl').addEventListener('pointerdown', (e) => { if (!view || tool === 'orbit') return; const r = $('gl').getBoundingClientRect(); const nx = ((e.clientX - r.left) / r.width) * 2 - 1, ny = -((e.clientY - r.top) / r.height) * 2 + 1; const hit = view.pick(nx, ny);
+  if (tool === 'poke') { if (hit.particle >= 0) { cr.poke(hit.particle, [hit.dir.x, Math.abs(hit.dir.y) + 0.3, hit.dir.z]); view.skinU.glitch.value = 1; } return; }
+  if (!hit.point) return; const { x, z } = hit.point; if (tool === 'food') cr.world.dropSnack(x, z); else if (tool === 'rock') cr.world.addRock(x, z, 0.8 + Math.random() * 1.2); else if (tool === 'spring') cr.world.addSpring(x, z); });
+// ---------------------------------------------------------------- flaws
+const syncFlawUI = () => { for (const k of ['scramble', 'leaky', 'backwards', 'misfire']) $('f-' + k).checked = cr.flaws[k].on; };
+const readFlaws = () => { const f = JSON.parse(JSON.stringify(cr.flaws)); for (const k of ['scramble', 'leaky', 'backwards', 'misfire']) f[k].on = $('f-' + k).checked; f.scramble.period = +$('f-scramble-p').value || 90; f.leaky.rate = +$('f-leaky-r').value; f.misfire.period = +$('f-misfire-p').value || 60; cr.setFlaws(f); urlSync(); };
+document.querySelectorAll('[id^=f-]').forEach((el) => el.tagName === 'INPUT' && el.addEventListener('change', readFlaws));
+$('f-none').onclick = () => { for (const k of ['scramble', 'leaky', 'backwards', 'misfire']) $('f-' + k).checked = false; readFlaws(); }; $('f-all').onclick = () => { for (const k of ['scramble', 'leaky', 'backwards', 'misfire']) $('f-' + k).checked = true; readFlaws(); }; syncFlawUI();
+function urlSync() { const on = Object.keys(cr.flaws).filter((k) => cr.flaws[k].on); const u = new URL(location.href); u.searchParams.set('seed', seed); on.length ? u.searchParams.set('flaws', on.join(',')) : u.searchParams.delete('flaws'); history.replaceState(null, '', u); }
+// ---------------------------------------------------------------- world controls
+$('gx').oninput = () => (cr.world.gx = +$('gx').value); $('gz').oninput = () => (cr.world.gz = +$('gz').value); $('gs').oninput = () => (cr.world.g = +$('gs').value);
+$('speed').onchange = () => (speed = +$('speed').value); $('quality').onchange = () => { qMode = $('quality').value; if (view && qMode !== 'auto') view.setQuality(+qMode); };
+$('rain').onclick = () => { cr.world.wind.rainT = cr.world.wind.rainT ? 0 : 1; }; $('gust').onclick = () => { cr.world.wind.tx = (Math.random() - 0.5) * 10; cr.world.wind.tz = (Math.random() - 0.5) * 10; };
+$('sleepy').onclick = () => { cr.sleep.S = 1; }; $('wake').onclick = () => { cr.sleep.forceWake = 30; cr.sleep.S = Math.min(cr.sleep.S, 0.3); };
+$('follow').onclick = () => { if (!view) return; view.follow = !view.follow; $('follow').textContent = 'Camera: ' + (view.follow ? 'follow' : 'free'); };
+$('reset').onclick = () => { seed = Math.floor(Math.random() * 99999) + 1; $('seed').value = seed; restart(); }; $('seed').onchange = () => { seed = +$('seed').value || 1; restart(); };
+function restart() { const f = cr.flaws; cr = new Creature(seed, { flaws: f }); if (view) { const c = $('gl'); view.renderer.dispose(); const nc = c.cloneNode(); c.replaceWith(nc); view = new View(nc, cr, { reduced, quality: view.quality }); } urlSync(); buildLesions(); }
+// ---------------------------------------------------------------- lesions
+const LES = [['mot', 'MOT neurons silenced'], ['cpg', 'LTC pattern generator off'], ['mn', 'all motor neurons off (paralysis)'], ['learnMotor', 'motor learning off'], ['stdp', 'STDP / plasticity off'], ['wm', 'world model off'], ['astro', 'astrocyte modulation off'], ['veto', 'veto off'], ['efe', 'epistemic (EFE) term off'], ['dream', 'REM dreaming off']];
+function buildLesions() { const box = $('lesions'); box.innerHTML = ''; for (const [k, label] of LES) { const b = document.createElement('button'); b.textContent = label; b.classList.toggle('on', !!cr.lesion[k]); b.onclick = () => { cr.lesion[k] = !cr.lesion[k]; if (k === 'wm') cr.wm.lesion = cr.lesion[k]; b.classList.toggle('on', cr.lesion[k]); lesionMark(k); }; box.appendChild(b); } }
+let lesionRef = null; function lesionMark(k) { lesionRef = { k, t: cr.t, dist: cr.stats.dist, on: cr.lesion[k] }; } buildLesions();
+// ---------------------------------------------------------------- legends
+$('regions').innerHTML = REGIONS.map(([n], i) => `<span><i style="background:hsl(${(i / REGIONS.length) * 360},90%,60%)"></i>${n}</span>`).join('');
+// ---------------------------------------------------------------- panel drawing
+const raster = $('raster'), rctx = raster.getContext('2d'); const rowY = (i) => Math.floor((i / NNEU) * raster.height); const regionColor = []; REGIONS.forEach(([n, c], ri) => { for (let k = 0; k < c; k++) regionColor[R0[n] + k] = `hsl(${(ri / REGIONS.length) * 360},90%,60%)`; });
+const spikeAcc = new Uint8Array(NNEU); const surpHist = [], mseHist = [];
+function bars(el, rows) { el.innerHTML = rows.map(([n, v]) => `<div class="bar-row"><span>${n}</span><div><i style="width:${Math.max(0, Math.min(100, v * 100)).toFixed(0)}%"></i></div></div>`).join(''); }
+function stats(el, rows) { el.innerHTML = rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join(''); }
+function drawPanel() { const p = $('panel'); if (p.hidden) return; const b = cr.brain;
+  // raster scroll
+  rctx.drawImage(raster, -2, 0); rctx.fillStyle = '#000'; rctx.fillRect(raster.width - 2, 0, 2, raster.height); for (let i = 0; i < NNEU; i++) if (spikeAcc[i]) { rctx.fillStyle = regionColor[i]; rctx.fillRect(raster.width - 2, rowY(i), 2, 1); } spikeAcc.fill(0);
+  bars($('nm'), [['DA', b.nm.DA], ['NE', b.nm.NE], ['5-HT', b.nm['5HT']], ['ACh', b.nm.ACh], ['cortisol', b.nm.cortisol]]); bars($('mot'), MOT_NAMES.map((n, m) => [n, cr.motRate[m] / 1.5]));
+  const rc = $('race').getContext('2d'); rc.fillStyle = '#000'; rc.fillRect(0, 0, 360, 70); for (let k = 0; k < 16; k++) { const d1 = cr.raceLog[k], d2 = cr.raceLog[16 + k]; rc.fillStyle = cr.goal && cr.goal.k === k ? '#ff0' : '#0f6'; rc.fillRect(k * 22 + 4, 35 - Math.min(33, d1 * 2.5), 9, Math.min(33, d1 * 2.5)); rc.fillStyle = '#f36'; rc.fillRect(k * 22 + 13, 35, 7, Math.min(33, d2 * 2.5)); }
+  const cc = $('cpg').getContext('2d'); cc.drawImage(cc.canvas, -2, 0); cc.fillStyle = '#000'; cc.fillRect(358, 0, 2, 60); for (let k = 0; k < 24; k++) { const v = cr.cpg.x[k]; cc.fillStyle = `hsla(${k * 15},90%,${20 + 50 * v}%,1)`; cc.fillRect(358, k * 2.5, 2, 2.5); }
+  const sc = $('ssm').getContext('2d'); sc.fillStyle = '#000'; sc.fillRect(0, 0, 360, 40); for (let k = 0; k < 32; k++) { const m = Math.hypot(cr.ssm.re[k], cr.ssm.im[k]); sc.fillStyle = '#0ff'; sc.fillRect(k * 11 + 2, 38 - Math.min(36, m * 30), 5, Math.min(36, m * 30)); sc.fillStyle = '#f0f'; sc.fillRect(k * 11 + 7, 38 - Math.min(36, cr.ssm.delta[k] * 12), 3, Math.min(36, cr.ssm.delta[k] * 12)); }
+  surpHist.push(cr.wm.surprise); mseHist.push(cr.wm.mse); if (surpHist.length > 180) { surpHist.shift(); mseHist.shift(); } const wc = $('wm').getContext('2d'); wc.fillStyle = '#000'; wc.fillRect(0, 0, 360, 50); const line = (h, col, sc2) => { wc.strokeStyle = col; wc.beginPath(); h.forEach((v, i) => { const y = 48 - Math.min(46, v * sc2); i ? wc.lineTo(i * 2, y) : wc.moveTo(0, y); }); wc.stroke(); }; line(surpHist, '#ff0', 40); line(mseHist, '#0ff', 60);
+  stats($('mindstats'), [['sleep stage', STAGES[cr.sleep.stage]], ['sleep pressure S', cr.sleep.S.toFixed(2)], ['goal', cr.goal ? cr.goal.type + (cr.goal.k !== undefined ? ' ' + cr.goal.k : '') : cr.race ? 'racing…' : '—'], ['races / vetoes', `${cr.stats.races} / ${cr.stats.vetoes}`], ['fed / tries', `${cr.stats.eats} / ${cr.stats.tries}`], ['NREM replays', cr.stats.replays], ['REM dream rollouts', cr.stats.dreams], ['imagined synergy value', [...cr.Vimg].map((v) => v.toFixed(2)).join(' ')], ['STDP events', b.stdpEvents], ['plastic |Δw| / 20ms', (b.dwLast || 0).toExponential(1)], ['astrocyte Ca (CTX)', b.astro[2].toFixed(2)], ['motor RPE δ', (cr.motorDelta || 0).toFixed(3)], ['behaviour entropy', `${cr.entropy.toFixed(2)} bits (${cr.states || 0}/128 states)`], ['world-model updates', cr.wm.n]]);
+  const M = cr.metab; stats($('bodystats'), [['hour', cr.hour.toFixed(1)], ['gut glc/fat/prot', `${M.gut.glc.toFixed(2)} / ${M.gut.fat.toFixed(2)} / ${M.gut.prot.toFixed(2)}`], ['blood glucose', M.blood.glc.toFixed(2)], ['blood FFA / AA / ketones', `${M.blood.ffa.toFixed(2)} / ${M.blood.aa.toFixed(2)} / ${M.blood.ket.toFixed(2)}`], ['liver glycogen', M.liverGly.toFixed(1)], ['fat store', M.fat.toFixed(0)], ['muscle', M.muscle.toFixed(1)], ['insulin / glucagon', `${M.insulin.toFixed(2)} / ${M.glucagon.toFixed(2)}`], ['ghrelin / leptin', `${M.ghrelin.toFixed(2)} / ${M.leptin.toFixed(2)}`], ['cortisol', M.cortisol.toFixed(2)], ['ATP', M.atp.toFixed(2)], ['heart rate', M.hr.toFixed(0)], ['water gut / blood', `${M.gut.water.toFixed(2)} / ${M.blood.water.toFixed(2)}`], ['bladder / colon', `${M.bladder.toFixed(2)} / ${M.colon.toFixed(2)}`], ['urinations / defecations', `${cr.stats.urine} / ${cr.stats.feces}`], ['hunger', M.hunger().toFixed(2)], ['body scale (growth)', cr.body.scale.toFixed(3)], ['distance travelled', cr.stats.dist.toFixed(1)], ['muscle effort Σ|u|', cr.body.energy.toFixed(1)]]);
+  if (lesionRef) { const dt = cr.t - lesionRef.t; stats($('lesionlog'), [['last change', `${lesionRef.k} ${lesionRef.on ? 'cut' : 'restored'}`], ['seconds since', dt.toFixed(0)], ['speed since (units/s)', dt > 0 ? ((cr.stats.dist - lesionRef.dist) / dt).toFixed(2) : '—']]); }
+  const mc = $('meta').getContext('2d'); mc.drawImage(mc.canvas, -1, 0); mc.fillStyle = '#000'; mc.fillRect(359, 0, 1, 90); const dot = (v, col) => { mc.fillStyle = col; mc.fillRect(359, 88 - Math.max(0, Math.min(86, v * 86)), 1, 2); }; dot(M.blood.glc / 6, '#f36'); dot(M.insulin, '#0ff'); dot(M.glucagon, '#ff0'); dot(M.liverGly / 60, '#a6f'); dot(M.ghrelin, '#0f6'); dot(M.cortisol, '#f80');
+}
+// ---------------------------------------------------------------- events overlay
+let evShown = 0; function drawEvents() { const ev = cr.events; const el = $('events'); const last = ev.slice(innerWidth < 640 ? -3 : -5); el.innerHTML = last.map((e) => `<div><b>${e.type}</b> ${e.msg}</div>`).join(''); }
+// ---------------------------------------------------------------- main loop with adaptive quality
+let last = performance.now(), acc = 0, fpsT = 0, fpsN = 0, panelT = 0, goodT = 0; const S = window.glitch.stats;
+function frame(now) { const dt = Math.min(0.1, (now - last) / 1000); last = now; fpsT += dt; fpsN++;
+  const t0 = performance.now(); if (!paused) { acc += dt * 60 * speed; let n = 0; while (acc >= 1 && n < 64) { cr.step(); acc -= 1; n++; for (let i = 0; i < NNEU; i++) spikeAcc[i] |= cr.brain.spk[i]; if (performance.now() - t0 > 14) { acc = 0; break; } } } cr.speed = speed; const t1 = performance.now();
+  if (view) view.update(paused ? 0 : dt); const t2 = performance.now(); S.simMs = S.simMs * 0.95 + (t1 - t0) * 0.05; S.renderMs = S.renderMs * 0.95 + (t2 - t1) * 0.05; S.frames++;
+  if (fpsT > 1) { const fps = fpsN / fpsT; S.fps = fps; $('hud-fps').textContent = fps.toFixed(0) + ' fps'; fpsT = 0; fpsN = 0;
+    if (view && qMode === 'auto') { if (fps < 38 && view.quality > 0) { view.setQuality(view.quality - 1); goodT = 0; } else if (fps > 57) { goodT++; if (goodT > 5 && view.quality < qMax) { view.setQuality(view.quality + 1); goodT = 0; } } else goodT = 0; }
+    S.quality = view ? view.quality : -1; $('hud-q').textContent = (qMode === 'auto' ? 'auto:' : '') + ['low', 'med', 'high', 'ultra'][S.quality] ; }
+  panelT += dt; if (panelT > 1 / 15) { panelT = 0; drawPanel(); drawEvents(); $('hud-stage').textContent = STAGES[cr.sleep.stage]; const h = cr.hour; $('hud-clock').textContent = `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; }
+  requestAnimationFrame(frame); }
+requestAnimationFrame(frame);

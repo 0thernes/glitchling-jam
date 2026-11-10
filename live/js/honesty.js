@@ -1,0 +1,25 @@
+// The real-vs-simplified lists shown on the page and in the README. Keep these accurate when the code changes.
+export const REAL = [
+  '<b>Spiking neurons:</b> 426 leaky integrate-and-fire neurons with adaptation and refractory periods, stepped every 2 ms. 272 of them use the reference organism\'s 14 regions, sizes and connection probabilities; PROP (32 proprioceptors) and MN (122 motor neurons) are added for the body.',
+  '<b>Liquid neurons:</b> the 24-neuron central pattern generator is made of LTC neurons (fused LTC solver); its rhythm comes from mutual inhibition and adaptation, not a sine wave. Motor neurons have an input-dependent ("liquid") membrane time constant.',
+  '<b>Muscles and physics:</b> 61 muscle channels (agonist minus antagonist motor-neuron activity) set the rest lengths of distance constraints in a 51-particle soft body, which is solved against gravity, anisotropic scale friction, neural foot/hand grip, terrain, rocks and spring pads. No keyframes, no animation clips.',
+  '<b>Plasticity:</b> STDP eligibility traces on 13 pathway types, turned into weight change by dopamine (third factor) scaled by acetylcholine; NREM consolidation and down-scaling; motor weights learn online by reward-modulated node perturbation (reward = progress toward the goal minus effort).',
+  '<b>Neuromodulators:</b> DA, NE, 5-HT and ACh are read from the firing of VTA, LC, raphe and basal-forebrain neurons; cortisol comes from the metabolism. They change gain, noise, learning rate, exploration, veto threshold, skin colour and pupil size.',
+  '<b>Decision:</b> a spike race between 16 D1 ("go") and 16 D2 ("no-go") striatal neurons, driven by expected free energy per site (learned value + Beta-belief mean, expected information gain, travel cost, learned harm), then a veto that can cancel the winner and re-race.',
+  '<b>MOT drives the body; the site choice comes from the race.</b> The 8 MOT neurons (forward, turn L/R, rear, reach, grip, jump, curl) feed the pattern generator and motor neurons; which site to go to is decided by the striatal race only.',
+  '<b>Memory and prediction:</b> a 32-mode selective diagonal state-space model (input-dependent step size) summarises recent senses and actions; a world model trained online by normalised LMS predicts the next proprioceptive/vestibular/contact state; its surprise drives LC/noradrenaline.',
+  '<b>Sleep:</b> two-process sleep pressure + circadian clock (reference rule), WAKE/N1/N2/N3/REM cycling, motor atonia, NREM replay of stored waking episodes (re-trains the world model, re-activates cortical assemblies for STDP), REM dreaming (reference dream-belief rule + world-model rollouts of each motor synergy, which bias waking behaviour).',
+  '<b>Metabolism:</b> gut → blood → liver glycogen → fat, ketones, gluconeogenesis, urea, muscle protein, insulin/glucagon PID, cortisol, ghrelin, leptin, ATP from oxidation (rate laws ported from the reference organism), plus water, bladder, colon and real waste objects dropped in the world. Muscle work and spikes cost ATP.',
+  '<b>Spine curvature</b> is computed with exact Taylor-mode derivatives (a port of the Taylor recurrences from Tsotchke\'s Eshkol, MIT) of a spline through the body, and fed to proprioceptive neurons.',
+  '<b>Skin:</b> a 64×32 excitable-medium sheet driven by cortical firing, muscle activity and neuromodulators sets chromatophore expansion and iridophore phase in the shader. Organs, heart beat (metabolic heart rate), gut peristalsis (enteric neuron firing), blood colour (blood glucose) and eye gaze (eye motor neurons) are all read from the simulation.',
+];
+export const SIMPLIFIED = [
+  'Scale: 426 spiking + 24 LTC neurons, not a biological brain. Regions are small and connections are random within the reference probabilities.',
+  'The innate wiring (which sense excites which MOT neuron, which pattern-generator neuron excites which muscle) is designed by hand as a starting "genome"; learning adjusts it within bounds.',
+  'The world model is a linear readout over SSM features, not a deep network. The SSM\'s input and gating projections are fixed random; only the readout learns.',
+  'Dropped food triggers an innate orienting response rather than entering the striatal race. Curiosity wandering uses a visit-count novelty map.',
+  'Physics is position-based (Verlet + distance constraints), not finite-element tissue. Organs and blood particles are drawn where the metabolism says, but they are not separately simulated as fluids.',
+  'Time is compressed: 1 simulated minute = 0.25 s at 1× speed, so a day is 6 minutes.',
+  'Tsotchke stack: only the Taylor-mode AD recurrences (Eshkol) are used here. The QRNG, QGTL and Moonlab components used elsewhere in the jam are not wired into this page.',
+  'It is a simulation. No claim of awareness, feelings, sentience or consciousness is made.',
+];

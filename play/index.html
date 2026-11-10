@@ -11,7 +11,7 @@
 <a class="skip" href="#world">Skip to the sim</a>
 <header class="top">
   <h1 class="glitch" data-text="GLITCHLING">GLITCHLING</h1>
-  <p class="sub">Live playable browser sim · <a href="../">home</a> · <a href="../site/">jam showcase</a></p>
+  <p class="sub">Live playable browser sim · <a href="../">home</a> · <a href="../site/">jam showcase</a> · <a href="../live/"><strong>NEW: Glitchling v2 live 3D →</strong></a></p>
   <p class="honest" role="note"><span class="tag sim">SIMPLIFIED PORT</span> This is a simplified JavaScript re-implementation that runs in your browser. It is <strong>not</strong> the TypeScript reference run (<code>glitchling.ts</code> + <code>core/organism.ts</code>), and its numbers will not match the published results. <a href="#about">What's real vs simplified</a>.</p>
 </header>
 
@@ -85,12 +85,12 @@
         <li>Only half the sites (a Latin pattern) are reachable on days 1–3. 1 tick = 1 sim-minute; awake 06:00–22:00.</li>
         <li>The brain layout: 272 neurons in the same 14 regions and sizes (SENS 16, THAL 16, CTX 64, HIP 32, STR 32, HYP 16, VTA/RAPHE/LC/BF 6, INS 8, SCN 8, MOT 8, ENS 48), wired with the reference's region-to-region connection probabilities.</li>
         <li>The four flaws, applied the way <code>glitchling.ts</code> applies them: permuted + noisy site senses re-shuffled every N ticks; 6%/tick decay of learned values toward 0.25; reversed MOT readout plus mirrored site choice; periodic jolts to one site value and 20 synapses. Seeded mulberry32 RNG, separate flaw stream.</li></ul></div>
-      <div><h3><span class="tag sim">SIMPLIFIED OR INVENTED HERE</span></h3><ul>
-        <li>Neurons are simple rate units, not the reference's spiking substrate with neuromodulators, plasticity rules and sleep stages.</li>
-        <li>Metabolism is a 3-pool toy (gut → blood glucose → fat), not the full gut/blood/liver/hormone model.</li>
-        <li>The decision is a noisy race over learned values plus a novelty bonus, not the striatal spike race with expected-free-energy terms, veto, and dreaming.</li>
-        <li>The walking body, the 2D map, travel time, and click-to-drop food are invented for play. In this port MOT encodes an 8-way heading; in the reference, site choice comes from the striatal race, not MOT.</li>
-        <li>No claims of awareness, feelings or consciousness are made. It's a small program that forages.</li></ul></div>
+      <div><h3><span class="tag sim">SIMPLIFIED ON THIS 2D PAGE</span></h3><ul>
+        <li>Neurons here are rate units. <strong>Real in <a href="../live/">live/</a>:</strong> 426 spiking leaky integrate-and-fire neurons with adaptation (the same 14 regions plus proprioceptive and motor-neuron pools), DA/NE/5-HT/ACh read from VTA/LC/raphe/basal-forebrain firing plus cortisol from the body, STDP eligibility traces turned into weight change by dopamine, and WAKE/N1/N2/N3/REM sleep with NREM replay and REM dreaming.</li>
+        <li>Metabolism here is 3 pools. <strong>Real in live/:</strong> gut → blood → liver glycogen → fat, ketones, gluconeogenesis, urea, muscle protein, insulin/glucagon (PID), cortisol, ghrelin, leptin, ATP from oxidation (rate laws ported from <code>core/organism.ts</code>), plus water, bladder, colon and waste.</li>
+        <li>The decision here is a noisy race over values. <strong>Real in live/:</strong> a spike race between 16 D1 and 16 D2 striatal neurons driven by expected free energy (value, Beta-belief information gain, travel cost, learned harm), a veto that can cancel the winner, and REM dreaming that writes beliefs and runs world-model rollouts.</li>
+        <li>On this page MOT encodes an 8-way heading on a 2D map. <strong>In live/:</strong> the 8 MOT neurons drive an LTC pattern generator and 122 motor neurons that pull 61 muscle channels of a 3D soft body; which site to visit comes from the striatal race.</li>
+        <li>Both pages are simulations running in your browser. Neither makes any claim of awareness, feelings, sentience or consciousness.</li></ul></div>
     </div>
     <p class="note">The published jam numbers (2 sim-days × 2 seeds, toy n) come from the TypeScript run: see the <a href="../site/">showcase</a> and <a href="../results/summary.csv">summary.csv</a>. Source of this page: <a href="sim.js">sim.js</a> (model) · <a href="app.js">app.js</a> (UI).</p>
   </section>
