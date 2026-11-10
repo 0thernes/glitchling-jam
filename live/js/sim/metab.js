@@ -19,7 +19,7 @@ export class Metab {
     const scnOut = Math.cos((2 * Math.PI * (hour - 14)) / 24);
     const gutFill = g.glc + g.fat + g.prot; const bg = b.glc / 3;
     const set = 1 + 0.08 * scnOut, e = bg - set; this.pidI = clamp(this.pidI + 0.002 * e, -0.5, 0.5); const dE = e - this.pidPrev; this.pidPrev = e;
-    this.insulin += 0.1 * (clamp(0.3 + 1.5 * e + this.pidI + 3 * dE + 0.2 * this.para) - this.insulin);
+    this.insulin += 0.1 * (clamp(0.3 + 1.5 * e + this.pidI + 3 * dE + 0.2 * this.para + 0.8 * (this.cephalic || 0)) - this.insulin); // + cephalic-phase (anticipatory) insulin, pass 8
     this.glucagon += 0.1 * (clamp(0.3 - 1.5 * e - this.pidI + 0.3 * this.symp) - this.glucagon);
     this.cortisol += 0.02 * (clamp(0.35 + 0.25 * (scnLesion ? 0 : Math.cos((2 * Math.PI * (hour - 7)) / 24)) + 0.6 * clamp(0.85 - bg) + 0.4 * clamp(0.8 - this.integrity) + 0.4 * stress) - this.cortisol);
     this.ghrelin += 0.01 * (clamp(1 - gutFill / 6) - this.ghrelin); this.leptin = clamp(this.fat / 800);
@@ -37,7 +37,7 @@ export class Metab {
     f = mv(this.muscle, 0.00015 * this.cortisol * (1 - this.insulin)); this.muscle -= f; b.aa += f;
     f = mv(b.aa, 0.002 * this.insulin * clamp((180 - this.muscle) / 60)); b.aa -= f; this.muscle += f; this.tissue += 0.02 * f; // anabolic growth (feeds morphological growth)
     // kidneys: urea + excess water -> bladder
-    f = mv(b.urea, 0.01); b.urea -= f; this.bladder += f; f = mv(b.water, 0.004 * Math.max(0, b.water - 4)); b.water -= f; this.bladder += 0.3 * f; f = mv(b.water, 0.0015); b.water -= f; // insensible loss
+    f = mv(b.urea, 0.01); b.urea -= f; this.bladder += f; f = mv(b.water, 0.004 * Math.max(0, b.water - 4)); b.water -= f; this.bladder += 0.3 * f; f = mv(b.water, 0.0005); b.water -= f; // insensible loss (pass 8: was 0.0015, which drained blood water in ~2 simulated min)
     this.thirst = clamp((4.5 - b.water) / 2);
     // brain glucose transport
     f = Math.max(0, 0.3 * (b.glc / 3 - this.brainGlc / 0.6)); f = Math.min(f, b.glc); b.glc -= f; this.brainGlc += f;

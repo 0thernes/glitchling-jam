@@ -12,6 +12,7 @@ export class World {
     this.best = this.plants.reduce((b, q) => (q.p > b.p ? q : b)).k;
     this.rocks = []; for (let i = 0; i < 7; i++) { const a = r() * Math.PI * 2, d = 5 + r() * 13; this.rocks.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, y: 0, r: 0.9 + r() * 1.6 }); }
     this.springs = []; for (let i = 0; i < 3; i++) { const a = r() * Math.PI * 2, d = 4 + r() * 12; this.springs.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 1.3, comp: 0, v: 0 }); }
+    { const rw = mulberry(seed * 97 + 3); this.pools = []; for (let i = 0; i < 3; i++) { const a = rw() * Math.PI * 2, d = 6 + rw() * 12; this.pools.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 2.2, level: 1 }); } } // water pools (separate RNG: plant/rock layout unchanged)
     this.snacks = []; this.waste = []; this.wind = { x: 0, z: 0, tx: 0, tz: 0, rain: 0 };
     this.fixY();
   }

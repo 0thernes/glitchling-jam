@@ -236,3 +236,36 @@ Measured (`test/growth_probe.mjs`, seed 1, 8 simulated minutes):
 - **Tried and dropped:** a climbing probe (`test/climb_probe.mjs`: rock placed on the path to a fixed goal, 40 s,
   6 seeds). The creature never got 3+ particles onto the rock, intact or with MOT lesioned, so climbing is not yet a real
   behaviour. It stays on the to-do list.
+
+## Pass 8: water, thirst vs hunger, cephalic-phase insulin
+
+- **Three water pools** with rippling surfaces. Their layout comes from a separate RNG, so plants and rocks are
+  unchanged.
+- **Drinking.** When the head is in a pool while awake and thirsty, water goes into the gut, then blood, then
+  bladder. Each drinking bout writes the pool into a third HDC map (WATER).
+- **Thirst vs hunger.** When thirst > 0.3, thirst wins the decision with probability
+  1.3·thirst / (1.3·thirst + hunger).
+  - The water target comes from the HDC water memory, else a humidity sense (nearest pool within 20 units), else search.
+  - A remembered spot with no water is written back as negative.
+- **Cephalic-phase insulin.** Food within 3 units of the head (seen or being eaten) adds an anticipatory term to the
+  insulin set point, before any glucose arrives.
+- **Metabolism fix.** Insensible water loss was 0.0015 per tick, which drained blood water from 5 to ~2.5 in about 2
+  simulated minutes; it is now 0.0005.
+- **UI:** thirst and water drunk in the brain panel. New lesions: thirst seeking, cephalic insulin.
+
+Measured (`test/water_probe.mjs`):
+- **Cephalic insulin.** Same 2-unit sugar meal, seeds 1–3, food in view 20 ticks before and 30 during. Peak blood
+  glucose:
+  - link on: 3.66 / 3.59 / 3.64
+  - link off: 4.03 / 3.99 / 4.03
+  - About 9% lower: the anticipatory response blunts the spike.
+- **Thirst.** 300 s, seeds 1–4, [mean thirst, water drunk]:
+  - intact: [0.27, 7], [0.56, 0], [0.43, 0], [0.52, 0]
+  - seeking lesioned: [0.56, 0], [0.56, 0], [0.43, 0], [0.52, 0]
+  - Only seed 1 reached a pool. Thirst goals are chosen, but navigation (the weak 0.2–0.3 rad/s turning from pass 2)
+    usually gives up before arrival. That is the honest bottleneck.
+- **`measure` intact:** dist 59.1, fed 0, entropy 6.35, upright 0.71. All MN lesioned: dist 5.2, entropy 0.15.
+  - Feeding per 90 s on 3 seeds was already 0–1.3 across passes. Thirst now takes some decisions away from food.
+- **Headless Chromium:** phone 20.7 fps, desktop 13.7 fps, no console errors.
+  - Motion: intact 8.1 / 7.6; MN lesioned 0.2 / 1.5; MOT lesioned 6.1 / 5.3.
+- Screenshots: `live-shots/s8-*.png`.
