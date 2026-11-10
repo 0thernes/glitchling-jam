@@ -6,10 +6,10 @@
 // Plasticity: pair-based STDP writes per-synapse eligibility traces; dopamine (relative to baseline, scaled by ACh) turns
 // eligibility into weight change while awake; in NREM, replayed STDP consolidates directly and plastic weights are slowly
 // down-scaled. Astrocyte-like slow calcium per region scales that region's synaptic gain.
-// Pass 14 - scale and structure. Three sizes:
+// Pass 13 - scale and structure. Three sizes (default M; choose with ?brain=S|M|L):
 //   S  = the original 426-neuron network (random wiring within the reference probabilities)
-//   M  = ~3,400 neurons: cortex is a 48x48 sheet, hippocampus 512, thalamus 128
-//   L  = ~12,200 neurons: cortex 96x96, hippocampus 2048, thalamus 384
+//   M  = 3,258 neurons / ~121k synapses: cortex is a 48x48 sheet, hippocampus 512, thalamus 128
+//   L  = 11,962 neurons / ~489k synapses: cortex 96x96, hippocampus 2048, thalamus 384
 // In M/L the cortex, hippocampus and thalamus are 2D sheets of cells with types: excitatory (E, adapting), PV-like fast
 // inhibitory (short time constant, no adaptation) and SST-like slow inhibitory (adapting). Cortex-to-cortex wiring is
 // distance-dependent (Gaussian, on a torus) with 5% long-range shortcuts (a small-world graph); thalamus->cortex and
@@ -23,10 +23,8 @@
 // eligibility/weight updates touch only synapses with a live eligibility trace. Everything is typed arrays on the main
 // thread (no Web Worker / WebGPU in this build).
 import { mulberry, clamp, gauss } from './util.js';
-const AUTO_SCALE = false; // pass 12 ships the small brain by default; larger ones via ?brain=M|L
 const SCALE = (() => { const q = globalThis.TW?.brain ?? globalThis.BRAIN_SCALE ?? (globalThis.location ? new URLSearchParams(globalThis.location.search).get('brain') : null);
-  if (q === 'S' || q === 'M' || q === 'L') return q; if (!AUTO_SCALE) return 'S'; if (globalThis.process?.versions?.node) return 'M';
-  const nav = globalThis.navigator || {}; const coarse = globalThis.matchMedia?.('(pointer: coarse)').matches; return !coarse && (nav.hardwareConcurrency || 4) >= 8 ? 'L' : 'M'; })();
+  if (q === 'S' || q === 'M' || q === 'L') return q; return 'M'; /* L (12k neurons) is opt-in: on the main thread it needs ~13 ms per frame */ })();
 export const BRAIN_SCALE = SCALE;
 const SZ = { S: { CTX: 64, HIP: 32, THAL: 16, side: 8 }, M: { CTX: 2304, HIP: 512, THAL: 128, side: 48 }, L: { CTX: 9216, HIP: 2048, THAL: 384, side: 96 } }[SCALE];
 export const REGIONS = [['SENS', 16], ['THAL', SZ.THAL], ['CTX', SZ.CTX], ['HIP', SZ.HIP], ['STR', 32], ['HYP', 16], ['VTA', 6], ['RAPHE', 6], ['LC', 6], ['BF', 6], ['INS', 8], ['SCN', 8], ['MOT', 8], ['ENS', 48], ['PROP', 32], ['MN', 122]];
@@ -65,7 +63,7 @@ export class Brain {
         if ((a === 'THAL' || a === 'PROP') && b === 'CTX') { // topographic: each input neuron targets a patch of the sheet (PROP: the x < 0.3 strip)
           const per = Math.max(1, Math.round((kin * RN.CTX) / RN[a])); for (let i = 0; i < RN[a]; i++) { const I = R0[a] + i; const cx = a === 'PROP' ? 0.15 : POSX[I], cy = a === 'PROP' ? POSX[I] : POSY[I]; for (let k = 0; k < per; k++) add(I, near(cx, cy, a === 'PROP' ? 0.06 : 0.07, 'CTX'), wE(), plastic); } continue; }
         if (a === 'SENS' && b === 'THAL') { const per = Math.max(1, Math.round((kin * RN.THAL) / RN.SENS)); for (let i = 0; i < RN.SENS; i++) { const I = R0.SENS + i; for (let k = 0; k < per; k++) add(I, near(POSX[I], 0.5 + 0.3 * gauss(r), 0.06, 'THAL'), wE(), plastic); } continue; }
-        for (let j = 0; j < RN[b]; j++) { const J = R0[b] + j; let n = poisson(kin); if (a === 'CTX' && b === 'MOT') { for (let k = 0; k < n; k++) { const I = near(0.85, (j + 0.5) / 8, 0.05, 'CTX'); add(I, J, INHIB(I) ? wI() : wE(), plastic); } continue; } // motor strip
+        for (let j = 0; j < RN[b]; j++) { const J = R0[b] + j; let n = poisson(kin); if (a === 'CTX' && b === 'MOT') { for (let k = 0; k < n; k++) { let I = near(0.85, (j + 0.5) / 8, 0.05, 'CTX'); for (let t = 0; t < 20 && INHIB(I); t++) I = near(0.85, (j + 0.5) / 8, 0.05, 'CTX'); add(I, J, wE(), plastic); } continue; } // motor strip: long-range projections come from excitatory (pyramidal) cells
           for (let k = 0; k < n; k++) { const I = R0[a] + Math.floor(r() * RN[a]); if (I === J) continue; add(I, J, INHIB(I) ? wI() : wE(), plastic); } } } }
     const S = pre.length; this.S = S; const ord = Array.from({ length: S }, (_, k) => k).sort((x, y) => pre[x] - pre[y]);
     this.pre = Int32Array.from(ord, (k) => pre[k]); this.post = Int32Array.from(ord, (k) => post[k]); this.w = Float64Array.from(ord, (k) => w[k]); this.w0 = Float64Array.from(this.w); this.plastic = Uint8Array.from(ord, (k) => pl[k]); this.wsc = Float32Array.from(ord, (k) => sc[k]); this.struct = Uint8Array.from(ord, (k) => st[k]); this.elig = new Float64Array(S);

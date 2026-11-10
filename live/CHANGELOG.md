@@ -412,3 +412,45 @@ Measured (brain S, the shipped default):
 - **Headless Chromium:** no console errors; phone 24.0 fps (sim 3.5 ms), desktop 11.6 fps (sim 8.4 ms; software-rendered WebGL,
   render-bound). Screenshots: `live-shots/s12-*.png`.
 
+## Pass 13 — thousands of neurons, structured wiring, structural plasticity
+
+Fix 3 of Alex's review ("426 neurons is tiny, wiring is random").
+
+- **Three brain sizes** (`js/sim/brain.js`), chosen by `?brain=S|M|L`; default M.
+  - S: the original 426 neurons, 1,896 synapses.
+  - M: 3,258 neurons, 120,811 synapses (cortex 48×48 sheet, hippocampus 512, thalamus 128).
+  - L: 11,962 neurons, 488,557 synapses (cortex 96×96, hippocampus 2,048, thalamus 384).
+- **Cell types:** excitatory (adapting), PV-like fast inhibitory, SST-like slow inhibitory.
+- **Wiring:** Gaussian distance-dependent cortex→cortex on a torus with 5% random shortcuts (small-world); topographic
+  thalamus→cortex and proprioception→cortex ("somatosensory" strip); cortex→MOT from a "motor" strip of excitatory
+  cells. Other region pairs keep the reference in-degree.
+  - Bug found and fixed while measuring: the motor strip first included inhibitory cells, which held MOT at 1.7 Hz
+    in M (S: 35.6 Hz). With pyramidal-only projections MOT fires at 16.5 Hz.
+- **Structural plasticity:** once per simulated second, cortical E→E synapses that STDP pushed below 25% of their
+  initial weight are pruned and regrown onto the most active of 3 nearby cells. Lesionable ("struct").
+- **Event-driven updates:** CSR spike propagation; eligibility and weight updates only touch synapses on an active list.
+- **Adaptive size:** the page measures ms per simulation step; if it stays above 12 ms for ~5 s it reloads one size
+  smaller (L → M → S), unless the size was set in the URL. L is opt-in.
+
+Measured (`test/brain_probe.mjs`, Node, one core, other jobs running):
+
+| brain | neurons / synapses | ms per 1/60-s step | CTX / MOT Hz | pruned+regrown in 300 s | wiring–activity alignment start → end |
+|---|---|---|---|---|---|
+| S | 426 / 1,896 | 1.3–1.6 | 62.5 / 35.6 | — | — |
+| M | 3,258 / 120,811 | 3.7 | 47.4 / 16.5 | 724,313 | 2.52 → 2.52 |
+| M, rewiring lesioned | same | 3.8 | 6.2 / 0.0 | 0 | 2.24 → 1.39 |
+| L (120 s) | 11,962 / 488,557 | 13–17 | 41.1 / 22.6 | 843,091 | 2.39 → 1.70 |
+
+- Alignment = mean pre×post rate over existing cortical E→E synapses ÷ mean rate²; 1 means wiring is unrelated to
+  activity. Rewiring keeps co-active cells wired (2.5); without it alignment decays to 1.4.
+- **Caveat:** without rewiring the M cortex goes nearly silent within 5 minutes (STDP depression + sleep down-scaling),
+  so rewiring is also acting as a homeostat, not only as learning.
+- **Behaviour is not better with the bigger brain:** `nav_probe` seeds 1–8 near 5/8, far 0/8, upright 0.64 (S: 6/8,
+  2/8, 0.67); `forage_bench` 240 s seeds 1–8 fed / arrivals 12 / 34 (S: 15 / 26). Within seed noise.
+- **Not done:** no Web Worker or WebGPU brain; everything is typed arrays on the main thread. 60 fps could not be
+  verified here: headless Chromium uses software WebGL (render 12–55 ms per frame).
+- **Headless Chromium:** no console errors. Phone 17.3 fps, desktop 13.3 fps (software WebGL; desktop render 43 ms per
+  frame). Brain cost per sim step: phone 4.0 ms; desktop 10.2 ms in the first 9 s, 3.5 ms after 50 s. The page stayed on M.
+  Forcing the threshold to 1 ms made it reload to `?brain=S&auto=1` as designed. Motion intact 9.5 / 9.7, MN
+  lesioned 0.4 / 0.6. Screenshots: `live-shots/s13-*.png`.
+

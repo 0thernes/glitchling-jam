@@ -100,7 +100,7 @@ export class View {
     this.heart = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), glow(0xff1144, 3)); this.liver = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), glow(0x8a2be2, 1.5)); this.bladder = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), glow(0xffee55, 1.2)); this.fatM = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), glow(0xffe0a0, 0.6));
     this.colonM = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), glow(0x7a4a20, 0.6)); for (const m of [this.heart, this.liver, this.bladder, this.fatM, this.colonM]) this.cg.add(m);
     this.gutBalls = []; for (let i = 0; i < 10; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), glow(0x33ff99, 1.2)); this.cg.add(m); this.gutBalls.push(m); }
-    // brain: one point per neuron (426), coloured by region, flashing on spikes
+    // brain: one point per neuron (NNEU), coloured by region, flashing on spikes
     const bp = new Float32Array(NNEU * 3), bc = new Float32Array(NNEU * 3), bs = new Float32Array(NNEU); this.brainLocal = bp; const rc = new THREE.Color();
     REGIONS.forEach(([name, cnt], ri) => { rc.setHSL(ri / REGIONS.length, 0.9, 0.6); const a = (ri / REGIONS.length) * Math.PI * 2; for (let k = 0; k < cnt; k++) { const i = R0[name] + k; const rr = 0.05 + 0.05 * Math.random(); const th = a + (Math.random() - 0.5) * 0.7, ph = (Math.random() - 0.5) * 2.4;
         bp[3 * i] = 0.09 * Math.cos(ph) + (Math.random() - 0.5) * 0.04; bp[3 * i + 1] = Math.sin(ph) * rr + Math.cos(th) * 0.03; bp[3 * i + 2] = Math.sin(th) * rr; bc[3 * i] = rc.r; bc[3 * i + 1] = rc.g; bc[3 * i + 2] = rc.b; } });

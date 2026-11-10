@@ -13,7 +13,7 @@ claim of awareness, feelings, sentience or consciousness.
 
 ```
 senses (bearing, colour, touch, light)  ─► SENS ─┐
-proprioception (spine curvature via Taylor jets,  ├─► 426 spiking LIF neurons (14 reference regions + PROP + MN)
+proprioception (spine curvature via Taylor jets,  ├─► 3,258 spiking LIF neurons by default (14 reference regions + PROP + MN)
   contacts, tilt, speed)                ─► PROP ─┤      STDP eligibility × dopamine, NREM consolidation, astrocyte gain
 interoception (glucose, ghrelin, bladder…) ► INS ─┘
                      STR D1/D2 spike race ── expected free energy (value + info gain − cost − harm) ─► veto ─► goal site
@@ -24,7 +24,7 @@ metabolism: gut → blood → liver glycogen → fat, ketones, gluconeogenesis, 
 sleep: adenosine S + circadian C, WAKE/N1/N2/N3/REM, atonia, NREM replay, REM dreaming
 ```
 
-## Mechanisms added in passes 2–12
+## Mechanisms added in passes 2–13
 
 Each one can be switched off from the brain panel ("lesions"). The effect of each, as measured, is in CHANGELOG.md.
 
@@ -39,6 +39,7 @@ Each one can be switched off from the brain panel ("lesions"). The effect of eac
 | 8 | thirst vs hunger, cephalic insulin | pools, drinking, probabilistic drive competition, humidity sense + HDC water map; seeing food raises the insulin set point early |
 | 9 | front arching reflex, ventral scale lift | turn commands contract front radial muscles; radial activation lowers sideways friction |
 | 12 | evolved motor genome, head-direction ring, path integration, grid cells, motor babbling | CMA-ES-evolved developmental genome grows the CPG/MOT→muscle wiring (turning 0.3 → 2.3 rad/s); a 36-unit ring attractor tracks heading, dead reckoning tracks position, sight of a known site resets it; goals beyond 9 units are steered to by vector; 12 s of random synergy babbling calibrates the steering gain |
+| 13 | brain scale, structured wiring, structural plasticity | default 3,258 neurons / 121k synapses (`?brain=L`: 11,962 / 489k; `?brain=S`: 426): E/PV/SST cell types on 2D sheets, distance-dependent small-world cortex, topographic thalamus/proprioception input, motor strip; weak cortical synapses pruned and regrown onto active neighbours each second; adaptive size drop if a step costs > 12 ms |
 | 11 | learned / consolidated memory | delta-rule HDC maps (1024-dim) with sleep-time feature resampling; 1024-slot Hopfield store with usage-based forgetting, sleep merging and a contrastively learned key map |
 
 ## Files
@@ -74,6 +75,7 @@ node test/measure.mjs                   # distance, behaviour entropy, intact vs
 node test/memory2_probe.mjs a           # HDC held-out regression: superposition vs delta rule vs delta rule + learned features
 node test/memory2_probe.mjs b 2         # Hopfield: pass-3 store vs 1024 slots + sleep vs + learned keys, on a real 600-s run
 node test/scale_probe.mjs               # forced-turn yaw rates (pass 9); see also righting/memory/pc/turing/growth/water probes
+node test/brain_probe.mjs M 300 [struct] # neurons, synapses, ms per step, rates, rewiring and wiring-activity alignment
 node test/nav_probe.mjs 1,2,3,4 [nav]   # near (4-8 u) vs far (14+ u) site arrival in 60 s; 'nav' lesions path integration
 node test/evolve_genome.mjs 30 16 8 1,2,3 out.json   # CMA-ES over the motor genome (fitness: test/genome_eval.mjs)
 CHROME=/path/to/chrome PLAYWRIGHT=/path/to/playwright-core/index.mjs node test/browser_check.mjs http://127.0.0.1:8899/live/ ./shots tag
