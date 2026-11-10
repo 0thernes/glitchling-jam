@@ -5,7 +5,7 @@
 import { Worker, isMainThread, parentPort } from 'worker_threads'; import { writeFileSync, appendFileSync } from 'fs';
 import { GENES, NG, toObj } from '../js/sim/genome.js';
 const dec = (x) => toObj(x.map((u, i) => GENES[i][1] + Math.min(1, Math.max(0, u)) * (GENES[i][2] - GENES[i][1])));
-if (!isMainThread) { globalThis.EVAL_BRAIN = process.env.EVAL_BRAIN || undefined; globalThis.BRAIN_SCALE = globalThis.EVAL_BRAIN; const { evalGenome } = await import('./genome_eval.mjs'); parentPort.on('message', ({ id, x, seeds }) => { const r = evalGenome(dec(x), seeds); parentPort.postMessage({ id, r }); }); }
+if (!isMainThread) { globalThis.EVAL_BRAIN = process.env.EVAL_BRAIN || undefined; globalThis.EVAL_ROUGH = !!process.env.EVAL_ROUGH; globalThis.BRAIN_SCALE = globalThis.EVAL_BRAIN; const { evalGenome } = await import('./genome_eval.mjs'); parentPort.on('message', ({ id, x, seeds }) => { const r = evalGenome(dec(x), seeds); parentPort.postMessage({ id, r }); }); }
 else {
   const GEN = +(process.argv[2] || 100), LAM = +(process.argv[3] || 16), NW = +(process.argv[4] || 8), SEEDS = (process.argv[5] || '1,2').split(',').map(Number), OUT = process.argv[6] || '/tmp/evo.json';
   const pool = Array.from({ length: NW }, () => new Worker(new URL(import.meta.url))); let nextId = 0; const pend = new Map(); pool.forEach((w) => w.on('message', ({ id, r }) => { pend.get(id)(r); pend.delete(id); }));
@@ -23,6 +23,7 @@ else {
         for (let k = 0; k < n; k++) { const akp = A[k][p], akq = A[k][q]; A[k][p] = c * akp - s * akq; A[k][q] = s * akp + c * akq; } for (let k = 0; k < n; k++) { const apk = A[p][k], aqk = A[q][k]; A[p][k] = c * apk - s * aqk; A[q][k] = s * apk + c * aqk; }
         for (let k = 0; k < n; k++) { const vkp = V[k][p], vkq = V[k][q]; V[k][p] = c * vkp - s * vkq; V[k][q] = s * vkp + c * vkq; } } }
     B = V; D = A.map((r, i) => Math.sqrt(Math.max(1e-20, r[i]))); }
+  if (process.env.INIT === 'starter') { const { MOTOR } = await import('../js/sim/starter_genome.js'); const { GENES: GG } = await import('../js/sim/genome.js'); m = GG.map(([nm, lo, hi]) => Math.min(0.97, Math.max(0.03, (MOTOR[nm] - lo) / (hi - lo)))); } else
   if (process.env.INIT) { m = JSON.parse((await import('fs')).readFileSync(process.env.INIT)).meanX.map((u) => Math.min(0.95, Math.max(0.05, u))); } // optional warm start from a previous run's mean
   let best = { fit: -1e9 }; writeFileSync(OUT.replace('.json', '.log'), '');
   for (let g = 0; g < GEN; g++) { const Z = [], Y = [], X = []; for (let k = 0; k < lam; k++) { const z = Array.from({ length: n }, gauss); const y = B.map((row) => row.reduce((a, bij, j) => a + bij * D[j] * z[j], 0)); Z.push(z); Y.push(y); X.push(m.map((mi, i) => mi + sigma * y[i])); }

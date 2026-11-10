@@ -24,7 +24,7 @@ metabolism: gut → blood → liver glycogen → fat, ketones, gluconeogenesis, 
 sleep: adenosine S + circadian C, WAKE/N1/N2/N3/REM, atonia, NREM replay, REM dreaming
 ```
 
-## Mechanisms added in passes 2–13
+## Mechanisms added in passes 2–14
 
 Each one can be switched off from the brain panel ("lesions"). The effect of each, as measured, is in CHANGELOG.md.
 
@@ -38,9 +38,10 @@ Each one can be switched off from the brain panel ("lesions"). The effect of eac
 | 7 | physical skin optics | thin-film (guanine) interference, Fresnel, GGX highlights, translucency and heartbeat capillaries in the shader |
 | 8 | thirst vs hunger, cephalic insulin | pools, drinking, probabilistic drive competition, humidity sense + HDC water map; seeing food raises the insulin set point early |
 | 9 | front arching reflex, ventral scale lift | turn commands contract front radial muscles; radial activation lowers sideways friction |
+| 11 | learned / consolidated memory | delta-rule HDC maps (1024-dim) with sleep-time feature resampling; 1024-slot Hopfield store with usage-based forgetting, sleep merging and a contrastively learned key map |
 | 12 | evolved motor genome, head-direction ring, path integration, grid cells, motor babbling | CMA-ES-evolved developmental genome grows the CPG/MOT→muscle wiring (turning 0.3 → 2.3 rad/s); a 36-unit ring attractor tracks heading, dead reckoning tracks position, sight of a known site resets it; goals beyond 9 units are steered to by vector; 12 s of random synergy babbling calibrates the steering gain |
 | 13 | brain scale, structured wiring, structural plasticity | default 3,258 neurons / 121k synapses (`?brain=L`: 11,962 / 489k; `?brain=S`: 426): E/PV/SST cell types on 2D sheets, distance-dependent small-world cortex, topographic thalamus/proprioception input, motor strip; weak cortical synapses pruned and regrown onto active neighbours each second; adaptive size drop if a step costs > 12 ms |
-| 11 | learned / consolidated memory | delta-rule HDC maps (1024-dim) with sleep-time feature resampling; 1024-slot Hopfield store with usage-based forgetting, sleep merging and a contrastively learned key map |
+| 14 | in-page lineage evolution, rough-ground genome, thirst interrupt, bias-corrected repertoire | the Lesions tab runs a separable CMA-ES on the 44 motor genes in Web Workers (8 mutants per generation, fitness shown per generation) and can adopt the result; shipped genome re-evolved offline with rocks, springs and a zig-zag steering trial; strong thirst can interrupt a food trip |
 
 ## Files
 
@@ -53,6 +54,8 @@ Each one can be switched off from the brain panel ("lesions"). The effect of eac
 | `js/sim/mind.js` | selective SSM, world model, two-level predictive coding, two-process sleep |
 | `js/sim/genome.js` | 44 motor + 17 steering genes and the developmental rules that grow synapses from them |
 | `js/sim/starter_genome.js` | the shipped (evolved) genome and how it was found |
+| `js/sim/fitness.js` | motor-genome fitness shared by the offline CMA-ES and the in-page lineage evolution |
+| `js/lineage.js`, `js/sim/lineage_worker.js` | in-page separable CMA-ES and its Web Worker |
 | `js/sim/nav.js` | head-direction ring attractor, sun compass, path integration, grid-cell readout |
 | `js/sim/memory.js` | hyperdimensional (FHRR) place maps and a modern Hopfield episodic memory |
 | `js/sim/metab.js` | metabolism, hormones, fluids, waste |
@@ -77,7 +80,9 @@ node test/memory2_probe.mjs b 2         # Hopfield: pass-3 store vs 1024 slots +
 node test/scale_probe.mjs               # forced-turn yaw rates (pass 9); see also righting/memory/pc/turing/growth/water probes
 node test/brain_probe.mjs M 300 [struct] # neurons, synapses, ms per step, rates, rewiring and wiring-activity alignment
 node test/nav_probe.mjs 1,2,3,4 [nav]   # near (4-8 u) vs far (14+ u) site arrival in 60 s; 'nav' lesions path integration
-node test/evolve_genome.mjs 30 16 8 1,2,3 out.json   # CMA-ES over the motor genome (fitness: test/genome_eval.mjs)
+node test/evolve_genome.mjs 30 16 8 1,2,3 out.json   # CMA-ES over the motor genome (fitness: js/sim/fitness.js; EVAL_ROUGH=1 for the rough-ground version)
+node test/babble_probe.mjs              # turn gain measured by motor babbling per body
+CHROME=... PLAYWRIGHT=... node test/lineage_check.mjs http://127.0.0.1:8899/live/ ./shots tag   # runs and adopts an in-page lineage
 CHROME=/path/to/chrome PLAYWRIGHT=/path/to/playwright-core/index.mjs node test/browser_check.mjs http://127.0.0.1:8899/live/ ./shots tag
 ```
 

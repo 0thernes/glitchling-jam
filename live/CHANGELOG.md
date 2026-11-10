@@ -454,3 +454,83 @@ Measured (`test/brain_probe.mjs`, Node, one core, other jobs running):
   Forcing the threshold to 1 ms made it reload to `?brain=S&auto=1` as designed. Motion intact 9.5 / 9.7, MN
   lesioned 0.4 / 0.6. Screenshots: `live-shots/s13-*.png`.
 
+
+## Pass 14 — evolve a lineage in the page, rough-ground genome, thirst, repertoire
+
+Fix 4 of Alex's review (an evolved genome, motor babbling and an in-page "evolve a new lineage" option), plus another go at
+the gaps pass 12 left open.
+
+- **In-page lineage evolution** (`js/lineage.js`, `js/sim/lineage_worker.js`; Lesions tab).
+  - Separable CMA-ES (diagonal covariance, cumulative step-size control) over the 44 motor genes, starting from the
+    current genome.
+  - Each generation scores 8 mutants and the current mean in Web Workers, using the same fitness as the offline run
+    (`js/sim/fitness.js`, moved out of `test/genome_eval.mjs`). Each one is a hidden body with the small brain doing
+    6-s forward / turn-left / turn-right trials and a righting trial.
+  - The panel shows per generation: lineage fitness, best child, turn rate, forward speed and uprightness.
+  - "Adopt lineage" grows a new creature from the mean genome and keeps it in localStorage; "Starter genome" undoes it.
+  - Headless Chromium: 6 generations (54 genomes) took 28 s on an idle machine and 58–66 s on a loaded one, with no
+    console errors, and adopting worked.
+  - **Honest result:** the lineage fitness bounced around over 6 generations (4.04 → 3.32 in one run, 2.82 → 2.16 in
+    another), because every generation is scored on a different single body. A short in-page run is a demonstration,
+    not a reliable improvement.
+- **Offline run 3, rough ground** (`EVAL_ROUGH=1 test/evolve_genome.mjs`).
+  - Setup: 24 generations × 16 (384 genomes), training bodies 1–2, brain M, warm start from the pass-12 genome,
+    σ 0.1.
+  - Fitness: rocks and springs left in place, plus a zig-zag trial (the turn command switches side every 1.5 s, as in
+    real steering) and extra weight on uprightness.
+  - Population mean fitness went from 3.8 to 4.4–4.6. The final CMA-ES mean is shipped, because on held-out bodies it
+    beat the single best-ever sample.
+
+  Held-out bodies 4–9, rough fitness:
+
+  | genome | fwd u/s | turn rad/s | upright | zig-zag travel u/s | zig-zag upright | righting s | fitness |
+  |---|---|---|---|---|---|---|---|
+  | pass 12 | 0.35 | 2.01 | 0.84 | 0.30 | 0.87 | 0.9 | 4.66 |
+  | run 3, best-ever sample | 0.25 | 2.12 | 0.87 | 0.46 | 0.89 | 1.7 | 4.82 |
+  | **run 3, mean (shipped)** | 0.43 | 2.20 | **0.89** | 0.35 | **0.91** | 1.5 | **5.05** |
+
+- **Navigation with the new genome** (`nav_probe`, 60 s, bodies 1–8, brain M):
+
+  | | near (4–8 u) | far (14+ u) | upright (on its back) |
+  |---|---|---|---|
+  | pass 13 genome | 5/8 | 0/8 | 0.64 |
+  | **pass 14 genome (shipped)** | **7/8** | **3/8** | **0.75 (5–8%)** |
+  | same, babbling lesioned | 5/8 | 2/8 | 0.72 |
+  | same, babbling reference gain 0.89 instead of 1.36 | 4/8 | 3/8 | 0.71 |
+  | same, rear/climb/jump/nocifensive reflex synergies off (test only) | 7/8 | 4/8 | 0.79 |
+
+  - The reflex synergies cost a little uprightness, but they are what climbs rocks and uses springs, so they stay on.
+  - Motor babbling measured a turn gain of 0.89 rad/s per unit command on average (range 0.65–1.02 across bodies 1–8,
+    CV 0.11–0.15; with the pass-12 genome it was 0.79, CV 0.36). It helps: without it, near 5/8 and far 2/8.
+  - **Still not met:** upright during navigation is 0.75, not > 0.85. Far arrival is 3/8, against 7/8 near. Forced
+    trials on held-out bodies now reach 0.89–0.91.
+- **Thirst.** Before this pass, thirst only competed when the creature was idle, which rarely happened. Now strong
+  thirst (> 0.45) can interrupt a food or exploration trip (about 0.5% × thirst per 0.25 s; lesionable with "thirst").
+  - On body 3, time spent seeking water rose from 1% to 20%. It got within 1.2 u of a pool's edge but gave up.
+  - `water_probe` (300 s, bodies 1–4): 1/4 bodies drank, both before and after, and also with thirst seeking
+    lesioned. **Thirst-driven water finding is still not shown to work**; the limit is again the gait over 6–18 u.
+- **Behavioural repertoire.** The pass-12 drop in entropy (6.2 → 4.1 bits) turned out to be mostly a measuring
+  artefact. The evolved wiring keeps a small tonic offset in the long muscles, so the "back half active" and
+  "front half active" bits (fixed threshold 0.05) are on 98–99% of the time. A bias-corrected version
+  (`entropy2`: each of the same 7 signals compared with its own ~5-s running mean) is now reported next to the old
+  one. `measure`, 90 s, bodies 1–3, brain M:
+
+  | genome | entropy (fixed threshold) | entropy2 (bias-corrected) | states | upright | dist |
+  |---|---|---|---|---|---|
+  | hand wiring (passes 1–11) | 5.74 | 6.42 | 92 | 0.36 | 72.8 |
+  | pass 12 | 4.71 | 6.17 | 51 | 0.60 | 69.0 |
+  | pass 14 (shipped) | 4.46 | 6.32 | 45 | 0.62 | 65.5 |
+  | pass 14, MOT lesioned | 6.03 | 6.20 | 103 | 0.79 | 52.3 |
+  | pass 14, MN lesioned | 0.08 | 0.39 | 1 | 0.85 | 4.2 |
+
+  The fixed-threshold entropy was not changed to make it look better; both are shown.
+- **Foraging** (`forage_bench`, 240 s, bodies 1–8, fed / arrivals): pass 13 12 / 34; pass 14 genome 10 / 18; pass 14
+  with the thirst interrupt (shipped) 12 / 20. Feeding is the same, but there are fewer site arrivals. Within seed noise
+  for feeds; arrivals are down.
+- **Headless Chromium:** phone and desktop showed no console errors. Motion: intact 6.4 / 6.2; MN lesioned 0.6 / 0.5.
+  - **fps could not be measured cleanly.** Other jobs on the test machine held the load average at 21–26, so phone
+    ran at 11.6 fps and desktop produced no fps reading within 9 s.
+  - Under that same load, an A/B run of the pass-13 build gave the same result (phone 14.0 fps, desktop no reading).
+    The slowdown comes from the machine, not this pass.
+  - Quiet-machine numbers are in pass 13: phone 17 fps, desktop 13 fps (software WebGL), 3.5–4 ms per brain step.
+  - Screenshots: `live-shots/s14-*.png` (`s14-desktop-lab.png` shows the lineage panel after 6 generations: 54 genomes, 56 s under load).

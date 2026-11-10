@@ -154,7 +154,7 @@ export class Creature {
    *  bearing -> turn weights so the steering loop has the same gain on this particular body as on the bodies evolution used. */
   babbleStep(dt) { if (!this.babble) { this.babble = { on: !this.lesion.babble && !this.forceMot && !globalThis.TW?.noBabble, t: 0, next: 0, mot: new Float64Array(8), sc: 0, cc: 0, yaw: 0 }; } const b = this.babble; if (!b.on) return;
     b.t += dt; b.yaw += this.omega * dt; if (b.t >= b.next) { if (b.t > 1.5) { const c = b.mot[1] - b.mot[2], y = -b.yaw / 0.75; b.sc += c * y; b.cc += c * c; } b.yaw = 0; b.next += 0.75; b.mot.fill(0); const k = Math.floor(this.gr() * 5); b.mot[0] = k < 3 ? 0.4 + 0.6 * this.gr() : 0.2; if (k === 1 || k === 3) b.mot[1] = 0.3 + 0.7 * this.gr(); if (k === 2 || k === 4) b.mot[2] = 0.3 + 0.7 * this.gr(); }
-        if (b.t >= 12) { b.on = false; this.turnGain = b.sc / Math.max(1e-6, b.cc); const g0 = STARTER_INFO.turnGain0 || 1; const k = clamp(g0 / Math.max(0.05, this.turnGain), 0.4, 2.5); this.babbleScale = k;
+        if (b.t >= 12) { b.on = false; this.turnGain = b.sc / Math.max(1e-6, b.cc); const g0 = globalThis.TW?.turnGain0 ?? (STARTER_INFO.turnGain0 || 1); const k = clamp(g0 / Math.max(0.05, this.turnGain), 0.4, 2.5); this.babbleScale = k;
       for (const [m, p] of [[1, 0], [2, 1]]) { this.Wmot[m * NPHI + p] *= k; this.Wmot0[m * NPHI + p] *= k; } this.selfW = Math.max(this.selfW ?? 0, 0.5 * Math.abs(this.turnGain));
       this.ev('babble', `motor babbling done: turn gain ${this.turnGain.toFixed(2)} rad/s per unit command, steering weights x${k.toFixed(2)}`); } }
   updateNM(dt) { const br = this.brain, nm = br.nm; const lp = (k, v, tau) => { nm[k] += (dt / tau) * (v - nm[k]); };
@@ -186,6 +186,11 @@ export class Creature {
     const Bu = this.body.u; const avg = (a, b, st = 1) => { let s = 0, n = 0; for (let i = a; i < b; i += st) { s += Bu[i]; n++; } return s / n; };
     const bits = [avg(CH.long + 13, CH.long + 24, 2) > 0.05, avg(CH.long + 1, CH.long + 12, 2) > 0.05, avg(CH.long, CH.long + 24, 4) > 0.05, avg(CH.radial, CH.radial + 7) > 0.05, avg(CH.legGrip, CH.legGrip + 4) > 0, avg(CH.arm + 2, CH.arm + 6, 3) > 0.05, this.vf > 0.25];
     const code = bits.reduce((a, b, i) => a | ((b ? 1 : 0) << i), 0); this.motorHist.push(code); if (this.motorHist.length > 600) this.motorHist.shift();
+    /* bias-corrected repertoire (pass 14): the same 7 signals, each compared with its own ~5-s running mean instead of a fixed
+       threshold, so a wiring with a constant tonic offset in one channel is not counted as "always on" */
+    { const an = [avg(CH.long + 13, CH.long + 24, 2), avg(CH.long + 1, CH.long + 12, 2), avg(CH.long, CH.long + 24, 4), avg(CH.radial, CH.radial + 7), avg(CH.legGrip, CH.legGrip + 4), avg(CH.arm + 2, CH.arm + 6, 3), this.vf]; this.anMean = this.anMean || an.slice();
+      let c2 = 0; for (let i = 0; i < 7; i++) { this.anMean[i] += 0.003 * (an[i] - this.anMean[i]); if (an[i] > this.anMean[i] + 0.01) c2 |= 1 << i; } (this.motorHist2 = this.motorHist2 || []).push(c2); if (this.motorHist2.length > 600) this.motorHist2.shift();
+      if (this.frame % 60 === 0) { const c = new Map(); for (const x of this.motorHist2) c.set(x, (c.get(x) || 0) + 1); let H = 0; for (const v of c.values()) { const p = v / this.motorHist2.length; H -= p * Math.log2(p); } this.entropy2 = H; } }
     if (this.frame % 60 === 0) { const c = new Map(); for (const x of this.motorHist) c.set(x, (c.get(x) || 0) + 1); let H = 0; for (const v of c.values()) { const p = v / this.motorHist.length; H -= p * Math.log2(p); } this.entropy = H; this.states = c.size; }
   }
   motorLearn(delta) { const lr = 0.003 * (0.5 + this.brain.nm.ACh) * clamp(delta, -1, 1); const decay = 0.85;
@@ -220,6 +225,8 @@ export class Creature {
     if (stage !== prev) { this.ev('sleep', `stage ${['WAKE', 'N1', 'N2', 'N3', 'REM'][prev]} -> ${['WAKE', 'N1', 'N2', 'N3', 'REM'][stage]}`); if (stage) { this.goal = null; this.race = null; } }
     if (stage === 2 || stage === 3) this.replay(); if (stage === 4 && !this.lesion.dream) this.dream();
     // decide: hungry -> striatal race over sites; dropped food in view -> innate orienting; otherwise curiosity: least-visited place
+    /* pass 14: strong thirst can interrupt a food or exploration trip (otherwise thirst only competes when the creature is idle, which is rare) */
+    if (stage === 0 && !this.lesion.thirst && M.thirst > 0.45 && (this.race || (this.goal && this.goal.type !== 'water' && this.goal.type !== 'snack')) && this.r() < 0.005 * M.thirst) { this.goal = null; this.race = null; this.ev('thirst', `thirst (${M.thirst.toFixed(2)}) interrupts the current goal`); }
     if (stage === 0 && !this.goal && !this.race) { const hd = this.body.head(); const sn = this.world.snacks.filter((s) => Math.hypot(s.x - hd[0], s.z - hd[2]) < 14);
       if (sn.length) { const s = sn[0]; this.goal = { type: 'snack', id: s.id, since: this.t }; this.ev('orient', 'oriented to dropped food'); }
       else if (!this.lesion.thirst && M.thirst > 0.3 && this.r() < (1.3 * M.thirst) / (1.3 * M.thirst + M.hunger()) /* motivational competition: probability of serving thirst = its share of total drive */) { /* thirst: go where the HDC water map recalls water; with no memory yet, explore */ let bx = 0, bz = 0, bv = -1e9; for (let q = 0; q < 64; q++) { const ex = (this.r() - 0.5) * 40, ez = (this.r() - 0.5) * 40; const v = this.hdcWater.recall(ex, ez) - 0.02 * Math.hypot(ex - hd[0], ez - hd[2]); if (v > bv) { bv = v; bx = ex; bz = ez; } }

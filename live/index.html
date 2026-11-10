@@ -61,6 +61,10 @@
     <p class="small">Lesions cut real pathways. Watch what stops working.</p>
     <div id="lesions" class="lesions"></div>
     <div id="lesionlog" class="stats"></div>
+    <h3>Lineage (innate wiring genome)</h3>
+    <p class="small">The motor wiring grows from a 44-gene genome. "Evolve" runs a separable CMA-ES in background Web Workers: 8 mutants of the current genome per generation are scored in forced walk / turn / righting trials on a hidden body (small brain, 6 s each), and the distribution moves toward the better half. Fitness is noisy: each generation uses a different body. "Adopt" starts a new creature from the evolved genome.</p>
+    <div class="btns"><button id="evo-run">Evolve 6 generations</button><button id="evo-adopt" disabled>Adopt lineage</button><button id="evo-reset">Starter genome</button></div>
+    <div id="evo-log" class="stats"></div>
   </section>
   <section data-pane="about" hidden>
     <h2>What's real here vs simplified</h2>
