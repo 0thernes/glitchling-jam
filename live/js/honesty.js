@@ -18,6 +18,7 @@ export const REAL = [
   '<b>Associative memory:</b> a modern Hopfield network stores episode states; recognition re-activates a hippocampal neuron assembly, and REM dreams start from a pattern-completed memory retrieved from a half-masked cue.',
   '<b>Predictive coding:</b> a two-level hierarchy (16 then 8 latent causes) predicts the 25-dim body-sense vector; inference and learning are local error-driven updates, sensory precision follows acetylcholine, and its normalised error drives the locus coeruleus (noradrenaline) and flushes the skin.',
   '<b>Turing morphogen skin:</b> a Gray-Scott reaction-diffusion layer under the chromatophores; leptin (fat stores) sets its feed rate and cortisol its kill rate, so spots, labyrinths or solid pigment are a readout of metabolic state, and strongly excited skin patches nucleate new spots.',
+  '<b>Morphological growth:</b> each limb lengthens with its own recent muscle use (paid from the muscle/protein pool) and atrophies when idle; body girth follows fat stores. Growth changes the rest lengths of that part\'s physics constraints, so the body the brain controls changes shape.',
 ];
 export const SIMPLIFIED = [
   'The Hopfield and HDC memories are small (256 episodes, 512 dimensions) and their encoders are fixed, not learned.',

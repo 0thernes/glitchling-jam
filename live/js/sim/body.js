@@ -19,18 +19,18 @@ export class Body {
     const off = [[0, 1], [-1, 0], [0, -1], [1, 0]]; // (z, y) unit offsets
     for (let i = 0; i < NS; i++) { const fx = (i - (NS - 1) / 2) * SEG; this.c.push(add(...W(fx, 0, 0), 1, RAD[i] * 0.8, 'core')); const rr = [];
       for (let j = 0; j < 4; j++) rr.push(add(...W(fx, off[j][1] * RAD[i], off[j][0] * RAD[i]), j === 2 ? 2.4 : j === 0 ? 0.2 : 0.6, 0.09, 'skin')); /* heavy belly, light back: passive righting */ this.ring.push(rr); }
-    const cons = []; const con = (a, b, k, m = -1, g = 0) => { const pa = P[a], pb = P[b]; cons.push({ a, b, rest: Math.hypot(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z), k, m, g }); };
+    const cons = []; let tagSeg = -1, tagLimb = -1; const con = (a, b, k, m = -1, g = 0) => { const pa = P[a], pb = P[b]; cons.push({ a, b, rest: Math.hypot(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z), k, m, g, seg: tagSeg, limb: tagLimb }); };
     for (let i = 0; i < NS; i++) { const R = this.ring[i], c = this.c[i], mr = CH.radial + i;
-      for (let j = 0; j < 4; j++) { con(c, R[j], 0.9, mr, 0.45); con(R[j], R[(j + 1) & 3], 0.8, mr, 0.45); } con(R[0], R[2], 0.6, mr, 0.45); con(R[1], R[3], 0.6, mr, 0.45);
+      tagSeg = i; for (let j = 0; j < 4; j++) { con(c, R[j], 0.9, mr, 0.45); con(R[j], R[(j + 1) & 3], 0.8, mr, 0.45); } con(R[0], R[2], 0.6, mr, 0.45); con(R[1], R[3], 0.6, mr, 0.45); tagSeg = -1;
       if (i < NS - 1) { const R2 = this.ring[i + 1], c2 = this.c[i + 1]; con(c, c2, 0.35);
         for (let j = 0; j < 4; j++) { con(R[j], R2[j], 0.9, CH.long + i * 4 + j, -0.3); con(R[j], R2[(j + 1) & 3], 0.5); con(R[j], R2[(j + 3) & 3], 0.5); con(c, R2[j], 0.4); con(R[j], c2, 0.4); } } }
     // limbs: legs on segments 1 and 3 (left/right), arms on segment 5, eye stalks on the head top
     this.limbs = []; const limb = (s, side, kind, idx) => { const sz = side === 1 ? -1 : 1; const fx = (s - (NS - 1) / 2) * SEG; const isArm = kind === 'arm'; const L1 = isArm ? 0.38 : 0.34, L2 = isArm ? 0.36 : 0.36;
-      const hip = this.ring[s][side]; const knee = add(...W(fx + (isArm ? 0.1 : 0), isArm ? 0.05 : -0.05, sz * (RAD[s] + L1)), 0.35, 0.07, 'knee'); const foot = add(...W(fx + (isArm ? 0.25 : 0), isArm ? -0.15 : -0.4, sz * (RAD[s] + L1 + 0.1)), 0.3, 0.08, isArm ? 'hand' : 'foot');
+      tagLimb = this.limbs.length; const hip = this.ring[s][side]; const knee = add(...W(fx + (isArm ? 0.1 : 0), isArm ? 0.05 : -0.05, sz * (RAD[s] + L1)), 0.35, 0.07, 'knee'); const foot = add(...W(fx + (isArm ? 0.25 : 0), isArm ? -0.15 : -0.4, sz * (RAD[s] + L1 + 0.1)), 0.3, 0.08, isArm ? 'hand' : 'foot');
       con(hip, knee, 1); con(knee, this.c[s], 0.9); con(knee, foot, 1); con(foot, this.c[s], 0.15);
       const sw = isArm ? CH.arm + idx * 3 : CH.leg + idx * 2; con(knee, this.ring[s + 1][side], 0.8, sw, -0.45); con(knee, this.ring[s - 1][side], 0.8, sw, 0.45);
       con(foot, hip, 0.8, sw + 1, 0.5); if (isArm) con(knee, this.ring[s][2], 0.7, sw + 2, 0.45);
-      this.limbs.push({ kind, s, side, hip, knee, foot, grip: isArm ? CH.armGrip + idx : CH.legGrip + idx, idx }); };
+      this.limbs.push({ kind, s, side, hip, knee, foot, grip: isArm ? CH.armGrip + idx : CH.legGrip + idx, idx }); tagLimb = -1; };
     limb(1, 1, 'leg', 0); limb(1, 3, 'leg', 1); limb(3, 1, 'leg', 2); limb(3, 3, 'leg', 3); limb(5, 1, 'arm', 0); limb(5, 3, 'arm', 1);
     this.stalks = []; for (let s = 0; s < 2; s++) { const sz = s ? 1 : -1, fx = ((NS - 1) / 2) * SEG; const top = this.ring[NS - 1][0];
       const m1 = add(...W(fx + 0.05, RAD[NS - 1] + 0.3, sz * 0.14), 0.12, 0.05, 'stalk'), eye = add(...W(fx + 0.15, RAD[NS - 1] + 0.55, sz * 0.24), 0.1, 0.09, 'eye');
@@ -39,7 +39,7 @@ export class Body {
     const n = P.length; this.n = n; this.x = new Float64Array(n); this.y = new Float64Array(n); this.z = new Float64Array(n); this.ox = new Float64Array(n); this.oy = new Float64Array(n); this.oz = new Float64Array(n);
     this.im = new Float64Array(n); this.r = new Float64Array(n); this.kind = P.map((p) => p.kind); this.contact = new Uint8Array(n); this.gripP = new Float64Array(n); this.fwdP = new Float64Array(n * 3);
     P.forEach((p, i) => { this.x[i] = this.ox[i] = p.x; this.y[i] = this.oy[i] = p.y; this.z[i] = this.oz[i] = p.z; this.im[i] = 1 / p.m; this.r[i] = p.r; });
-    this.cons = cons; this.u = new Float64Array(CH.N); this.stretch = new Float64Array(CH.N); this.ext = []; this.scale = 1; this.energy = 0; this.grabbing = 0;
+    this.cons = cons; this.u = new Float64Array(CH.N); this.stretch = new Float64Array(CH.N); this.ext = []; this.scale = 1; this.girth = new Float64Array(NS).fill(1); this.limbLen = new Float64Array(6).fill(1); this.energy = 0; this.grabbing = 0;
     for (const L of this.limbs) this.gripP[L.foot] = 0;
     this.curvL = new Float64Array(NS - 1); this.curvU = new Float64Array(NS - 1); this.frames();
   }
@@ -73,7 +73,7 @@ export class Body {
     // measured left-yaw bias of ~0.38 rad/s under a perfectly symmetric muscle wave (test/symmetry_probe.mjs); a random order removes it.
     const ord = this.ord || (this.ord = Uint16Array.from(cons.keys())); let rs = this.rs ?? (this.rs = 12345);
     for (let i = ord.length - 1; i > 0; i--) { rs = (Math.imul(rs, 1664525) + 1013904223) >>> 0; const j = rs % (i + 1); const t = ord[i]; ord[i] = ord[j]; ord[j] = t; } this.rs = rs;
-    for (let it = 0; it < iters; it++) { const fw = it % 2 === 0; for (let qq = 0; qq < cons.length; qq++) { const C = cons[ord[fw ? qq : cons.length - 1 - qq]]; const a = C.a, b = C.b; let rest = C.rest * sc; if (C.m >= 0) rest *= Math.max(0.35, 1 + C.g * u[C.m]);
+    for (let it = 0; it < iters; it++) { const fw = it % 2 === 0; for (let qq = 0; qq < cons.length; qq++) { const C = cons[ord[fw ? qq : cons.length - 1 - qq]]; const a = C.a, b = C.b; let rest = C.rest * sc * (C.seg >= 0 ? this.girth[C.seg] : C.limb >= 0 ? this.limbLen[C.limb] : 1); /* morphological growth: per-segment girth, per-limb length */ if (C.m >= 0) rest *= Math.max(0.35, 1 + C.g * u[C.m]);
         const dx = X[b] - X[a], dy = Y[b] - Y[a], dz = Z[b] - Z[a]; const d = Math.hypot(dx, dy, dz) || 1e-9; const w = this.im[a] + this.im[b]; const corr = (C.k * (d - rest)) / (d * w);
         X[a] += dx * corr * this.im[a]; Y[a] += dy * corr * this.im[a]; Z[a] += dz * corr * this.im[a]; X[b] -= dx * corr * this.im[b]; Y[b] -= dy * corr * this.im[b]; Z[b] -= dz * corr * this.im[b]; }
       this.collide(it === iters - 1, dt, F); }

@@ -191,3 +191,29 @@ cells with V > 0.2, blobs = connected components):
 - **Headless Chromium:** phone 19.7 fps, desktop 13.9 fps, no console errors.
   - Motion: intact 10.0 / 8.8; MN lesioned 0.3 / 1.1; MOT lesioned 4.9 / 6.1.
 - Screenshots: `live-shots/s5-*.png`.
+
+## Pass 6: per-part morphological growth
+
+- Every physics constraint is tagged with the body segment (ring) or limb it belongs to.
+- **Per-segment girth.** Relaxes toward 0.85 + 0.35·leptin, so a fat creature is thicker.
+- **Per-limb length.** Grows with that limb's own muscle use (swing + extend + ½ grip, low-passed), scaled by the
+  muscle/protein pool. It atrophies toward 1 when idle, bounded 0.85–1.45.
+- Rest lengths scale with these, so the body the brain controls changes shape. This sits on top of the earlier global
+  tissue scale.
+- **UI:** the brain panel shows the limb lengths. New lesion: per-part growth off.
+
+Measured (`test/growth_probe.mjs`, seed 1, 8 simulated minutes):
+
+| condition | limb lengths (L0 L1 L2 L3 arm0 arm1) | corr(length, use) | mid girth |
+|---|---|---|---|
+| normal | 1.18 1.20 1.19 1.16 1.09 1.17 | 0.78 | 0.97 |
+| fat clamped high (780) | 1.20 1.19 1.18 1.18 1.16 1.17 | 0.00 (all limbs used similarly) | 1.19 |
+| fat clamped low (40) | 1.19 1.16 1.18 1.18 1.16 1.18 | 0.33 | 0.87 |
+| arm-0 use signal removed | 1.17 1.16 1.15 1.19 **1.01** 1.19 | 0.97 | 0.97 |
+
+- **`measure` intact** (90 s, so growth is still small): dist 63.0, fed 0, entropy 6.27, upright 0.69. All MN
+  lesioned: dist 5.5, entropy 0.11.
+- **`forage_bench`** 240 s, seeds 1–8: 8 feeds / 37 arrivals / 51 give-ups (pass 4: 9 / 18 / 50).
+- **Headless Chromium:** phone 20.0 fps, desktop 11.6 fps, no console errors.
+  - Motion: intact 8.4 / 8.4; MN lesioned 0.8 / 1.0; MOT lesioned 4.8 / 4.6.
+- Screenshots: `live-shots/s6-*.png`.

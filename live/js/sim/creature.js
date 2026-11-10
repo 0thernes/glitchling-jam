@@ -32,7 +32,7 @@ export class Creature {
     // values and beliefs over the 16 sites (names follow the reference organism)
     this.wSite = new Float32Array(SITES).fill(0.25); this.bA = new Float64Array(SITES).fill(1); this.bB = new Float64Array(SITES).fill(1); this.wAv = new Float64Array(SITES); this.visits = new Float64Array(SITES); this.featC = new Float64Array(4).fill(0.15); this.featS = new Float64Array(4).fill(0.15);
     this.senPerm = [...Array(16).keys()]; this.goal = null; this.race = null; this.goalT = 0; this.lastDist = null; this.rBar = 0; this.da = 0; this.rpe = 0; this.nociception = 0; this.stuck = 0; this.progEMA = 0; this.recent = new Float64Array(SITES); this.selfV = 0.3; this.selfW = 0.25; this.goalBest = 1e9; this.goalBestT = 0;
-    this.Vimg = new Float64Array(8); this.episodes = []; this.novelty = new Float32Array(24 * 24); this.hdcVisit = new HDCMap(seed, 512, 0.45); this.hdcFood = new HDCMap(seed + 1, 512, 0.35); this.hop = new Hopfield(NZ, 256, 24); this.zMean = new Float64Array(NZ); this.familiar = 0; this.pc = new PredictiveCoding(seed, NY); this.memStats = { stored: 0, retrievals: 0, dreamSim: 0, famMean: 0 }; this.stats = { eats: 0, rewards: 0, tries: 0, vetoes: 0, races: 0, dreams: 0, replays: 0, mirrored: 0, rewires: 0, misfires: 0, dist: 0, stings: 0, snacks: 0, urine: 0, feces: 0 };
+    this.Vimg = new Float64Array(8); this.episodes = []; this.novelty = new Float32Array(24 * 24); this.hdcVisit = new HDCMap(seed, 512, 0.45); this.hdcFood = new HDCMap(seed + 1, 512, 0.35); this.hop = new Hopfield(NZ, 256, 24); this.zMean = new Float64Array(NZ); this.familiar = 0; this.limbUse = new Float64Array(6); this.limbUseEMA = new Float64Array(6); this.limbUseN = 0; this.pc = new PredictiveCoding(seed, NY); this.memStats = { stored: 0, retrievals: 0, dreamSim: 0, famMean: 0 }; this.stats = { eats: 0, rewards: 0, tries: 0, vetoes: 0, races: 0, dreams: 0, replays: 0, mirrored: 0, rewires: 0, misfires: 0, dist: 0, stings: 0, snacks: 0, urine: 0, feces: 0 };
     this.events = []; this.motorHist = []; this.entropy = 0; this.lastCom = this.body.com(); this.growth = 0; this.raceLog = new Float64Array(SITES * 2); this.dreamLog = [];
     this.skin = new Skin(); this.speedEMA = 0;
   }
@@ -138,6 +138,7 @@ export class Creature {
       if ((this.frame * 8 + s) % 10 === 0) br.slow(0.02, stage);
     }
     for (let c = 0; c < CH.N; c++) B.u[c] = clamp((this.muscleGain ?? 2.4) * (this.mnAct[2 * c] - this.mnAct[2 * c + 1]), -1, 1);
+    B.limbs.forEach((L, k) => { const sw = L.kind === 'leg' ? CH.leg + L.idx * 2 : CH.arm + L.idx * 3; this.limbUse[k] += Math.abs(B.u[sw]) + Math.abs(B.u[sw + 1]) + 0.5 * Math.abs(B.u[L.grip]); }); this.limbUseN++;
     B.step(1 / 120); B.step(1 / 120); const com = B.com(); this.vel = [com[0] - this.lastCom[0], com[1] - this.lastCom[1], com[2] - this.lastCom[2]]; this.stats.dist += Math.hypot(this.vel[0], this.vel[2]); this.lastCom = com;
     this.nociception *= 0.97; if (this.race) this.raceCheck(dt); this.interact();
     if (this.frame % 6 === 0) this.tenHz(); if (this.frame % 4 === 0) this.skin.step(this); if (this.frame % 15 === 0) this.minute();
@@ -206,6 +207,10 @@ export class Creature {
     const com = this.body.com(); const gi = clamp(Math.floor((com[0] / 36 + 0.5) * 24), 0, 23) + 24 * clamp(Math.floor((com[2] / 36 + 0.5) * 24), 0, 23); this.novelty[gi] += 1; if (this.tick % 4 === 0) { this.hdcVisit.add(com[0], com[2], 0.25); this.hdcVisit.decay(0.9997); }
     // morphological growth: anabolic tissue gain slowly scales the body (bounded)
     const target = 1 + clamp(M.tissue * 0.4, 0, 0.35); this.body.scale += 0.01 * (target - this.body.scale);
+    // per-part growth: girth follows fat stores (leptin); each limb grows with its own recent use (use-dependent hypertrophy,
+    // paid for from the protein/tissue pool) and slowly atrophies when idle. Rest lengths of that limb's constraints scale with it.
+    if (!this.lesion.growth) { const B = this.body; for (let i = 0; i < NS; i++) B.girth[i] += 0.004 * (0.85 + 0.35 * M.leptin - B.girth[i]);
+      B.limbs.forEach((L, k) => { const use = clamp(this.limbUse[k] / Math.max(1, this.limbUseN) / 2.2); this.limbUseEMA[k] += 0.02 * (use - this.limbUseEMA[k]); const grow = 0.00025 * this.limbUseEMA[k] * (0.4 + clamp(M.muscle / 150)) - 0.0006 * (B.limbLen[k] - 1); B.limbLen[k] = clamp(B.limbLen[k] + grow, 0.85, 1.45); }); this.limbUse.fill(0); this.limbUseN = 0; }
     this.flawTick();
   }
   flawTick() { const F = this.flaws, br = this.brain, t = this.tick;
