@@ -1,0 +1,9 @@
+{
+  "source": "/workspace/glitchling-jam/synthetic/state_v2.synthetic.jsonl",
+  "real": false,
+  "mode": "clip",
+  "W": 1920,
+  "H": 1080,
+  "errs": [],
+  "frames": 48
+}

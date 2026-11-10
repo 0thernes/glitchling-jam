@@ -1,0 +1,5609 @@
+{
+ "version": "glitchling-v2-blueprint",
+ "note": "exists_today=true: variable exists now in core/ or glitchling.ts. cqm_reuse: read-only source files in cqm-copy (or the jam core) to port/adapt; status=new means no existing code found. Areas 29,30,61,62 are SIMULATED in-sim mechanics, not real psychic phenomena.",
+ "areas": [
+  {
+   "id": 1,
+   "area": "Body plan",
+   "system": "morph",
+   "attributes": [
+    {
+     "attribute": "segment count",
+     "variable": "body.nSeg",
+     "exists_today": false,
+     "couples_to": [
+      2,
+      86
+     ]
+    },
+    {
+     "attribute": "segment radius",
+     "variable": "body.seg[i].r",
+     "exists_today": false,
+     "couples_to": [
+      3,
+      13
+     ]
+    },
+    {
+     "attribute": "symmetry break",
+     "variable": "body.asym",
+     "exists_today": false,
+     "couples_to": [
+      82,
+      9
+     ]
+    },
+    {
+     "attribute": "mass",
+     "variable": "body.mass",
+     "exists_today": false,
+     "couples_to": [
+      51,
+      11
+     ]
+    },
+    {
+     "attribute": "hydrostatic pressure",
+     "variable": "body.pressure",
+     "exists_today": false,
+     "couples_to": [
+      3,
+      17
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/super-body.ts",
+    "cqm-copy/src/sim/morphotypes.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 2,
+   "area": "Morphing",
+   "system": "morph",
+   "attributes": [
+    {
+     "attribute": "shape target",
+     "variable": "morph.target[]",
+     "exists_today": false,
+     "couples_to": [
+      55,
+      56
+     ]
+    },
+    {
+     "attribute": "morph rate",
+     "variable": "morph.rate",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      46
+     ]
+    },
+    {
+     "attribute": "blend shape weights",
+     "variable": "morph.w[]",
+     "exists_today": false,
+     "couples_to": [
+      5,
+      57
+     ]
+    },
+    {
+     "attribute": "reversibility",
+     "variable": "morph.hyst",
+     "exists_today": false,
+     "couples_to": [
+      93,
+      85
+     ]
+    },
+    {
+     "attribute": "cost per unit change",
+     "variable": "morph.atpCost",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      12
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/super-body.ts",
+    "cqm-copy/src/sim/nhi-body.ts",
+    "cqm-copy/src/sim/morphic-field.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 3,
+   "area": "Expansion/contraction",
+   "system": "morph",
+   "attributes": [
+    {
+     "attribute": "volume",
+     "variable": "body.vol",
+     "exists_today": false,
+     "couples_to": [
+      1,
+      17
+     ]
+    },
+    {
+     "attribute": "inflate drive",
+     "variable": "morph.inflate",
+     "exists_today": false,
+     "couples_to": [
+      41,
+      54
+     ]
+    },
+    {
+     "attribute": "contract drive",
+     "variable": "morph.contract",
+     "exists_today": false,
+     "couples_to": [
+      44,
+      15
+     ]
+    },
+    {
+     "attribute": "pulse rhythm",
+     "variable": "morph.pulseHz",
+     "exists_today": false,
+     "couples_to": [
+      40,
+      57
+     ]
+    },
+    {
+     "attribute": "rupture risk",
+     "variable": "body.strain",
+     "exists_today": false,
+     "couples_to": [
+      92,
+      26
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/super-body.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 4,
+   "area": "Extension/shortening",
+   "system": "morph",
+   "attributes": [
+    {
+     "attribute": "limb length",
+     "variable": "limb[j].len",
+     "exists_today": false,
+     "couples_to": [
+      7,
+      8
+     ]
+    },
+    {
+     "attribute": "reach goal",
+     "variable": "limb[j].reachTgt",
+     "exists_today": false,
+     "couples_to": [
+      19,
+      52
+     ]
+    },
+    {
+     "attribute": "extension speed",
+     "variable": "limb[j].extV",
+     "exists_today": false,
+     "couples_to": [
+      39,
+      11
+     ]
+    },
+    {
+     "attribute": "retract reflex",
+     "variable": "limb[j].retract",
+     "exists_today": false,
+     "couples_to": [
+      26,
+      54
+     ]
+    },
+    {
+     "attribute": "length cost",
+     "variable": "limb[j].lenCost",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      10
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/super-body.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 5,
+   "area": "Skin",
+   "system": "morph",
+   "attributes": [
+    {
+     "attribute": "pigment",
+     "variable": "skin.rgb",
+     "exists_today": false,
+     "couples_to": [
+      56,
+      57
+     ]
+    },
+    {
+     "attribute": "chromatophore gain",
+     "variable": "skin.chromaGain",
+     "exists_today": false,
+     "couples_to": [
+      35,
+      45
+     ]
+    },
+    {
+     "attribute": "thickness",
+     "variable": "skin.thick",
+     "exists_today": false,
+     "couples_to": [
+      92,
+      16
+     ]
+    },
+    {
+     "attribute": "permeability",
+     "variable": "skin.perm",
+     "exists_today": false,
+     "couples_to": [
+      17,
+      21
+     ]
+    },
+    {
+     "attribute": "wound map",
+     "variable": "skin.wounds[]",
+     "exists_today": false,
+     "couples_to": [
+      92,
+      26
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/creature-exterior-layers.ts",
+    "cqm-copy/src/sim/creature-exterior-phenomena.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 6,
+   "area": "Hydroskeleton",
+   "system": "morph",
+   "attributes": [
+    {
+     "attribute": "stiffness",
+     "variable": "skel.k",
+     "exists_today": false,
+     "couples_to": [
+      51,
+      3
+     ]
+    },
+    {
+     "attribute": "joint count",
+     "variable": "skel.joints",
+     "exists_today": false,
+     "couples_to": [
+      86,
+      7
+     ]
+    },
+    {
+     "attribute": "fluid volume",
+     "variable": "skel.fluid",
+     "exists_today": false,
+     "couples_to": [
+      17,
+      3
+     ]
+    },
+    {
+     "attribute": "damage",
+     "variable": "skel.dmg",
+     "exists_today": false,
+     "couples_to": [
+      92,
+      94
+     ]
+    },
+    {
+     "attribute": "tone",
+     "variable": "skel.tone",
+     "exists_today": false,
+     "couples_to": [
+      35,
+      44
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 7,
+   "area": "Legs (weird)",
+   "system": "morph",
+   "attributes": [
+    {
+     "attribute": "leg count (odd allowed)",
+     "variable": "legs.n",
+     "exists_today": false,
+     "couples_to": [
+      82,
+      86
+     ]
+    },
+    {
+     "attribute": "gait phase",
+     "variable": "legs[j].phase",
+     "exists_today": false,
+     "couples_to": [
+      32,
+      51
+     ]
+    },
+    {
+     "attribute": "foot contact",
+     "variable": "legs[j].contact",
+     "exists_today": false,
+     "couples_to": [
+      23,
+      97
+     ]
+    },
+    {
+     "attribute": "leg reversal flag",
+     "variable": "legs[j].rev",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      39
+     ]
+    },
+    {
+     "attribute": "fatigue",
+     "variable": "legs[j].fatigue",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      46
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/super-body.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 8,
+   "area": "Arms/manipulators",
+   "system": "morph",
+   "attributes": [
+    {
+     "attribute": "grip force",
+     "variable": "arms[k].grip",
+     "exists_today": false,
+     "couples_to": [
+      19,
+      59
+     ]
+    },
+    {
+     "attribute": "tip sensors",
+     "variable": "arms[k].tipSens[]",
+     "exists_today": false,
+     "couples_to": [
+      23,
+      21
+     ]
+    },
+    {
+     "attribute": "arm count",
+     "variable": "arms.n",
+     "exists_today": false,
+     "couples_to": [
+      86,
+      82
+     ]
+    },
+    {
+     "attribute": "tool use",
+     "variable": "arms[k].tool",
+     "exists_today": false,
+     "couples_to": [
+      60,
+      68
+     ]
+    },
+    {
+     "attribute": "arm brain load",
+     "variable": "arms[k].brainLoad",
+     "exists_today": false,
+     "couples_to": [
+      32,
+      11
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 9,
+   "area": "Eyes (weird)",
+   "system": "morph",
+   "attributes": [
+    {
+     "attribute": "eye count",
+     "variable": "eyes.n",
+     "exists_today": false,
+     "couples_to": [
+      82,
+      22
+     ]
+    },
+    {
+     "attribute": "eye position on body",
+     "variable": "eyes[e].pos",
+     "exists_today": false,
+     "couples_to": [
+      1,
+      22
+     ]
+    },
+    {
+     "attribute": "aperture",
+     "variable": "eyes[e].aperture",
+     "exists_today": false,
+     "couples_to": [
+      41,
+      22
+     ]
+    },
+    {
+     "attribute": "eye stalk length",
+     "variable": "eyes[e].stalk",
+     "exists_today": false,
+     "couples_to": [
+      4,
+      53
+     ]
+    },
+    {
+     "attribute": "eye damage",
+     "variable": "eyes[e].dmg",
+     "exists_today": false,
+     "couples_to": [
+      92,
+      26
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/super-body.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 10,
+   "area": "Growth",
+   "system": "morph",
+   "attributes": [
+    {
+     "attribute": "growth rate",
+     "variable": "grow.rate",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      84
+     ]
+    },
+    {
+     "attribute": "size target",
+     "variable": "grow.target",
+     "exists_today": false,
+     "couples_to": [
+      87,
+      71
+     ]
+    },
+    {
+     "attribute": "allometry",
+     "variable": "grow.allo[]",
+     "exists_today": false,
+     "couples_to": [
+      86,
+      1
+     ]
+    },
+    {
+     "attribute": "nutrient gate",
+     "variable": "grow.gate",
+     "exists_today": false,
+     "couples_to": [
+      12,
+      14
+     ]
+    },
+    {
+     "attribute": "stunting",
+     "variable": "grow.stunt",
+     "exists_today": false,
+     "couples_to": [
+      46,
+      93
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/growth-ramp.ts",
+    "cqm-copy/src/sim/super-evolution.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 11,
+   "area": "Energy (ATP)",
+   "system": "metab",
+   "attributes": [
+    {
+     "attribute": "ATP pool",
+     "variable": "atp",
+     "exists_today": true,
+     "couples_to": [
+      12,
+      46
+     ]
+    },
+    {
+     "attribute": "muscle reserve",
+     "variable": "muscle",
+     "exists_today": true,
+     "couples_to": [
+      51,
+      93
+     ]
+    },
+    {
+     "attribute": "brain glucose",
+     "variable": "brainGlc",
+     "exists_today": true,
+     "couples_to": [
+      31,
+      40
+     ]
+    },
+    {
+     "attribute": "cognition cost",
+     "variable": "cogCost",
+     "exists_today": true,
+     "couples_to": [
+      31,
+      36
+     ]
+    },
+    {
+     "attribute": "heat out",
+     "variable": "heat",
+     "exists_today": true,
+     "couples_to": [
+      16,
+      15
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/organism.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 12,
+   "area": "Blood chemistry",
+   "system": "metab",
+   "attributes": [
+    {
+     "attribute": "glucose",
+     "variable": "blood.glc",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      45
+     ]
+    },
+    {
+     "attribute": "free fatty acids",
+     "variable": "blood.ffa",
+     "exists_today": true,
+     "couples_to": [
+      13,
+      11
+     ]
+    },
+    {
+     "attribute": "amino acids",
+     "variable": "blood.aa",
+     "exists_today": true,
+     "couples_to": [
+      10,
+      92
+     ]
+    },
+    {
+     "attribute": "ketones",
+     "variable": "blood.ket",
+     "exists_today": true,
+     "couples_to": [
+      13,
+      31
+     ]
+    },
+    {
+     "attribute": "urea",
+     "variable": "blood.urea",
+     "exists_today": true,
+     "couples_to": [
+      18,
+      91
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/organism.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 13,
+   "area": "Fat storage",
+   "system": "metab",
+   "attributes": [
+    {
+     "attribute": "fat",
+     "variable": "fat",
+     "exists_today": true,
+     "couples_to": [
+      11,
+      72
+     ]
+    },
+    {
+     "attribute": "liver glycogen",
+     "variable": "liverGly",
+     "exists_today": true,
+     "couples_to": [
+      12,
+      40
+     ]
+    },
+    {
+     "attribute": "mobilisation rate",
+     "variable": "metab.lipolysis",
+     "exists_today": false,
+     "couples_to": [
+      46,
+      11
+     ]
+    },
+    {
+     "attribute": "fat distribution",
+     "variable": "body.fatMap[]",
+     "exists_today": false,
+     "couples_to": [
+      1,
+      56
+     ]
+    },
+    {
+     "attribute": "starvation flag",
+     "variable": "metab.starving",
+     "exists_today": false,
+     "couples_to": [
+      94,
+      45
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/organism.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 14,
+   "area": "Digestion (ENS)",
+   "system": "metab",
+   "attributes": [
+    {
+     "attribute": "gut contents",
+     "variable": "gut",
+     "exists_today": true,
+     "couples_to": [
+      12,
+      19
+     ]
+    },
+    {
+     "attribute": "ENS rates",
+     "variable": "rate[ENS]",
+     "exists_today": true,
+     "couples_to": [
+      31,
+      25
+     ]
+    },
+    {
+     "attribute": "gut motility",
+     "variable": "metab.motility",
+     "exists_today": false,
+     "couples_to": [
+      40,
+      18
+     ]
+    },
+    {
+     "attribute": "microbiome",
+     "variable": "gut.biome[]",
+     "exists_today": false,
+     "couples_to": [
+      91,
+      98
+     ]
+    },
+    {
+     "attribute": "satiety (ghrelin)",
+     "variable": "ghrelin",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      45
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/organism.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 15,
+   "area": "Respiration",
+   "system": "metab",
+   "attributes": [
+    {
+     "attribute": "O2 level",
+     "variable": "metab.o2",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      96
+     ]
+    },
+    {
+     "attribute": "breath rate",
+     "variable": "metab.breathHz",
+     "exists_today": false,
+     "couples_to": [
+      3,
+      41
+     ]
+    },
+    {
+     "attribute": "CO2",
+     "variable": "metab.co2",
+     "exists_today": false,
+     "couples_to": [
+      25,
+      46
+     ]
+    },
+    {
+     "attribute": "hypoxia",
+     "variable": "metab.hypoxia",
+     "exists_today": false,
+     "couples_to": [
+      31,
+      94
+     ]
+    },
+    {
+     "attribute": "gill/pore area",
+     "variable": "skin.poreArea",
+     "exists_today": false,
+     "couples_to": [
+      5,
+      17
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 16,
+   "area": "Thermoregulation",
+   "system": "metab",
+   "attributes": [
+    {
+     "attribute": "core temp",
+     "variable": "metab.temp",
+     "exists_today": false,
+     "couples_to": [
+      96,
+      11
+     ]
+    },
+    {
+     "attribute": "set point",
+     "variable": "metab.tempSet",
+     "exists_today": false,
+     "couples_to": [
+      40,
+      91
+     ]
+    },
+    {
+     "attribute": "shiver/flush",
+     "variable": "metab.thermoAct",
+     "exists_today": false,
+     "couples_to": [
+      3,
+      5
+     ]
+    },
+    {
+     "attribute": "heat stress",
+     "variable": "metab.heatStress",
+     "exists_today": false,
+     "couples_to": [
+      46,
+      41
+     ]
+    },
+    {
+     "attribute": "huddling gain",
+     "variable": "metab.huddle",
+     "exists_today": false,
+     "couples_to": [
+      77,
+      69
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 17,
+   "area": "Water balance",
+   "system": "metab",
+   "attributes": [
+    {
+     "attribute": "hydration",
+     "variable": "metab.h2o",
+     "exists_today": false,
+     "couples_to": [
+      96,
+      3
+     ]
+    },
+    {
+     "attribute": "thirst",
+     "variable": "drive.thirst",
+     "exists_today": false,
+     "couples_to": [
+      52,
+      45
+     ]
+    },
+    {
+     "attribute": "osmolality",
+     "variable": "metab.osm",
+     "exists_today": false,
+     "couples_to": [
+      12,
+      18
+     ]
+    },
+    {
+     "attribute": "evaporation",
+     "variable": "metab.evap",
+     "exists_today": false,
+     "couples_to": [
+      5,
+      16
+     ]
+    },
+    {
+     "attribute": "bloat",
+     "variable": "metab.bloat",
+     "exists_today": false,
+     "couples_to": [
+      3,
+      1
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 18,
+   "area": "Excretion",
+   "system": "metab",
+   "attributes": [
+    {
+     "attribute": "excreted",
+     "variable": "excreted",
+     "exists_today": true,
+     "couples_to": [
+      95,
+      98
+     ]
+    },
+    {
+     "attribute": "scent marks",
+     "variable": "env.scent[]",
+     "exists_today": false,
+     "couples_to": [
+      57,
+      63
+     ]
+    },
+    {
+     "attribute": "toxin clearance",
+     "variable": "metab.clear",
+     "exists_today": false,
+     "couples_to": [
+      91,
+      12
+     ]
+    },
+    {
+     "attribute": "bladder fill",
+     "variable": "metab.bladder",
+     "exists_today": false,
+     "couples_to": [
+      25,
+      40
+     ]
+    },
+    {
+     "attribute": "waste signal",
+     "variable": "sig.waste",
+     "exists_today": false,
+     "couples_to": [
+      64,
+      66
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/waste-ecology.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 19,
+   "area": "Harvesting",
+   "system": "metab",
+   "attributes": [
+    {
+     "attribute": "eaten",
+     "variable": "eaten",
+     "exists_today": true,
+     "couples_to": [
+      12,
+      14
+     ]
+    },
+    {
+     "attribute": "site depletion",
+     "variable": "depl[]",
+     "exists_today": true,
+     "couples_to": [
+      98,
+      52
+     ]
+    },
+    {
+     "attribute": "harvest rate",
+     "variable": "harvest.rate",
+     "exists_today": false,
+     "couples_to": [
+      8,
+      11
+     ]
+    },
+    {
+     "attribute": "handling time",
+     "variable": "harvest.handle",
+     "exists_today": false,
+     "couples_to": [
+      8,
+      37
+     ]
+    },
+    {
+     "attribute": "yield memory",
+     "variable": "wSite[]",
+     "exists_today": true,
+     "couples_to": [
+      37,
+      52
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/edible-resource.ts",
+    "cqm-copy/src/sim/dome-feeding.ts",
+    "cqm-copy/src/sim/ad-forager.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 20,
+   "area": "Food caching",
+   "system": "metab",
+   "attributes": [
+    {
+     "attribute": "cache sites",
+     "variable": "cache.pos[]",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      60
+     ]
+    },
+    {
+     "attribute": "cache contents",
+     "variable": "cache.amt[]",
+     "exists_today": false,
+     "couples_to": [
+      98,
+      13
+     ]
+    },
+    {
+     "attribute": "retrieval accuracy",
+     "variable": "cache.recall",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      100
+     ]
+    },
+    {
+     "attribute": "theft risk",
+     "variable": "cache.theft",
+     "exists_today": false,
+     "couples_to": [
+      66,
+      41
+     ]
+    },
+    {
+     "attribute": "cache defence",
+     "variable": "cache.guard",
+     "exists_today": false,
+     "couples_to": [
+      67,
+      54
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 21,
+   "area": "Chemosense",
+   "system": "sense",
+   "attributes": [
+    {
+     "attribute": "sens chemo channels",
+     "variable": "sens[0..3]",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      14
+     ]
+    },
+    {
+     "attribute": "gradient follow",
+     "variable": "chemo.grad",
+     "exists_today": false,
+     "couples_to": [
+      51,
+      98
+     ]
+    },
+    {
+     "attribute": "receptor adaptation",
+     "variable": "chemo.adapt",
+     "exists_today": false,
+     "couples_to": [
+      34,
+      100
+     ]
+    },
+    {
+     "attribute": "scent ID",
+     "variable": "chemo.id",
+     "exists_today": false,
+     "couples_to": [
+      63,
+      72
+     ]
+    },
+    {
+     "attribute": "toxin detect",
+     "variable": "chemo.tox",
+     "exists_today": false,
+     "couples_to": [
+      26,
+      54
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/stigmergy.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 22,
+   "area": "Vision",
+   "system": "sense",
+   "attributes": [
+    {
+     "attribute": "retina image",
+     "variable": "eyes.retina[]",
+     "exists_today": false,
+     "couples_to": [
+      9,
+      36
+     ]
+    },
+    {
+     "attribute": "motion detect",
+     "variable": "eyes.motion",
+     "exists_today": false,
+     "couples_to": [
+      54,
+      99
+     ]
+    },
+    {
+     "attribute": "colour channels",
+     "variable": "eyes.chroma",
+     "exists_today": false,
+     "couples_to": [
+      56,
+      57
+     ]
+    },
+    {
+     "attribute": "night mode",
+     "variable": "eyes.scotopic",
+     "exists_today": false,
+     "couples_to": [
+      40,
+      96
+     ]
+    },
+    {
+     "attribute": "visual noise",
+     "variable": "eyes.noise",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      9
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/topdown-perception.ts",
+    "cqm-copy/src/sim/perceptual-priority.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 23,
+   "area": "Touch",
+   "system": "sense",
+   "attributes": [
+    {
+     "attribute": "contact map",
+     "variable": "touch.map[]",
+     "exists_today": false,
+     "couples_to": [
+      7,
+      8
+     ]
+    },
+    {
+     "attribute": "pressure",
+     "variable": "touch.p",
+     "exists_today": false,
+     "couples_to": [
+      26,
+      97
+     ]
+    },
+    {
+     "attribute": "vibration",
+     "variable": "touch.vib",
+     "exists_today": false,
+     "couples_to": [
+      28,
+      99
+     ]
+    },
+    {
+     "attribute": "texture",
+     "variable": "touch.tex",
+     "exists_today": false,
+     "couples_to": [
+      97,
+      19
+     ]
+    },
+    {
+     "attribute": "social touch",
+     "variable": "touch.social",
+     "exists_today": false,
+     "couples_to": [
+      48,
+      77
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 24,
+   "area": "Proprioception",
+   "system": "sense",
+   "attributes": [
+    {
+     "attribute": "joint angles",
+     "variable": "prop.angle[]",
+     "exists_today": false,
+     "couples_to": [
+      32,
+      39
+     ]
+    },
+    {
+     "attribute": "stretch",
+     "variable": "prop.stretch",
+     "exists_today": false,
+     "couples_to": [
+      4,
+      3
+     ]
+    },
+    {
+     "attribute": "body schema",
+     "variable": "prop.schema",
+     "exists_today": false,
+     "couples_to": [
+      1,
+      38
+     ]
+    },
+    {
+     "attribute": "efference copy",
+     "variable": "rate[MOT]",
+     "exists_today": true,
+     "couples_to": [
+      39,
+      100
+     ]
+    },
+    {
+     "attribute": "schema error",
+     "variable": "prop.err",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      38
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/embodiment.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 25,
+   "area": "Interoception",
+   "system": "sense",
+   "attributes": [
+    {
+     "attribute": "INS rates",
+     "variable": "rate[INS]",
+     "exists_today": true,
+     "couples_to": [
+      45,
+      11
+     ]
+    },
+    {
+     "attribute": "intero vector",
+     "variable": "intero[4]",
+     "exists_today": true,
+     "couples_to": [
+      12,
+      13
+     ]
+    },
+    {
+     "attribute": "heartbeat",
+     "variable": "intero.hb",
+     "exists_today": false,
+     "couples_to": [
+      41,
+      46
+     ]
+    },
+    {
+     "attribute": "intero prediction error",
+     "variable": "intero.pe",
+     "exists_today": false,
+     "couples_to": [
+      38,
+      45
+     ]
+    },
+    {
+     "attribute": "gut-brain line",
+     "variable": "intero.vagal",
+     "exists_today": false,
+     "couples_to": [
+      14,
+      44
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/organism.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 26,
+   "area": "Nociception",
+   "system": "sense",
+   "attributes": [
+    {
+     "attribute": "integrity",
+     "variable": "integrity",
+     "exists_today": true,
+     "couples_to": [
+      92,
+      41
+     ]
+    },
+    {
+     "attribute": "damage taken",
+     "variable": "damageTaken",
+     "exists_today": true,
+     "couples_to": [
+      50,
+      37
+     ]
+    },
+    {
+     "attribute": "pain threshold",
+     "variable": "noci.th",
+     "exists_today": false,
+     "couples_to": [
+      35,
+      49
+     ]
+    },
+    {
+     "attribute": "referred pain",
+     "variable": "noci.ref",
+     "exists_today": false,
+     "couples_to": [
+      32,
+      7
+     ]
+    },
+    {
+     "attribute": "analgesia",
+     "variable": "noci.opioid",
+     "exists_today": false,
+     "couples_to": [
+      35,
+      44
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 27,
+   "area": "Thermosense",
+   "system": "sense",
+   "attributes": [
+    {
+     "attribute": "skin temp",
+     "variable": "thermo.skin",
+     "exists_today": false,
+     "couples_to": [
+      16,
+      96
+     ]
+    },
+    {
+     "attribute": "gradient",
+     "variable": "thermo.grad",
+     "exists_today": false,
+     "couples_to": [
+      51,
+      60
+     ]
+    },
+    {
+     "attribute": "cold pain",
+     "variable": "thermo.cold",
+     "exists_today": false,
+     "couples_to": [
+      26,
+      41
+     ]
+    },
+    {
+     "attribute": "warmth seeking",
+     "variable": "thermo.seek",
+     "exists_today": false,
+     "couples_to": [
+      48,
+      77
+     ]
+    },
+    {
+     "attribute": "sensor drift",
+     "variable": "thermo.drift",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      93
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 28,
+   "area": "Vibration/hearing",
+   "system": "sense",
+   "attributes": [
+    {
+     "attribute": "substrate vibration",
+     "variable": "hear.vib",
+     "exists_today": false,
+     "couples_to": [
+      97,
+      99
+     ]
+    },
+    {
+     "attribute": "call detect",
+     "variable": "hear.call",
+     "exists_today": false,
+     "couples_to": [
+      64,
+      57
+     ]
+    },
+    {
+     "attribute": "direction",
+     "variable": "hear.dir",
+     "exists_today": false,
+     "couples_to": [
+      51,
+      63
+     ]
+    },
+    {
+     "attribute": "startle",
+     "variable": "hear.startle",
+     "exists_today": false,
+     "couples_to": [
+      41,
+      54
+     ]
+    },
+    {
+     "attribute": "habituation",
+     "variable": "hear.habit",
+     "exists_today": false,
+     "couples_to": [
+      34,
+      47
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 29,
+   "area": "Field sense (simulated)",
+   "system": "sense",
+   "attributes": [
+    {
+     "attribute": "magnetic-like field",
+     "variable": "alien[0]",
+     "exists_today": true,
+     "couples_to": [
+      51,
+      40
+     ]
+    },
+    {
+     "attribute": "electric-like threat field",
+     "variable": "alien[1]",
+     "exists_today": true,
+     "couples_to": [
+      99,
+      41
+     ]
+    },
+    {
+     "attribute": "quantum click",
+     "variable": "alien[2]",
+     "exists_today": true,
+     "couples_to": [
+      82,
+      47
+     ]
+    },
+    {
+     "attribute": "field gradient",
+     "variable": "field.grad",
+     "exists_today": false,
+     "couples_to": [
+      61,
+      51
+     ]
+    },
+    {
+     "attribute": "field noise",
+     "variable": "field.noise",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      96
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/apex-field-organs.ts",
+    "cqm-copy/src/sim/chaos-field.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 30,
+   "area": "Remote viewing (SIMULATED)",
+   "system": "sense",
+   "attributes": [
+    {
+     "attribute": "range",
+     "variable": "rv.range",
+     "exists_today": false,
+     "couples_to": [
+      61,
+      11
+     ]
+    },
+    {
+     "attribute": "target sample",
+     "variable": "rv.sample[]",
+     "exists_today": false,
+     "couples_to": [
+      98,
+      52
+     ]
+    },
+    {
+     "attribute": "fidelity",
+     "variable": "rv.fid",
+     "exists_today": false,
+     "couples_to": [
+      36,
+      100
+     ]
+    },
+    {
+     "attribute": "cost",
+     "variable": "rv.atp",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      40
+     ]
+    },
+    {
+     "attribute": "false-image rate",
+     "variable": "rv.false",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      38
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/mind-field.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 31,
+   "area": "Central brain",
+   "system": "neural",
+   "attributes": [
+    {
+     "attribute": "neurons",
+     "variable": "NNEU(272)",
+     "exists_today": true,
+     "couples_to": [
+      32,
+      90
+     ]
+    },
+    {
+     "attribute": "regions",
+     "variable": "REGIONS",
+     "exists_today": true,
+     "couples_to": [
+      36,
+      35
+     ]
+    },
+    {
+     "attribute": "synapses",
+     "variable": "syn.w",
+     "exists_today": true,
+     "couples_to": [
+      34,
+      82
+     ]
+    },
+    {
+     "attribute": "firing rates",
+     "variable": "rate[]",
+     "exists_today": true,
+     "couples_to": [
+      39,
+      45
+     ]
+    },
+    {
+     "attribute": "scale tier",
+     "variable": "brain.tier",
+     "exists_today": false,
+     "couples_to": [
+      90,
+      11
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/connectome.ts",
+    "cqm-copy/src/sim/entity-brain.ts",
+    "cqm-copy/src/math/izhikevich.ts",
+    "cqm-copy/src/sim/xenomimic-brain.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 32,
+   "area": "Limb brains",
+   "system": "neural",
+   "attributes": [
+    {
+     "attribute": "ganglion per limb",
+     "variable": "lb[j].n",
+     "exists_today": false,
+     "couples_to": [
+      7,
+      8
+     ]
+    },
+    {
+     "attribute": "CPG oscillator",
+     "variable": "lb[j].cpg",
+     "exists_today": false,
+     "couples_to": [
+      51,
+      40
+     ]
+    },
+    {
+     "attribute": "local reflex",
+     "variable": "lb[j].reflex",
+     "exists_today": false,
+     "couples_to": [
+      26,
+      54
+     ]
+    },
+    {
+     "attribute": "uplink bandwidth",
+     "variable": "lb[j].up",
+     "exists_today": false,
+     "couples_to": [
+      31,
+      61
+     ]
+    },
+    {
+     "attribute": "autonomy",
+     "variable": "lb[j].auto",
+     "exists_today": false,
+     "couples_to": [
+      46,
+      100
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/entity-brain.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 33,
+   "area": "Nerve types",
+   "system": "neural",
+   "attributes": [
+    {
+     "attribute": "synapse kinds",
+     "variable": "kind[]",
+     "exists_today": true,
+     "couples_to": [
+      34,
+      31
+     ]
+    },
+    {
+     "attribute": "fast/slow fibres",
+     "variable": "nerve.speed[]",
+     "exists_today": false,
+     "couples_to": [
+      39,
+      54
+     ]
+    },
+    {
+     "attribute": "neuromod fibres",
+     "variable": "nerve.mod[]",
+     "exists_today": false,
+     "couples_to": [
+      35,
+      45
+     ]
+    },
+    {
+     "attribute": "gap junctions",
+     "variable": "nerve.gap[]",
+     "exists_today": false,
+     "couples_to": [
+      69,
+      32
+     ]
+    },
+    {
+     "attribute": "myelin",
+     "variable": "nerve.myelin",
+     "exists_today": false,
+     "couples_to": [
+      86,
+      11
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/math/izhikevich.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 34,
+   "area": "Plasticity",
+   "system": "neural",
+   "attributes": [
+    {
+     "attribute": "plastic mask",
+     "variable": "syn.plastic",
+     "exists_today": true,
+     "couples_to": [
+      37,
+      100
+     ]
+    },
+    {
+     "attribute": "learning rate",
+     "variable": "plast.lr",
+     "exists_today": false,
+     "couples_to": [
+      35,
+      47
+     ]
+    },
+    {
+     "attribute": "STDP window",
+     "variable": "plast.stdp",
+     "exists_today": false,
+     "couples_to": [
+      36,
+      37
+     ]
+    },
+    {
+     "attribute": "pruning",
+     "variable": "devPruned",
+     "exists_today": true,
+     "couples_to": [
+      86,
+      93
+     ]
+    },
+    {
+     "attribute": "sprouting",
+     "variable": "dev.sprouted",
+     "exists_today": false,
+     "couples_to": [
+      86,
+      10
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/plastic-weights.ts",
+    "cqm-copy/src/sim/online-learning.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 35,
+   "area": "Neuromodulation",
+   "system": "neural",
+   "attributes": [
+    {
+     "attribute": "dopamine",
+     "variable": "nm.DA",
+     "exists_today": true,
+     "couples_to": [
+      42,
+      52
+     ]
+    },
+    {
+     "attribute": "noradrenaline",
+     "variable": "nm.NE",
+     "exists_today": true,
+     "couples_to": [
+      41,
+      36
+     ]
+    },
+    {
+     "attribute": "serotonin",
+     "variable": "nm.5HT",
+     "exists_today": true,
+     "couples_to": [
+      44,
+      45
+     ]
+    },
+    {
+     "attribute": "acetylcholine",
+     "variable": "nm.ACh",
+     "exists_today": true,
+     "couples_to": [
+      36,
+      34
+     ]
+    },
+    {
+     "attribute": "cortisol",
+     "variable": "cortisol",
+     "exists_today": true,
+     "couples_to": [
+      46,
+      40
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/neuromodulation.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 36,
+   "area": "Attention/workspace",
+   "system": "neural",
+   "attributes": [
+    {
+     "attribute": "ignition",
+     "variable": "mind.amp[]",
+     "exists_today": true,
+     "couples_to": [
+      31,
+      37
+     ]
+    },
+    {
+     "attribute": "salience",
+     "variable": "mind.sal[]",
+     "exists_today": true,
+     "couples_to": [
+      47,
+      41
+     ]
+    },
+    {
+     "attribute": "binding",
+     "variable": "mind.plv",
+     "exists_today": true,
+     "couples_to": [
+      22,
+      23
+     ]
+    },
+    {
+     "attribute": "confidence",
+     "variable": "mind.conf",
+     "exists_today": true,
+     "couples_to": [
+      38,
+      49
+     ]
+    },
+    {
+     "attribute": "broadcast gate",
+     "variable": "ws.gate",
+     "exists_today": false,
+     "couples_to": [
+      61,
+      64
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/math/global-workspace.ts",
+    "cqm-copy/src/sim/attention-controller.ts",
+    "cqm-copy/src/sim/attention-schema.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 37,
+   "area": "Memory",
+   "system": "neural",
+   "attributes": [
+    {
+     "attribute": "site values",
+     "variable": "wSite[]",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      19
+     ]
+    },
+    {
+     "attribute": "alternate map",
+     "variable": "wAlt[]",
+     "exists_today": true,
+     "couples_to": [
+      53,
+      38
+     ]
+    },
+    {
+     "attribute": "Beta counts",
+     "variable": "bA/bB",
+     "exists_today": true,
+     "couples_to": [
+      47,
+      100
+     ]
+    },
+    {
+     "attribute": "episodic buffer",
+     "variable": "mind.epi",
+     "exists_today": true,
+     "couples_to": [
+      68,
+      58
+     ]
+    },
+    {
+     "attribute": "consolidation",
+     "variable": "mem.consol",
+     "exists_today": false,
+     "couples_to": [
+      40,
+      34
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/holographic-memory.ts",
+    "cqm-copy/src/sim/narrative-memory.ts",
+    "cqm-copy/src/sim/successor-representation.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 38,
+   "area": "Prediction",
+   "system": "neural",
+   "attributes": [
+    {
+     "attribute": "world model",
+     "variable": "mind.Tm",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      53
+     ]
+    },
+    {
+     "attribute": "prediction error",
+     "variable": "pred.err",
+     "exists_today": false,
+     "couples_to": [
+      47,
+      45
+     ]
+    },
+    {
+     "attribute": "surprise (NIS)",
+     "variable": "pred.nis",
+     "exists_today": false,
+     "couples_to": [
+      41,
+      36
+     ]
+    },
+    {
+     "attribute": "forward motor model",
+     "variable": "pred.fwd",
+     "exists_today": false,
+     "couples_to": [
+      39,
+      24
+     ]
+    },
+    {
+     "attribute": "planning depth",
+     "variable": "mind.plan",
+     "exists_today": true,
+     "couples_to": [
+      31,
+      52
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/math/predictive-coding.ts",
+    "cqm-copy/src/sim/active-inference.ts",
+    "cqm-copy/src/sim/embodiment.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 39,
+   "area": "Motor control",
+   "system": "neural",
+   "attributes": [
+    {
+     "attribute": "MOT rates",
+     "variable": "rate[MOT]",
+     "exists_today": true,
+     "couples_to": [
+      7,
+      51
+     ]
+    },
+    {
+     "attribute": "action choice",
+     "variable": "lastChoice",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      100
+     ]
+    },
+    {
+     "attribute": "motor noise",
+     "variable": "mot.noise",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      22
+     ]
+    },
+    {
+     "attribute": "force scaling",
+     "variable": "mot.gain",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      8
+     ]
+    },
+    {
+     "attribute": "inhibition",
+     "variable": "mot.inhib",
+     "exists_today": false,
+     "couples_to": [
+      54,
+      44
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/behaviors.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 40,
+   "area": "Sleep/circadian",
+   "system": "neural",
+   "attributes": [
+    {
+     "attribute": "sleep pressure",
+     "variable": "S",
+     "exists_today": true,
+     "couples_to": [
+      37,
+      45
+     ]
+    },
+    {
+     "attribute": "stage",
+     "variable": "stage",
+     "exists_today": true,
+     "couples_to": [
+      34,
+      29
+     ]
+    },
+    {
+     "attribute": "SCN phase",
+     "variable": "rate[SCN]",
+     "exists_today": true,
+     "couples_to": [
+      16,
+      96
+     ]
+    },
+    {
+     "attribute": "sleep debt",
+     "variable": "affect.sleepDebt",
+     "exists_today": true,
+     "couples_to": [
+      46,
+      91
+     ]
+    },
+    {
+     "attribute": "dreaming replay",
+     "variable": "sleep.replay",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      68
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/organism.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 41,
+   "area": "Fear",
+   "system": "affect",
+   "attributes": [
+    {
+     "attribute": "fear",
+     "variable": "affect.emo.fear",
+     "exists_today": true,
+     "couples_to": [
+      54,
+      3
+     ]
+    },
+    {
+     "attribute": "freeze",
+     "variable": "beh.freeze",
+     "exists_today": false,
+     "couples_to": [
+      39,
+      56
+     ]
+    },
+    {
+     "attribute": "threat memory",
+     "variable": "fear.mem[]",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      99
+     ]
+    },
+    {
+     "attribute": "contagion",
+     "variable": "fear.contagion",
+     "exists_today": false,
+     "couples_to": [
+      61,
+      69
+     ]
+    },
+    {
+     "attribute": "extinction",
+     "variable": "fear.ext",
+     "exists_today": false,
+     "couples_to": [
+      34,
+      44
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/affect.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 42,
+   "area": "Delight",
+   "system": "affect",
+   "attributes": [
+    {
+     "attribute": "delight",
+     "variable": "affect.emo.delight",
+     "exists_today": true,
+     "couples_to": [
+      35,
+      58
+     ]
+    },
+    {
+     "attribute": "reward burst",
+     "variable": "nm.DA",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      34
+     ]
+    },
+    {
+     "attribute": "glow",
+     "variable": "sig.glow",
+     "exists_today": false,
+     "couples_to": [
+      57,
+      72
+     ]
+    },
+    {
+     "attribute": "anticipation",
+     "variable": "delight.anti",
+     "exists_today": false,
+     "couples_to": [
+      38,
+      47
+     ]
+    },
+    {
+     "attribute": "sharing",
+     "variable": "delight.share",
+     "exists_today": false,
+     "couples_to": [
+      65,
+      61
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/affect.ts",
+    "cqm-copy/src/sim/valence-steering.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 43,
+   "area": "Frustration",
+   "system": "affect",
+   "attributes": [
+    {
+     "attribute": "frustration",
+     "variable": "affect.emo.frustration",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      66
+     ]
+    },
+    {
+     "attribute": "fail streak",
+     "variable": "affect.failStreak",
+     "exists_today": true,
+     "couples_to": [
+      53,
+      100
+     ]
+    },
+    {
+     "attribute": "aggression",
+     "variable": "beh.aggr",
+     "exists_today": false,
+     "couples_to": [
+      67,
+      54
+     ]
+    },
+    {
+     "attribute": "thrash",
+     "variable": "mot.thrash",
+     "exists_today": false,
+     "couples_to": [
+      39,
+      3
+     ]
+    },
+    {
+     "attribute": "give-up",
+     "variable": "beh.quit",
+     "exists_today": false,
+     "couples_to": [
+      45,
+      94
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/affect.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 44,
+   "area": "Calm",
+   "system": "affect",
+   "attributes": [
+    {
+     "attribute": "calm",
+     "variable": "affect.emo.calm",
+     "exists_today": true,
+     "couples_to": [
+      40,
+      59
+     ]
+    },
+    {
+     "attribute": "tone",
+     "variable": "skel.tone",
+     "exists_today": false,
+     "couples_to": [
+      6,
+      3
+     ]
+    },
+    {
+     "attribute": "breath slow",
+     "variable": "metab.breathHz",
+     "exists_today": false,
+     "couples_to": [
+      15,
+      46
+     ]
+    },
+    {
+     "attribute": "rest bias",
+     "variable": "beh.rest",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      40
+     ]
+    },
+    {
+     "attribute": "co-regulation",
+     "variable": "calm.coreg",
+     "exists_today": false,
+     "couples_to": [
+      48,
+      61
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/affect.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 45,
+   "area": "Mood",
+   "system": "affect",
+   "attributes": [
+    {
+     "attribute": "valence",
+     "variable": "affect.mood.val",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      47
+     ]
+    },
+    {
+     "attribute": "arousal",
+     "variable": "affect.mood.aro",
+     "exists_today": true,
+     "couples_to": [
+      35,
+      51
+     ]
+    },
+    {
+     "attribute": "slow valence",
+     "variable": "affect.mood.valSlow",
+     "exists_today": true,
+     "couples_to": [
+      49,
+      93
+     ]
+    },
+    {
+     "attribute": "mood swing",
+     "variable": "affect.swingSign",
+     "exists_today": true,
+     "couples_to": [
+      46,
+      100
+     ]
+    },
+    {
+     "attribute": "colour expression",
+     "variable": "skin.moodTint",
+     "exists_today": false,
+     "couples_to": [
+      5,
+      57
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/affect.ts",
+    "cqm-copy/src/sim/nhsi-affect-binding.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 46,
+   "area": "Stress (HPA)",
+   "system": "affect",
+   "attributes": [
+    {
+     "attribute": "stress",
+     "variable": "affect.stress",
+     "exists_today": true,
+     "couples_to": [
+      35,
+      91
+     ]
+    },
+    {
+     "attribute": "HPA lock",
+     "variable": "affect.hpaLocked",
+     "exists_today": true,
+     "couples_to": [
+      40,
+      93
+     ]
+    },
+    {
+     "attribute": "inflammation",
+     "variable": "affect.inflam",
+     "exists_today": true,
+     "couples_to": [
+      91,
+      50
+     ]
+    },
+    {
+     "attribute": "sickness",
+     "variable": "affect.sick",
+     "exists_today": true,
+     "couples_to": [
+      91,
+      51
+     ]
+    },
+    {
+     "attribute": "scarcity",
+     "variable": "affect.scarcity",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      72
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/affect.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 47,
+   "area": "Curiosity",
+   "system": "affect",
+   "attributes": [
+    {
+     "attribute": "curious",
+     "variable": "persona.curious",
+     "exists_today": true,
+     "couples_to": [
+      53,
+      38
+     ]
+    },
+    {
+     "attribute": "info gain",
+     "variable": "betaIG",
+     "exists_today": true,
+     "couples_to": [
+      37,
+      52
+     ]
+    },
+    {
+     "attribute": "novelty",
+     "variable": "cur.nov",
+     "exists_today": false,
+     "couples_to": [
+      22,
+      30
+     ]
+    },
+    {
+     "attribute": "boredom",
+     "variable": "cur.bored",
+     "exists_today": false,
+     "couples_to": [
+      58,
+      45
+     ]
+    },
+    {
+     "attribute": "risk scar",
+     "variable": "persona.riskScar",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      13
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/apex-novelty.ts",
+    "cqm-copy/src/sim/empowerment.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 48,
+   "area": "Attachment",
+   "system": "affect",
+   "attributes": [
+    {
+     "attribute": "bond[id]",
+     "variable": "bond.w[]",
+     "exists_today": false,
+     "couples_to": [
+      63,
+      77
+     ]
+    },
+    {
+     "attribute": "separation distress",
+     "variable": "bond.sep",
+     "exists_today": false,
+     "couples_to": [
+      41,
+      61
+     ]
+    },
+    {
+     "attribute": "proximity seek",
+     "variable": "bond.prox",
+     "exists_today": false,
+     "couples_to": [
+      51,
+      78
+     ]
+    },
+    {
+     "attribute": "imprinting window",
+     "variable": "bond.imprint",
+     "exists_today": false,
+     "couples_to": [
+      71,
+      86
+     ]
+    },
+    {
+     "attribute": "loss grief",
+     "variable": "bond.grief",
+     "exists_today": false,
+     "couples_to": [
+      94,
+      45
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 49,
+   "area": "Personality",
+   "system": "affect",
+   "attributes": [
+    {
+     "attribute": "bold",
+     "variable": "persona.bold",
+     "exists_today": true,
+     "couples_to": [
+      53,
+      54
+     ]
+    },
+    {
+     "attribute": "reactive",
+     "variable": "persona.reactive",
+     "exists_today": true,
+     "couples_to": [
+      41,
+      46
+     ]
+    },
+    {
+     "attribute": "vulnerability",
+     "variable": "persona.vuln",
+     "exists_today": true,
+     "couples_to": [
+      46,
+      89
+     ]
+    },
+    {
+     "attribute": "hedge",
+     "variable": "persona.hedge",
+     "exists_today": true,
+     "couples_to": [
+      80,
+      82
+     ]
+    },
+    {
+     "attribute": "drift",
+     "variable": "persona.drift",
+     "exists_today": false,
+     "couples_to": [
+      93,
+      85
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/affect.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 50,
+   "area": "Suffering/wellbeing",
+   "system": "affect",
+   "attributes": [
+    {
+     "attribute": "wellbeing index",
+     "variable": "wb.idx",
+     "exists_today": false,
+     "couples_to": [
+      45,
+      91
+     ]
+    },
+    {
+     "attribute": "chronic pain",
+     "variable": "wb.chronic",
+     "exists_today": false,
+     "couples_to": [
+      26,
+      46
+     ]
+    },
+    {
+     "attribute": "learned helplessness",
+     "variable": "wb.helpless",
+     "exists_today": false,
+     "couples_to": [
+      43,
+      34
+     ]
+    },
+    {
+     "attribute": "recovery",
+     "variable": "wb.recover",
+     "exists_today": false,
+     "couples_to": [
+      92,
+      44
+     ]
+    },
+    {
+     "attribute": "quality log",
+     "variable": "wb.log[]",
+     "exists_today": false,
+     "couples_to": [
+      94,
+      87
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/valence-steering.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 51,
+   "area": "Locomotion",
+   "system": "behav",
+   "attributes": [
+    {
+     "attribute": "speed",
+     "variable": "loc.v",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      7
+     ]
+    },
+    {
+     "attribute": "heading",
+     "variable": "loc.dir",
+     "exists_today": false,
+     "couples_to": [
+      39,
+      29
+     ]
+    },
+    {
+     "attribute": "terrain cost",
+     "variable": "loc.cost",
+     "exists_today": false,
+     "couples_to": [
+      97,
+      11
+     ]
+    },
+    {
+     "attribute": "gait mode",
+     "variable": "loc.gait",
+     "exists_today": false,
+     "couples_to": [
+      32,
+      7
+     ]
+    },
+    {
+     "attribute": "stumble",
+     "variable": "loc.stumble",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      92
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/behaviors.ts",
+    "cqm-copy/src/sim/habitat-roaming.ts",
+    "cqm-copy/src/sim/wilderness-population.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 52,
+   "area": "Foraging decision",
+   "system": "behav",
+   "attributes": [
+    {
+     "attribute": "striatal race",
+     "variable": "rate[STR]",
+     "exists_today": true,
+     "couples_to": [
+      39,
+      35
+     ]
+    },
+    {
+     "attribute": "chosen site",
+     "variable": "lastChoice",
+     "exists_today": true,
+     "couples_to": [
+      19,
+      100
+     ]
+    },
+    {
+     "attribute": "forages",
+     "variable": "foraged",
+     "exists_today": true,
+     "couples_to": [
+      11,
+      98
+     ]
+    },
+    {
+     "attribute": "rewards",
+     "variable": "rewards",
+     "exists_today": true,
+     "couples_to": [
+      42,
+      37
+     ]
+    },
+    {
+     "attribute": "site access",
+     "variable": "access[]",
+     "exists_today": true,
+     "couples_to": [
+      8,
+      97
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "glitchling.ts",
+    "cqm-copy/src/sim/ad-forager.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 53,
+   "area": "Exploration",
+   "system": "behav",
+   "attributes": [
+    {
+     "attribute": "explore rate",
+     "variable": "expl.eps",
+     "exists_today": false,
+     "couples_to": [
+      47,
+      45
+     ]
+    },
+    {
+     "attribute": "novel sites visited",
+     "variable": "expl.novel",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      98
+     ]
+    },
+    {
+     "attribute": "range",
+     "variable": "expl.range",
+     "exists_today": false,
+     "couples_to": [
+      51,
+      30
+     ]
+    },
+    {
+     "attribute": "risk taken",
+     "variable": "expl.risk",
+     "exists_today": false,
+     "couples_to": [
+      49,
+      99
+     ]
+    },
+    {
+     "attribute": "map coverage",
+     "variable": "expl.cov",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      61
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/apex-novelty.ts",
+    "cqm-copy/src/sim/habitat-roaming.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 54,
+   "area": "Escape",
+   "system": "behav",
+   "attributes": [
+    {
+     "attribute": "flee vector",
+     "variable": "esc.v",
+     "exists_today": false,
+     "couples_to": [
+      41,
+      51
+     ]
+    },
+    {
+     "attribute": "threat distance",
+     "variable": "esc.d",
+     "exists_today": false,
+     "couples_to": [
+      99,
+      22
+     ]
+    },
+    {
+     "attribute": "burst cost",
+     "variable": "esc.atp",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      3
+     ]
+    },
+    {
+     "attribute": "ink/expel",
+     "variable": "esc.expel",
+     "exists_today": false,
+     "couples_to": [
+      3,
+      57
+     ]
+    },
+    {
+     "attribute": "autotomy (drop limb)",
+     "variable": "esc.autotomy",
+     "exists_today": false,
+     "couples_to": [
+      7,
+      92
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 55,
+   "area": "Mimicry",
+   "system": "behav",
+   "attributes": [
+    {
+     "attribute": "model target",
+     "variable": "mim.target",
+     "exists_today": false,
+     "couples_to": [
+      22,
+      68
+     ]
+    },
+    {
+     "attribute": "match error",
+     "variable": "mim.err",
+     "exists_today": false,
+     "couples_to": [
+      2,
+      38
+     ]
+    },
+    {
+     "attribute": "shape copy",
+     "variable": "morph.target[]",
+     "exists_today": false,
+     "couples_to": [
+      2,
+      1
+     ]
+    },
+    {
+     "attribute": "signal copy",
+     "variable": "mim.sig",
+     "exists_today": false,
+     "couples_to": [
+      57,
+      64
+     ]
+    },
+    {
+     "attribute": "mimicry payoff",
+     "variable": "mim.payoff",
+     "exists_today": false,
+     "couples_to": [
+      87,
+      99
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/xenomimics.ts",
+    "cqm-copy/src/sim/xenomimic-brain.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 56,
+   "area": "Camouflage",
+   "system": "behav",
+   "attributes": [
+    {
+     "attribute": "background sample",
+     "variable": "camo.bg[]",
+     "exists_today": false,
+     "couples_to": [
+      22,
+      97
+     ]
+    },
+    {
+     "attribute": "pigment match",
+     "variable": "skin.rgb",
+     "exists_today": false,
+     "couples_to": [
+      5,
+      2
+     ]
+    },
+    {
+     "attribute": "stillness",
+     "variable": "beh.freeze",
+     "exists_today": false,
+     "couples_to": [
+      41,
+      39
+     ]
+    },
+    {
+     "attribute": "detect probability",
+     "variable": "camo.pDetect",
+     "exists_today": false,
+     "couples_to": [
+      99,
+      87
+     ]
+    },
+    {
+     "attribute": "cost",
+     "variable": "camo.atp",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      2
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 57,
+   "area": "Signaling",
+   "system": "behav",
+   "attributes": [
+    {
+     "attribute": "light pulses",
+     "variable": "sig.light",
+     "exists_today": false,
+     "couples_to": [
+      5,
+      61
+     ]
+    },
+    {
+     "attribute": "colour flash",
+     "variable": "sig.flash",
+     "exists_today": false,
+     "couples_to": [
+      45,
+      72
+     ]
+    },
+    {
+     "attribute": "pheromone",
+     "variable": "sig.pher",
+     "exists_today": false,
+     "couples_to": [
+      18,
+      63
+     ]
+    },
+    {
+     "attribute": "honesty",
+     "variable": "sig.honest",
+     "exists_today": false,
+     "couples_to": [
+      70,
+      87
+     ]
+    },
+    {
+     "attribute": "receiver response",
+     "variable": "sig.resp",
+     "exists_today": false,
+     "couples_to": [
+      64,
+      65
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/emergent-language.ts",
+    "cqm-copy/src/sim/social-field.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 58,
+   "area": "Play",
+   "system": "behav",
+   "attributes": [
+    {
+     "attribute": "play bout",
+     "variable": "play.on",
+     "exists_today": false,
+     "couples_to": [
+      42,
+      47
+     ]
+    },
+    {
+     "attribute": "practice skill",
+     "variable": "play.skill",
+     "exists_today": false,
+     "couples_to": [
+      39,
+      68
+     ]
+    },
+    {
+     "attribute": "safe signal",
+     "variable": "play.safe",
+     "exists_today": false,
+     "couples_to": [
+      57,
+      70
+     ]
+    },
+    {
+     "attribute": "energy budget",
+     "variable": "play.atp",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      80
+     ]
+    },
+    {
+     "attribute": "social play",
+     "variable": "play.social",
+     "exists_today": false,
+     "couples_to": [
+      65,
+      78
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 59,
+   "area": "Grooming/repair",
+   "system": "behav",
+   "attributes": [
+    {
+     "attribute": "self-groom",
+     "variable": "groom.self",
+     "exists_today": false,
+     "couples_to": [
+      5,
+      91
+     ]
+    },
+    {
+     "attribute": "allo-groom",
+     "variable": "groom.allo",
+     "exists_today": false,
+     "couples_to": [
+      70,
+      48
+     ]
+    },
+    {
+     "attribute": "parasite load",
+     "variable": "groom.par",
+     "exists_today": false,
+     "couples_to": [
+      91,
+      98
+     ]
+    },
+    {
+     "attribute": "repair effort",
+     "variable": "groom.repair",
+     "exists_today": false,
+     "couples_to": [
+      92,
+      11
+     ]
+    },
+    {
+     "attribute": "calming effect",
+     "variable": "groom.calm",
+     "exists_today": false,
+     "couples_to": [
+      44,
+      35
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 60,
+   "area": "Nest building",
+   "system": "behav",
+   "attributes": [
+    {
+     "attribute": "nest site",
+     "variable": "nest.pos",
+     "exists_today": false,
+     "couples_to": [
+      97,
+      77
+     ]
+    },
+    {
+     "attribute": "material carried",
+     "variable": "nest.mat",
+     "exists_today": false,
+     "couples_to": [
+      8,
+      19
+     ]
+    },
+    {
+     "attribute": "shelter value",
+     "variable": "nest.shelter",
+     "exists_today": false,
+     "couples_to": [
+      16,
+      99
+     ]
+    },
+    {
+     "attribute": "defence",
+     "variable": "nest.def",
+     "exists_today": false,
+     "couples_to": [
+      67,
+      41
+     ]
+    },
+    {
+     "attribute": "nest memory",
+     "variable": "nest.mem",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      75
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 61,
+   "area": "Wireless field (SIMULATED)",
+   "system": "social",
+   "attributes": [
+    {
+     "attribute": "broadcast amplitude",
+     "variable": "wf.amp",
+     "exists_today": false,
+     "couples_to": [
+      36,
+      11
+     ]
+    },
+    {
+     "attribute": "channel/frequency",
+     "variable": "wf.freq",
+     "exists_today": false,
+     "couples_to": [
+      63,
+      82
+     ]
+    },
+    {
+     "attribute": "payload vector",
+     "variable": "wf.payload[]",
+     "exists_today": false,
+     "couples_to": [
+      64,
+      45
+     ]
+    },
+    {
+     "attribute": "range falloff",
+     "variable": "wf.falloff",
+     "exists_today": false,
+     "couples_to": [
+      96,
+      30
+     ]
+    },
+    {
+     "attribute": "jamming",
+     "variable": "wf.jam",
+     "exists_today": false,
+     "couples_to": [
+      66,
+      100
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/social-field.ts",
+    "cqm-copy/src/sim/mind-field.ts",
+    "cqm-copy/src/workers/social-field-worker.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 62,
+   "area": "Psychic coupling (SIMULATED)",
+   "system": "social",
+   "attributes": [
+    {
+     "attribute": "coupling strength",
+     "variable": "psy.k",
+     "exists_today": false,
+     "couples_to": [
+      48,
+      63
+     ]
+    },
+    {
+     "attribute": "shared affect",
+     "variable": "psy.affect",
+     "exists_today": false,
+     "couples_to": [
+      45,
+      41
+     ]
+    },
+    {
+     "attribute": "sync phase",
+     "variable": "psy.phase",
+     "exists_today": false,
+     "couples_to": [
+      40,
+      69
+     ]
+    },
+    {
+     "attribute": "leakage",
+     "variable": "psy.leak",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      100
+     ]
+    },
+    {
+     "attribute": "consent/gate",
+     "variable": "psy.gate",
+     "exists_today": false,
+     "couples_to": [
+      70,
+      36
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/symbiosis.ts",
+    "cqm-copy/src/sim/mind-field.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 63,
+   "area": "Kin recognition",
+   "system": "social",
+   "attributes": [
+    {
+     "attribute": "genome distance",
+     "variable": "kin.d",
+     "exists_today": false,
+     "couples_to": [
+      81,
+      77
+     ]
+    },
+    {
+     "attribute": "scent ID",
+     "variable": "chemo.id",
+     "exists_today": false,
+     "couples_to": [
+      21,
+      72
+     ]
+    },
+    {
+     "attribute": "field signature",
+     "variable": "wf.sig",
+     "exists_today": false,
+     "couples_to": [
+      61,
+      48
+     ]
+    },
+    {
+     "attribute": "kin bias",
+     "variable": "kin.bias",
+     "exists_today": false,
+     "couples_to": [
+      65,
+      80
+     ]
+    },
+    {
+     "attribute": "misrecognition",
+     "variable": "kin.err",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      66
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/lineage.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 64,
+   "area": "Communication",
+   "system": "social",
+   "attributes": [
+    {
+     "attribute": "symbol set",
+     "variable": "comm.sym[]",
+     "exists_today": false,
+     "couples_to": [
+      57,
+      68
+     ]
+    },
+    {
+     "attribute": "recv decoder",
+     "variable": "mind.recv",
+     "exists_today": true,
+     "couples_to": [
+      36,
+      61
+     ]
+    },
+    {
+     "attribute": "report",
+     "variable": "mind.rep",
+     "exists_today": true,
+     "couples_to": [
+      36,
+      57
+     ]
+    },
+    {
+     "attribute": "vocab growth",
+     "variable": "comm.vocab",
+     "exists_today": false,
+     "couples_to": [
+      34,
+      90
+     ]
+    },
+    {
+     "attribute": "miscommunication",
+     "variable": "comm.err",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      70
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/emergent-language.ts",
+    "cqm-copy/src/sim/archon-language.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 65,
+   "area": "Cooperation",
+   "system": "social",
+   "attributes": [
+    {
+     "attribute": "shared harvest",
+     "variable": "coop.share",
+     "exists_today": false,
+     "couples_to": [
+      19,
+      77
+     ]
+    },
+    {
+     "attribute": "reciprocity ledger",
+     "variable": "coop.ledger[]",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      70
+     ]
+    },
+    {
+     "attribute": "group hunt",
+     "variable": "coop.hunt",
+     "exists_today": false,
+     "couples_to": [
+      69,
+      99
+     ]
+    },
+    {
+     "attribute": "cost",
+     "variable": "coop.atp",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      80
+     ]
+    },
+    {
+     "attribute": "defection",
+     "variable": "coop.defect",
+     "exists_today": false,
+     "couples_to": [
+      66,
+      43
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/symbiosis.ts",
+    "cqm-copy/src/sim/economy.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 66,
+   "area": "Competition",
+   "system": "social",
+   "attributes": [
+    {
+     "attribute": "contest",
+     "variable": "comp.fight",
+     "exists_today": false,
+     "couples_to": [
+      67,
+      92
+     ]
+    },
+    {
+     "attribute": "resource overlap",
+     "variable": "comp.overlap",
+     "exists_today": false,
+     "couples_to": [
+      98,
+      19
+     ]
+    },
+    {
+     "attribute": "intensity",
+     "variable": "comp.k",
+     "exists_today": false,
+     "couples_to": [
+      43,
+      46
+     ]
+    },
+    {
+     "attribute": "win/loss memory",
+     "variable": "comp.mem",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      49
+     ]
+    },
+    {
+     "attribute": "display",
+     "variable": "comp.display",
+     "exists_today": false,
+     "couples_to": [
+      57,
+      3
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/factions.ts",
+    "cqm-copy/src/sim/super-hunt.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 67,
+   "area": "Dominance",
+   "system": "social",
+   "attributes": [
+    {
+     "attribute": "rank",
+     "variable": "dom.rank",
+     "exists_today": false,
+     "couples_to": [
+      66,
+      72
+     ]
+    },
+    {
+     "attribute": "posture size",
+     "variable": "dom.size",
+     "exists_today": false,
+     "couples_to": [
+      3,
+      1
+     ]
+    },
+    {
+     "attribute": "submission",
+     "variable": "dom.submit",
+     "exists_today": false,
+     "couples_to": [
+      41,
+      46
+     ]
+    },
+    {
+     "attribute": "priority access",
+     "variable": "dom.access",
+     "exists_today": false,
+     "couples_to": [
+      52,
+      19
+     ]
+    },
+    {
+     "attribute": "rank stress",
+     "variable": "dom.stress",
+     "exists_today": false,
+     "couples_to": [
+      46,
+      93
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/factions.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 68,
+   "area": "Imitation learning",
+   "system": "social",
+   "attributes": [
+    {
+     "attribute": "demonstrator",
+     "variable": "imit.demo",
+     "exists_today": false,
+     "couples_to": [
+      63,
+      78
+     ]
+    },
+    {
+     "attribute": "copy fidelity",
+     "variable": "imit.fid",
+     "exists_today": false,
+     "couples_to": [
+      55,
+      37
+     ]
+    },
+    {
+     "attribute": "mirror units",
+     "variable": "imit.mirror[]",
+     "exists_today": false,
+     "couples_to": [
+      31,
+      36
+     ]
+    },
+    {
+     "attribute": "cultural trait",
+     "variable": "imit.trait[]",
+     "exists_today": false,
+     "couples_to": [
+      90,
+      64
+     ]
+    },
+    {
+     "attribute": "error spread",
+     "variable": "imit.err",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      82
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/theory-of-mind.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 69,
+   "area": "Collective/swarm",
+   "system": "social",
+   "attributes": [
+    {
+     "attribute": "neighbour count",
+     "variable": "swarm.n",
+     "exists_today": false,
+     "couples_to": [
+      98,
+      99
+     ]
+    },
+    {
+     "attribute": "alignment",
+     "variable": "swarm.align",
+     "exists_today": false,
+     "couples_to": [
+      51,
+      61
+     ]
+    },
+    {
+     "attribute": "quorum",
+     "variable": "swarm.quorum",
+     "exists_today": false,
+     "couples_to": [
+      65,
+      60
+     ]
+    },
+    {
+     "attribute": "dilution",
+     "variable": "swarm.dilute",
+     "exists_today": false,
+     "couples_to": [
+      99,
+      41
+     ]
+    },
+    {
+     "attribute": "emergent signal",
+     "variable": "swarm.sig",
+     "exists_today": false,
+     "couples_to": [
+      57,
+      62
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/stigmergy.ts",
+    "cqm-copy/src/sim/social-field.ts",
+    "cqm-copy/src/sim/mind-field.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 70,
+   "area": "Trust",
+   "system": "social",
+   "attributes": [
+    {
+     "attribute": "trust[id]",
+     "variable": "trust.w[]",
+     "exists_today": false,
+     "couples_to": [
+      48,
+      65
+     ]
+    },
+    {
+     "attribute": "betrayal memory",
+     "variable": "trust.betray",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      43
+     ]
+    },
+    {
+     "attribute": "signal reliability",
+     "variable": "sig.honest",
+     "exists_today": false,
+     "couples_to": [
+      57,
+      64
+     ]
+    },
+    {
+     "attribute": "openness",
+     "variable": "trust.open",
+     "exists_today": false,
+     "couples_to": [
+      49,
+      62
+     ]
+    },
+    {
+     "attribute": "repair",
+     "variable": "trust.repair",
+     "exists_today": false,
+     "couples_to": [
+      59,
+      45
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/theory-of-mind.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 71,
+   "area": "Maturation",
+   "system": "repro",
+   "attributes": [
+    {
+     "attribute": "age",
+     "variable": "t",
+     "exists_today": true,
+     "couples_to": [
+      93,
+      86
+     ]
+    },
+    {
+     "attribute": "puberty gate",
+     "variable": "mat.gate",
+     "exists_today": false,
+     "couples_to": [
+      10,
+      13
+     ]
+    },
+    {
+     "attribute": "juvenile traits",
+     "variable": "mat.juv",
+     "exists_today": false,
+     "couples_to": [
+      86,
+      78
+     ]
+    },
+    {
+     "attribute": "maturity score",
+     "variable": "mat.score",
+     "exists_today": false,
+     "couples_to": [
+      72,
+      74
+     ]
+    },
+    {
+     "attribute": "hormone onset",
+     "variable": "mat.horm",
+     "exists_today": false,
+     "couples_to": [
+      35,
+      46
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/lineage.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 72,
+   "area": "Mate choice",
+   "system": "repro",
+   "attributes": [
+    {
+     "attribute": "mate preference",
+     "variable": "mate.pref[]",
+     "exists_today": false,
+     "couples_to": [
+      57,
+      81
+     ]
+    },
+    {
+     "attribute": "assessment",
+     "variable": "mate.assess",
+     "exists_today": false,
+     "couples_to": [
+      22,
+      63
+     ]
+    },
+    {
+     "attribute": "choosiness",
+     "variable": "mate.choose",
+     "exists_today": false,
+     "couples_to": [
+      13,
+      49
+     ]
+    },
+    {
+     "attribute": "inbreeding avoid",
+     "variable": "mate.inbreed",
+     "exists_today": false,
+     "couples_to": [
+      63,
+      83
+     ]
+    },
+    {
+     "attribute": "rejection",
+     "variable": "mate.reject",
+     "exists_today": false,
+     "couples_to": [
+      43,
+      45
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/pantheon-breeding.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 73,
+   "area": "Courtship",
+   "system": "repro",
+   "attributes": [
+    {
+     "attribute": "display pattern",
+     "variable": "court.disp",
+     "exists_today": false,
+     "couples_to": [
+      57,
+      2
+     ]
+    },
+    {
+     "attribute": "duration",
+     "variable": "court.dur",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      99
+     ]
+    },
+    {
+     "attribute": "synchrony",
+     "variable": "court.sync",
+     "exists_today": false,
+     "couples_to": [
+      62,
+      40
+     ]
+    },
+    {
+     "attribute": "gift/food",
+     "variable": "court.gift",
+     "exists_today": false,
+     "couples_to": [
+      19,
+      20
+     ]
+    },
+    {
+     "attribute": "success",
+     "variable": "court.ok",
+     "exists_today": false,
+     "couples_to": [
+      74,
+      42
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 74,
+   "area": "Procreation",
+   "system": "repro",
+   "attributes": [
+    {
+     "attribute": "mode (sexual/asexual/budding)",
+     "variable": "repro.mode",
+     "exists_today": false,
+     "couples_to": [
+      81,
+      82
+     ]
+    },
+    {
+     "attribute": "clutch size",
+     "variable": "repro.n",
+     "exists_today": false,
+     "couples_to": [
+      13,
+      80
+     ]
+    },
+    {
+     "attribute": "energy threshold",
+     "variable": "repro.th",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      13
+     ]
+    },
+    {
+     "attribute": "offspring genome",
+     "variable": "repro.childGenome",
+     "exists_today": false,
+     "couples_to": [
+      83,
+      82
+     ]
+    },
+    {
+     "attribute": "fertility",
+     "variable": "repro.fert",
+     "exists_today": false,
+     "couples_to": [
+      46,
+      93
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/genome.ts",
+    "cqm-copy/src/sim/pantheon-breeding.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 75,
+   "area": "Gestation/egg",
+   "system": "repro",
+   "attributes": [
+    {
+     "attribute": "embryo stage",
+     "variable": "gest.stage",
+     "exists_today": false,
+     "couples_to": [
+      86,
+      10
+     ]
+    },
+    {
+     "attribute": "yolk/nutrient",
+     "variable": "gest.yolk",
+     "exists_today": false,
+     "couples_to": [
+      13,
+      80
+     ]
+    },
+    {
+     "attribute": "egg site",
+     "variable": "gest.site",
+     "exists_today": false,
+     "couples_to": [
+      60,
+      97
+     ]
+    },
+    {
+     "attribute": "temperature dependence",
+     "variable": "gest.temp",
+     "exists_today": false,
+     "couples_to": [
+      16,
+      96
+     ]
+    },
+    {
+     "attribute": "loss",
+     "variable": "gest.loss",
+     "exists_today": false,
+     "couples_to": [
+      91,
+      99
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 76,
+   "area": "Birth",
+   "system": "repro",
+   "attributes": [
+    {
+     "attribute": "birth event",
+     "variable": "birth.ev",
+     "exists_today": false,
+     "couples_to": [
+      74,
+      94
+     ]
+    },
+    {
+     "attribute": "neonate mass",
+     "variable": "birth.mass",
+     "exists_today": false,
+     "couples_to": [
+      1,
+      80
+     ]
+    },
+    {
+     "attribute": "parent cost",
+     "variable": "birth.atp",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      46
+     ]
+    },
+    {
+     "attribute": "first imprint",
+     "variable": "bond.imprint",
+     "exists_today": false,
+     "couples_to": [
+      48,
+      71
+     ]
+    },
+    {
+     "attribute": "birth defects",
+     "variable": "birth.defect",
+     "exists_today": false,
+     "couples_to": [
+      82,
+      100
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 77,
+   "area": "Nurturing",
+   "system": "repro",
+   "attributes": [
+    {
+     "attribute": "feeding young",
+     "variable": "nurt.feed",
+     "exists_today": false,
+     "couples_to": [
+      19,
+      80
+     ]
+    },
+    {
+     "attribute": "warming",
+     "variable": "nurt.warm",
+     "exists_today": false,
+     "couples_to": [
+      16,
+      48
+     ]
+    },
+    {
+     "attribute": "protection",
+     "variable": "nurt.guard",
+     "exists_today": false,
+     "couples_to": [
+      54,
+      99
+     ]
+    },
+    {
+     "attribute": "nurture affect",
+     "variable": "nurt.oxy",
+     "exists_today": false,
+     "couples_to": [
+      42,
+      48
+     ]
+    },
+    {
+     "attribute": "neglect",
+     "variable": "nurt.neglect",
+     "exists_today": false,
+     "couples_to": [
+      46,
+      79
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/lineage.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 78,
+   "area": "Raising young",
+   "system": "repro",
+   "attributes": [
+    {
+     "attribute": "teaching",
+     "variable": "raise.teach",
+     "exists_today": false,
+     "couples_to": [
+      68,
+      64
+     ]
+    },
+    {
+     "attribute": "juvenile skill",
+     "variable": "raise.skill",
+     "exists_today": false,
+     "couples_to": [
+      58,
+      37
+     ]
+    },
+    {
+     "attribute": "play partner",
+     "variable": "play.social",
+     "exists_today": false,
+     "couples_to": [
+      58,
+      48
+     ]
+    },
+    {
+     "attribute": "discipline",
+     "variable": "raise.disc",
+     "exists_today": false,
+     "couples_to": [
+      43,
+      49
+     ]
+    },
+    {
+     "attribute": "mortality of young",
+     "variable": "raise.mort",
+     "exists_today": false,
+     "couples_to": [
+      94,
+      87
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/lineage.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 79,
+   "area": "Weaning/independence",
+   "system": "repro",
+   "attributes": [
+    {
+     "attribute": "wean age",
+     "variable": "wean.age",
+     "exists_today": false,
+     "couples_to": [
+      71,
+      80
+     ]
+    },
+    {
+     "attribute": "conflict",
+     "variable": "wean.conflict",
+     "exists_today": false,
+     "couples_to": [
+      43,
+      77
+     ]
+    },
+    {
+     "attribute": "dispersal",
+     "variable": "wean.disperse",
+     "exists_today": false,
+     "couples_to": [
+      53,
+      88
+     ]
+    },
+    {
+     "attribute": "juvenile foraging",
+     "variable": "wean.forage",
+     "exists_today": false,
+     "couples_to": [
+      52,
+      19
+     ]
+    },
+    {
+     "attribute": "bond decay",
+     "variable": "bond.w[]",
+     "exists_today": false,
+     "couples_to": [
+      48,
+      45
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 80,
+   "area": "Parental investment",
+   "system": "repro",
+   "attributes": [
+    {
+     "attribute": "investment ratio",
+     "variable": "invest.r",
+     "exists_today": false,
+     "couples_to": [
+      13,
+      74
+     ]
+    },
+    {
+     "attribute": "offspring count",
+     "variable": "lineage.kids",
+     "exists_today": false,
+     "couples_to": [
+      87,
+      88
+     ]
+    },
+    {
+     "attribute": "self vs young tradeoff",
+     "variable": "invest.trade",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      46
+     ]
+    },
+    {
+     "attribute": "bet-hedging",
+     "variable": "persona.hedge",
+     "exists_today": true,
+     "couples_to": [
+      49,
+      82
+     ]
+    },
+    {
+     "attribute": "terminal investment",
+     "variable": "invest.term",
+     "exists_today": false,
+     "couples_to": [
+      93,
+      94
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 81,
+   "area": "Genome",
+   "system": "genome",
+   "attributes": [
+    {
+     "attribute": "developmental genome",
+     "variable": "devGenome",
+     "exists_today": true,
+     "couples_to": [
+      86,
+      31
+     ]
+    },
+    {
+     "attribute": "organism genes",
+     "variable": "genes",
+     "exists_today": true,
+     "couples_to": [
+      10,
+      52
+     ]
+    },
+    {
+     "attribute": "genome length",
+     "variable": "gen.len",
+     "exists_today": false,
+     "couples_to": [
+      90,
+      82
+     ]
+    },
+    {
+     "attribute": "body genes",
+     "variable": "gen.body[]",
+     "exists_today": false,
+     "couples_to": [
+      1,
+      7
+     ]
+    },
+    {
+     "attribute": "brain genes",
+     "variable": "gen.brain[]",
+     "exists_today": false,
+     "couples_to": [
+      31,
+      32
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/genome.ts",
+    "core/develop.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 82,
+   "area": "Mutation",
+   "system": "genome",
+   "attributes": [
+    {
+     "attribute": "mutation rate",
+     "variable": "mut.rate",
+     "exists_today": false,
+     "couples_to": [
+      90,
+      100
+     ]
+    },
+    {
+     "attribute": "point mutations",
+     "variable": "mut.point",
+     "exists_today": false,
+     "couples_to": [
+      81,
+      87
+     ]
+    },
+    {
+     "attribute": "duplication",
+     "variable": "mut.dup",
+     "exists_today": false,
+     "couples_to": [
+      7,
+      9
+     ]
+    },
+    {
+     "attribute": "misfire jolts",
+     "variable": "jolts",
+     "exists_today": true,
+     "couples_to": [
+      34,
+      100
+     ]
+    },
+    {
+     "attribute": "mutational load",
+     "variable": "mut.load",
+     "exists_today": false,
+     "couples_to": [
+      91,
+      93
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/genome.ts",
+    "glitchling.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 83,
+   "area": "Recombination",
+   "system": "genome",
+   "attributes": [
+    {
+     "attribute": "crossover",
+     "variable": "rec.cross",
+     "exists_today": false,
+     "couples_to": [
+      74,
+      81
+     ]
+    },
+    {
+     "attribute": "linkage",
+     "variable": "rec.link[]",
+     "exists_today": false,
+     "couples_to": [
+      81,
+      90
+     ]
+    },
+    {
+     "attribute": "mate genome",
+     "variable": "mate.genome",
+     "exists_today": false,
+     "couples_to": [
+      72,
+      63
+     ]
+    },
+    {
+     "attribute": "hybrid vigour",
+     "variable": "rec.vigour",
+     "exists_today": false,
+     "couples_to": [
+      91,
+      87
+     ]
+    },
+    {
+     "attribute": "incompatibility",
+     "variable": "rec.incompat",
+     "exists_today": false,
+     "couples_to": [
+      88,
+      74
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/genome.ts",
+    "cqm-copy/src/sim/pantheon-breeding.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 84,
+   "area": "Gene expression",
+   "system": "genome",
+   "attributes": [
+    {
+     "attribute": "expression levels",
+     "variable": "expr.lv[]",
+     "exists_today": false,
+     "couples_to": [
+      10,
+      35
+     ]
+    },
+    {
+     "attribute": "stress-induced",
+     "variable": "expr.stress",
+     "exists_today": false,
+     "couples_to": [
+      46,
+      85
+     ]
+    },
+    {
+     "attribute": "tissue specificity",
+     "variable": "expr.tissue[]",
+     "exists_today": false,
+     "couples_to": [
+      1,
+      32
+     ]
+    },
+    {
+     "attribute": "circadian expression",
+     "variable": "expr.circ",
+     "exists_today": false,
+     "couples_to": [
+      40,
+      16
+     ]
+    },
+    {
+     "attribute": "noise",
+     "variable": "expr.noise",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      82
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 85,
+   "area": "Epigenetics",
+   "system": "genome",
+   "attributes": [
+    {
+     "attribute": "methylation marks",
+     "variable": "epi.marks[]",
+     "exists_today": false,
+     "couples_to": [
+      46,
+      89
+     ]
+    },
+    {
+     "attribute": "parental stress transmit",
+     "variable": "epi.parent",
+     "exists_today": false,
+     "couples_to": [
+      80,
+      49
+     ]
+    },
+    {
+     "attribute": "lifetime reset",
+     "variable": "epi.reset",
+     "exists_today": false,
+     "couples_to": [
+      71,
+      93
+     ]
+    },
+    {
+     "attribute": "environment memory",
+     "variable": "epi.env",
+     "exists_today": false,
+     "couples_to": [
+      96,
+      98
+     ]
+    },
+    {
+     "attribute": "reversibility",
+     "variable": "epi.rev",
+     "exists_today": false,
+     "couples_to": [
+      2,
+      59
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 86,
+   "area": "Development",
+   "system": "genome",
+   "attributes": [
+    {
+     "attribute": "grown wiring",
+     "variable": "devStats",
+     "exists_today": true,
+     "couples_to": [
+      31,
+      34
+     ]
+    },
+    {
+     "attribute": "affinity",
+     "variable": "devAff",
+     "exists_today": true,
+     "couples_to": [
+      33,
+      81
+     ]
+    },
+    {
+     "attribute": "target synapses",
+     "variable": "devTarget",
+     "exists_today": true,
+     "couples_to": [
+      90,
+      11
+     ]
+    },
+    {
+     "attribute": "limb budding",
+     "variable": "dev.bud[]",
+     "exists_today": false,
+     "couples_to": [
+      7,
+      8
+     ]
+    },
+    {
+     "attribute": "critical periods",
+     "variable": "dev.crit",
+     "exists_today": false,
+     "couples_to": [
+      48,
+      71
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/develop.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 87,
+   "area": "Selection",
+   "system": "genome",
+   "attributes": [
+    {
+     "attribute": "fitness",
+     "variable": "sel.fit",
+     "exists_today": false,
+     "couples_to": [
+      80,
+      94
+     ]
+    },
+    {
+     "attribute": "survival",
+     "variable": "dead",
+     "exists_today": true,
+     "couples_to": [
+      94,
+      11
+     ]
+    },
+    {
+     "attribute": "offspring success",
+     "variable": "sel.kids",
+     "exists_today": false,
+     "couples_to": [
+      74,
+      78
+     ]
+    },
+    {
+     "attribute": "sexual selection",
+     "variable": "sel.sexual",
+     "exists_today": false,
+     "couples_to": [
+      72,
+      57
+     ]
+    },
+    {
+     "attribute": "environment pressure",
+     "variable": "sel.env",
+     "exists_today": false,
+     "couples_to": [
+      96,
+      99
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/super-evolution.ts",
+    "cqm-copy/src/sim/self-evolution-loop.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 88,
+   "area": "Lineage/speciation",
+   "system": "genome",
+   "attributes": [
+    {
+     "attribute": "lineage tree",
+     "variable": "lin.tree",
+     "exists_today": false,
+     "couples_to": [
+      81,
+      87
+     ]
+    },
+    {
+     "attribute": "divergence",
+     "variable": "lin.div",
+     "exists_today": false,
+     "couples_to": [
+      83,
+      63
+     ]
+    },
+    {
+     "attribute": "niche",
+     "variable": "lin.niche",
+     "exists_today": false,
+     "couples_to": [
+      98,
+      97
+     ]
+    },
+    {
+     "attribute": "population size",
+     "variable": "lin.pop",
+     "exists_today": false,
+     "couples_to": [
+      69,
+      94
+     ]
+    },
+    {
+     "attribute": "extinction",
+     "variable": "lin.ext",
+     "exists_today": false,
+     "couples_to": [
+      94,
+      96
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/lineage.ts",
+    "cqm-copy/src/sim/phyla.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 89,
+   "area": "Affect heritability",
+   "system": "genome",
+   "attributes": [
+    {
+     "attribute": "inherited persona",
+     "variable": "Affect.birth",
+     "exists_today": true,
+     "couples_to": [
+      49,
+      80
+     ]
+    },
+    {
+     "attribute": "vuln heritability",
+     "variable": "her.vuln",
+     "exists_today": false,
+     "couples_to": [
+      46,
+      85
+     ]
+    },
+    {
+     "attribute": "temperament spread",
+     "variable": "her.spread",
+     "exists_today": false,
+     "couples_to": [
+      82,
+      49
+     ]
+    },
+    {
+     "attribute": "mood genes",
+     "variable": "her.mood[]",
+     "exists_today": false,
+     "couples_to": [
+      45,
+      81
+     ]
+    },
+    {
+     "attribute": "cross-gen trauma",
+     "variable": "epi.parent",
+     "exists_today": false,
+     "couples_to": [
+      85,
+      50
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "core/affect.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 90,
+   "area": "Evolvability",
+   "system": "genome",
+   "attributes": [
+    {
+     "attribute": "brain tier gene",
+     "variable": "gen.tier",
+     "exists_today": false,
+     "couples_to": [
+      31,
+      11
+     ]
+    },
+    {
+     "attribute": "modularity",
+     "variable": "evo.mod",
+     "exists_today": false,
+     "couples_to": [
+      86,
+      32
+     ]
+    },
+    {
+     "attribute": "robustness to flaws",
+     "variable": "evo.robust",
+     "exists_today": false,
+     "couples_to": [
+      100,
+      87
+     ]
+    },
+    {
+     "attribute": "innovation rate",
+     "variable": "evo.innov",
+     "exists_today": false,
+     "couples_to": [
+      82,
+      47
+     ]
+    },
+    {
+     "attribute": "open-endedness",
+     "variable": "evo.open",
+     "exists_today": false,
+     "couples_to": [
+      88,
+      96
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/open-endedness.ts",
+    "cqm-copy/src/sim/self-evolution-loop.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 91,
+   "area": "Health/immunity",
+   "system": "life",
+   "attributes": [
+    {
+     "attribute": "immune state",
+     "variable": "imm.state",
+     "exists_today": false,
+     "couples_to": [
+      46,
+      92
+     ]
+    },
+    {
+     "attribute": "pathogen load",
+     "variable": "imm.path",
+     "exists_today": false,
+     "couples_to": [
+      98,
+      59
+     ]
+    },
+    {
+     "attribute": "fever",
+     "variable": "imm.fever",
+     "exists_today": false,
+     "couples_to": [
+      16,
+      40
+     ]
+    },
+    {
+     "attribute": "sickness behaviour",
+     "variable": "affect.sick",
+     "exists_today": true,
+     "couples_to": [
+      45,
+      51
+     ]
+    },
+    {
+     "attribute": "immune memory",
+     "variable": "imm.mem",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      85
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/portal-immune-bounce.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 92,
+   "area": "Injury/regeneration",
+   "system": "life",
+   "attributes": [
+    {
+     "attribute": "tissue",
+     "variable": "tissue",
+     "exists_today": true,
+     "couples_to": [
+      26,
+      11
+     ]
+    },
+    {
+     "attribute": "regrowth rate",
+     "variable": "regen.rate",
+     "exists_today": false,
+     "couples_to": [
+      10,
+      12
+     ]
+    },
+    {
+     "attribute": "scar",
+     "variable": "regen.scar",
+     "exists_today": false,
+     "couples_to": [
+      5,
+      49
+     ]
+    },
+    {
+     "attribute": "limb regrowth",
+     "variable": "regen.limb",
+     "exists_today": false,
+     "couples_to": [
+      7,
+      8
+     ]
+    },
+    {
+     "attribute": "neural repair",
+     "variable": "regen.neural",
+     "exists_today": false,
+     "couples_to": [
+      34,
+      31
+     ]
+    }
+   ],
+   "cqm_reuse": [],
+   "status": "new"
+  },
+  {
+   "id": 93,
+   "area": "Aging",
+   "system": "life",
+   "attributes": [
+    {
+     "attribute": "age",
+     "variable": "t",
+     "exists_today": true,
+     "couples_to": [
+      71,
+      94
+     ]
+    },
+    {
+     "attribute": "senescence",
+     "variable": "age.sen",
+     "exists_today": false,
+     "couples_to": [
+      82,
+      11
+     ]
+    },
+    {
+     "attribute": "plasticity decline",
+     "variable": "age.plast",
+     "exists_today": false,
+     "couples_to": [
+      34,
+      37
+     ]
+    },
+    {
+     "attribute": "telomere-like budget",
+     "variable": "age.budget",
+     "exists_today": false,
+     "couples_to": [
+      81,
+      94
+     ]
+    },
+    {
+     "attribute": "wisdom (stable priors)",
+     "variable": "age.priors",
+     "exists_today": false,
+     "couples_to": [
+      37,
+      49
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/mortality.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 94,
+   "area": "Death",
+   "system": "life",
+   "attributes": [
+    {
+     "attribute": "dead",
+     "variable": "dead",
+     "exists_today": true,
+     "couples_to": [
+      87,
+      95
+     ]
+    },
+    {
+     "attribute": "cause of death",
+     "variable": "death.cause",
+     "exists_today": false,
+     "couples_to": [
+      12,
+      99
+     ]
+    },
+    {
+     "attribute": "dying process",
+     "variable": "death.decline",
+     "exists_today": false,
+     "couples_to": [
+      11,
+      46
+     ]
+    },
+    {
+     "attribute": "grief response (others)",
+     "variable": "bond.grief",
+     "exists_today": false,
+     "couples_to": [
+      48,
+      69
+     ]
+    },
+    {
+     "attribute": "legacy",
+     "variable": "death.legacy",
+     "exists_today": false,
+     "couples_to": [
+      80,
+      68
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/mortality.ts",
+    "cqm-copy/src/sim/gedanken-death.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 95,
+   "area": "Decomposition",
+   "system": "life",
+   "attributes": [
+    {
+     "attribute": "corpse mass",
+     "variable": "decomp.mass",
+     "exists_today": false,
+     "couples_to": [
+      98,
+      18
+     ]
+    },
+    {
+     "attribute": "nutrient release",
+     "variable": "decomp.nut",
+     "exists_today": false,
+     "couples_to": [
+      98,
+      97
+     ]
+    },
+    {
+     "attribute": "scavenger draw",
+     "variable": "decomp.scav",
+     "exists_today": false,
+     "couples_to": [
+      99,
+      69
+     ]
+    },
+    {
+     "attribute": "scent",
+     "variable": "decomp.scent",
+     "exists_today": false,
+     "couples_to": [
+      21,
+      63
+     ]
+    },
+    {
+     "attribute": "recycling to env",
+     "variable": "decomp.cycle",
+     "exists_today": false,
+     "couples_to": [
+      96,
+      88
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/waste-ecology.ts",
+    "cqm-copy/src/sim/dome-feeding.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 96,
+   "area": "Weather/climate",
+   "system": "env",
+   "attributes": [
+    {
+     "attribute": "temperature",
+     "variable": "env.temp",
+     "exists_today": false,
+     "couples_to": [
+      16,
+      27
+     ]
+    },
+    {
+     "attribute": "light level",
+     "variable": "env.light",
+     "exists_today": false,
+     "couples_to": [
+      22,
+      40
+     ]
+    },
+    {
+     "attribute": "humidity",
+     "variable": "env.hum",
+     "exists_today": false,
+     "couples_to": [
+      17,
+      5
+     ]
+    },
+    {
+     "attribute": "seasonal cycle",
+     "variable": "env.season",
+     "exists_today": false,
+     "couples_to": [
+      74,
+      13
+     ]
+    },
+    {
+     "attribute": "storms",
+     "variable": "env.storm",
+     "exists_today": false,
+     "couples_to": [
+      41,
+      51
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/weather.ts",
+    "cqm-copy/src/sim/atmosphere.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 97,
+   "area": "Terrain/substrate",
+   "system": "env",
+   "attributes": [
+    {
+     "attribute": "elevation map",
+     "variable": "env.height[]",
+     "exists_today": false,
+     "couples_to": [
+      51,
+      7
+     ]
+    },
+    {
+     "attribute": "substrate type",
+     "variable": "env.sub[]",
+     "exists_today": false,
+     "couples_to": [
+      23,
+      6
+     ]
+    },
+    {
+     "attribute": "shelter spots",
+     "variable": "env.shelter[]",
+     "exists_today": false,
+     "couples_to": [
+      60,
+      56
+     ]
+    },
+    {
+     "attribute": "vibration conduction",
+     "variable": "env.cond",
+     "exists_today": false,
+     "couples_to": [
+      28,
+      61
+     ]
+    },
+    {
+     "attribute": "obstacles",
+     "variable": "env.obst[]",
+     "exists_today": false,
+     "couples_to": [
+      4,
+      38
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/terrain-deformation.ts",
+    "cqm-copy/src/sim/terrain-profile.ts",
+    "cqm-copy/src/sim/biome-strata.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 98,
+   "area": "Food ecology",
+   "system": "env",
+   "attributes": [
+    {
+     "attribute": "site probability",
+     "variable": "pBase[]",
+     "exists_today": true,
+     "couples_to": [
+      52,
+      19
+     ]
+    },
+    {
+     "attribute": "depletion",
+     "variable": "depl[]",
+     "exists_today": true,
+     "couples_to": [
+      19,
+      69
+     ]
+    },
+    {
+     "attribute": "regrowth",
+     "variable": "env.regrow",
+     "exists_today": false,
+     "couples_to": [
+      96,
+      95
+     ]
+    },
+    {
+     "attribute": "food types",
+     "variable": "env.foodType[]",
+     "exists_today": false,
+     "couples_to": [
+      14,
+      21
+     ]
+    },
+    {
+     "attribute": "patch competition",
+     "variable": "env.patchComp",
+     "exists_today": false,
+     "couples_to": [
+      66,
+      65
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/edible-resource.ts",
+    "cqm-copy/src/sim/vegetation.ts",
+    "cqm-copy/src/sim/alien-flora.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 99,
+   "area": "Predators/threat",
+   "system": "env",
+   "attributes": [
+    {
+     "attribute": "predator pos",
+     "variable": "env.pred[]",
+     "exists_today": false,
+     "couples_to": [
+      22,
+      54
+     ]
+    },
+    {
+     "attribute": "attack event",
+     "variable": "env.attack",
+     "exists_today": false,
+     "couples_to": [
+      26,
+      92
+     ]
+    },
+    {
+     "attribute": "threat field",
+     "variable": "alien[1]",
+     "exists_today": true,
+     "couples_to": [
+      29,
+      41
+     ]
+    },
+    {
+     "attribute": "predator learning",
+     "variable": "env.predLearn",
+     "exists_today": false,
+     "couples_to": [
+      56,
+      55
+     ]
+    },
+    {
+     "attribute": "kill",
+     "variable": "env.kill",
+     "exists_today": false,
+     "couples_to": [
+      94,
+      87
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "cqm-copy/src/sim/super-hunt.ts",
+    "cqm-copy/src/sim/xenomimics.ts"
+   ],
+   "status": "reuse"
+  },
+  {
+   "id": 100,
+   "area": "Glitch self-model",
+   "system": "env",
+   "attributes": [
+    {
+     "attribute": "sensor perm",
+     "variable": "perm[]",
+     "exists_today": true,
+     "couples_to": [
+      21,
+      22
+     ]
+    },
+    {
+     "attribute": "leak rate",
+     "variable": "FLAW_PARAMS.leakRate",
+     "exists_today": true,
+     "couples_to": [
+      37,
+      34
+     ]
+    },
+    {
+     "attribute": "motor reversal",
+     "variable": "backwards",
+     "exists_today": true,
+     "couples_to": [
+      39,
+      7
+     ]
+    },
+    {
+     "attribute": "misfire jolts",
+     "variable": "jolts",
+     "exists_today": true,
+     "couples_to": [
+      82,
+      31
+     ]
+    },
+    {
+     "attribute": "flaw awareness",
+     "variable": "glitch.aware",
+     "exists_today": false,
+     "couples_to": [
+      38,
+      36
+     ]
+    }
+   ],
+   "cqm_reuse": [
+    "glitchling.ts"
+   ],
+   "status": "reuse"
+  }
+ ]
+}

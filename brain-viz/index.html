@@ -1,0 +1,11 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Glitchling · Brain Viz (SIMULATED)</title>
+<style>html,body{margin:0;background:#07040d;color:#e8dcff;font:12px ui-monospace,monospace;overflow:hidden}
+canvas{display:block}#hud{position:fixed;left:12px;top:10px;pointer-events:none}
+#hud h1{margin:0;font-size:20px;color:#ff5cf0;text-shadow:2px 0 #0ff,-2px 0 #f00}
+.sim{display:inline-block;background:#ff2d55;color:#fff;padding:2px 6px;margin:4px 0;font-weight:bold}
+#ctl{position:fixed;right:12px;top:10px;text-align:right}button{font:inherit;background:#222;color:#ccc;border:1px solid #666;padding:3px 8px;cursor:pointer}button.on{background:#ff2d55;color:#fff}#ctl label{display:block}</style></head><body>
+<canvas id="c"></canvas>
+<div id="hud"><h1>GL1TCHL1NG // brain</h1><div class="sim" id="banner"></div><div id="sub"></div><div id="stats"></div></div>
+<div id="ctl"><div style="margin-bottom:6px"><button id="mReal">REAL</button> <button id="mSim">SIMULATED</button></div><div id="simctl"><label>scramble senses <input type="checkbox" id="g0" checked></label><label>leaky memory <input type="checkbox" id="g1" checked></label>
+<label>backwards motors <input type="checkbox" id="g2" checked></label><label>misfiring mutations <input type="checkbox" id="g3" checked></label></div></div>
+<script src="data.js"></script><script src="brain.js"></script></body></html>

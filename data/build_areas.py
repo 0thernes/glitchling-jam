@@ -1,0 +1,148 @@
+# Generates data/areas.json + BLUEPRINT table rows. Spec: id|area|system|attr=var>couples;...  '*' prefix on var = exists in core/ today.
+import json,sys
+S="""1|Body plan|morph|segment count=body.nSeg>2,86;segment radius=body.seg[i].r>3,13;symmetry break=body.asym>82,9;mass=body.mass>51,11;hydrostatic pressure=body.pressure>3,17
+2|Morphing|morph|shape target=morph.target[]>55,56;morph rate=morph.rate>11,46;blend shape weights=morph.w[]>5,57;reversibility=morph.hyst>93,85;cost per unit change=morph.atpCost>11,12
+3|Expansion/contraction|morph|volume=body.vol>1,17;inflate drive=morph.inflate>41,54;contract drive=morph.contract>44,15;pulse rhythm=morph.pulseHz>40,57;rupture risk=body.strain>92,26
+4|Extension/shortening|morph|limb length=limb[j].len>7,8;reach goal=limb[j].reachTgt>19,52;extension speed=limb[j].extV>39,11;retract reflex=limb[j].retract>26,54;length cost=limb[j].lenCost>11,10
+5|Skin|morph|pigment=skin.rgb>56,57;chromatophore gain=skin.chromaGain>35,45;thickness=skin.thick>92,16;permeability=skin.perm>17,21;wound map=skin.wounds[]>92,26
+6|Hydroskeleton|morph|stiffness=skel.k>51,3;joint count=skel.joints>86,7;fluid volume=skel.fluid>17,3;damage=skel.dmg>92,94;tone=skel.tone>35,44
+7|Legs (weird)|morph|leg count (odd allowed)=legs.n>82,86;gait phase=legs[j].phase>32,51;foot contact=legs[j].contact>23,97;leg reversal flag=legs[j].rev>100,39;fatigue=legs[j].fatigue>11,46
+8|Arms/manipulators|morph|grip force=arms[k].grip>19,59;tip sensors=arms[k].tipSens[]>23,21;arm count=arms.n>86,82;tool use=arms[k].tool>60,68;arm brain load=arms[k].brainLoad>32,11
+9|Eyes (weird)|morph|eye count=eyes.n>82,22;eye position on body=eyes[e].pos>1,22;aperture=eyes[e].aperture>41,22;eye stalk length=eyes[e].stalk>4,53;eye damage=eyes[e].dmg>92,26
+10|Growth|morph|growth rate=grow.rate>11,84;size target=grow.target>87,71;allometry=grow.allo[]>86,1;nutrient gate=grow.gate>12,14;stunting=grow.stunt>46,93
+11|Energy (ATP)|metab|ATP pool=*atp>12,46;muscle reserve=*muscle>51,93;brain glucose=*brainGlc>31,40;cognition cost=*cogCost>31,36;heat out=*heat>16,15
+12|Blood chemistry|metab|glucose=*blood.glc>52,45;free fatty acids=*blood.ffa>13,11;amino acids=*blood.aa>10,92;ketones=*blood.ket>13,31;urea=*blood.urea>18,91
+13|Fat storage|metab|fat=*fat>11,72;liver glycogen=*liverGly>12,40;mobilisation rate=metab.lipolysis>46,11;fat distribution=body.fatMap[]>1,56;starvation flag=metab.starving>94,45
+14|Digestion (ENS)|metab|gut contents=*gut>12,19;ENS rates=*rate[ENS]>31,25;gut motility=metab.motility>40,18;microbiome=gut.biome[]>91,98;satiety (ghrelin)=*ghrelin>52,45
+15|Respiration|metab|O2 level=metab.o2>11,96;breath rate=metab.breathHz>3,41;CO2=metab.co2>25,46;hypoxia=metab.hypoxia>31,94;gill/pore area=skin.poreArea>5,17
+16|Thermoregulation|metab|core temp=metab.temp>96,11;set point=metab.tempSet>40,91;shiver/flush=metab.thermoAct>3,5;heat stress=metab.heatStress>46,41;huddling gain=metab.huddle>77,69
+17|Water balance|metab|hydration=metab.h2o>96,3;thirst=drive.thirst>52,45;osmolality=metab.osm>12,18;evaporation=metab.evap>5,16;bloat=metab.bloat>3,1
+18|Excretion|metab|excreted=*excreted>95,98;scent marks=env.scent[]>57,63;toxin clearance=metab.clear>91,12;bladder fill=metab.bladder>25,40;waste signal=sig.waste>64,66
+19|Harvesting|metab|eaten=*eaten>12,14;site depletion=*depl[]>98,52;harvest rate=harvest.rate>8,11;handling time=harvest.handle>8,37;yield memory=*wSite[]>37,52
+20|Food caching|metab|cache sites=cache.pos[]>37,60;cache contents=cache.amt[]>98,13;retrieval accuracy=cache.recall>37,100;theft risk=cache.theft>66,41;cache defence=cache.guard>67,54
+21|Chemosense|sense|sens chemo channels=*sens[0..3]>52,14;gradient follow=chemo.grad>51,98;receptor adaptation=chemo.adapt>34,100;scent ID=chemo.id>63,72;toxin detect=chemo.tox>26,54
+22|Vision|sense|retina image=eyes.retina[]>9,36;motion detect=eyes.motion>54,99;colour channels=eyes.chroma>56,57;night mode=eyes.scotopic>40,96;visual noise=eyes.noise>100,9
+23|Touch|sense|contact map=touch.map[]>7,8;pressure=touch.p>26,97;vibration=touch.vib>28,99;texture=touch.tex>97,19;social touch=touch.social>48,77
+24|Proprioception|sense|joint angles=prop.angle[]>32,39;stretch=prop.stretch>4,3;body schema=prop.schema>1,38;efference copy=*rate[MOT]>39,100;schema error=prop.err>100,38
+25|Interoception|sense|INS rates=*rate[INS]>45,11;intero vector=*intero[4]>12,13;heartbeat=intero.hb>41,46;intero prediction error=intero.pe>38,45;gut-brain line=intero.vagal>14,44
+26|Nociception|sense|integrity=*integrity>92,41;damage taken=*damageTaken>50,37;pain threshold=noci.th>35,49;referred pain=noci.ref>32,7;analgesia=noci.opioid>35,44
+27|Thermosense|sense|skin temp=thermo.skin>16,96;gradient=thermo.grad>51,60;cold pain=thermo.cold>26,41;warmth seeking=thermo.seek>48,77;sensor drift=thermo.drift>100,93
+28|Vibration/hearing|sense|substrate vibration=hear.vib>97,99;call detect=hear.call>64,57;direction=hear.dir>51,63;startle=hear.startle>41,54;habituation=hear.habit>34,47
+29|Field sense (simulated)|sense|magnetic-like field=*alien[0]>51,40;electric-like threat field=*alien[1]>99,41;quantum click=*alien[2]>82,47;field gradient=field.grad>61,51;field noise=field.noise>100,96
+30|Remote viewing (SIMULATED)|sense|range=rv.range>61,11;target sample=rv.sample[]>98,52;fidelity=rv.fid>36,100;cost=rv.atp>11,40;false-image rate=rv.false>100,38
+31|Central brain|neural|neurons=*NNEU(272)>32,90;regions=*REGIONS>36,35;synapses=*syn.w>34,82;firing rates=*rate[]>39,45;scale tier=brain.tier>90,11
+32|Limb brains|neural|ganglion per limb=lb[j].n>7,8;CPG oscillator=lb[j].cpg>51,40;local reflex=lb[j].reflex>26,54;uplink bandwidth=lb[j].up>31,61;autonomy=lb[j].auto>46,100
+33|Nerve types|neural|synapse kinds=*kind[]>34,31;fast/slow fibres=nerve.speed[]>39,54;neuromod fibres=nerve.mod[]>35,45;gap junctions=nerve.gap[]>69,32;myelin=nerve.myelin>86,11
+34|Plasticity|neural|plastic mask=*syn.plastic>37,100;learning rate=plast.lr>35,47;STDP window=plast.stdp>36,37;pruning=*devPruned>86,93;sprouting=dev.sprouted>86,10
+35|Neuromodulation|neural|dopamine=*nm.DA>42,52;noradrenaline=*nm.NE>41,36;serotonin=*nm.5HT>44,45;acetylcholine=*nm.ACh>36,34;cortisol=*cortisol>46,40
+36|Attention/workspace|neural|ignition=*mind.amp[]>31,37;salience=*mind.sal[]>47,41;binding=*mind.plv>22,23;confidence=*mind.conf>38,49;broadcast gate=ws.gate>61,64
+37|Memory|neural|site values=*wSite[]>52,19;alternate map=*wAlt[]>53,38;Beta counts=*bA/bB>47,100;episodic buffer=*mind.epi>68,58;consolidation=mem.consol>40,34
+38|Prediction|neural|world model=*mind.Tm>52,53;prediction error=pred.err>47,45;surprise (NIS)=pred.nis>41,36;forward motor model=pred.fwd>39,24;planning depth=*mind.plan>31,52
+39|Motor control|neural|MOT rates=*rate[MOT]>7,51;action choice=*lastChoice>52,100;motor noise=mot.noise>100,22;force scaling=mot.gain>11,8;inhibition=mot.inhib>54,44
+40|Sleep/circadian|neural|sleep pressure=*S>37,45;stage=*stage>34,29;SCN phase=*rate[SCN]>16,96;sleep debt=*affect.sleepDebt>46,91;dreaming replay=sleep.replay>37,68
+41|Fear|affect|fear=*affect.emo.fear>54,3;freeze=beh.freeze>39,56;threat memory=fear.mem[]>37,99;contagion=fear.contagion>61,69;extinction=fear.ext>34,44
+42|Delight|affect|delight=*affect.emo.delight>35,58;reward burst=*nm.DA>52,34;glow=sig.glow>57,72;anticipation=delight.anti>38,47;sharing=delight.share>65,61
+43|Frustration|affect|frustration=*affect.emo.frustration>52,66;fail streak=*affect.failStreak>53,100;aggression=beh.aggr>67,54;thrash=mot.thrash>39,3;give-up=beh.quit>45,94
+44|Calm|affect|calm=*affect.emo.calm>40,59;tone=skel.tone>6,3;breath slow=metab.breathHz>15,46;rest bias=beh.rest>11,40;co-regulation=calm.coreg>48,61
+45|Mood|affect|valence=*affect.mood.val>52,47;arousal=*affect.mood.aro>35,51;slow valence=*affect.mood.valSlow>49,93;mood swing=*affect.swingSign>46,100;colour expression=skin.moodTint>5,57
+46|Stress (HPA)|affect|stress=*affect.stress>35,91;HPA lock=*affect.hpaLocked>40,93;inflammation=*affect.inflam>91,50;sickness=*affect.sick>91,51;scarcity=*affect.scarcity>52,72
+47|Curiosity|affect|curious=*persona.curious>53,38;info gain=*betaIG>37,52;novelty=cur.nov>22,30;boredom=cur.bored>58,45;risk scar=*persona.riskScar>52,13
+48|Attachment|affect|bond[id]=bond.w[]>63,77;separation distress=bond.sep>41,61;proximity seek=bond.prox>51,78;imprinting window=bond.imprint>71,86;loss grief=bond.grief>94,45
+49|Personality|affect|bold=*persona.bold>53,54;reactive=*persona.reactive>41,46;vulnerability=*persona.vuln>46,89;hedge=*persona.hedge>80,82;drift=persona.drift>93,85
+50|Suffering/wellbeing|affect|wellbeing index=wb.idx>45,91;chronic pain=wb.chronic>26,46;learned helplessness=wb.helpless>43,34;recovery=wb.recover>92,44;quality log=wb.log[]>94,87
+51|Locomotion|behav|speed=loc.v>11,7;heading=loc.dir>39,29;terrain cost=loc.cost>97,11;gait mode=loc.gait>32,7;stumble=loc.stumble>100,92
+52|Foraging decision|behav|striatal race=*rate[STR]>39,35;chosen site=*lastChoice>19,100;forages=*foraged>11,98;rewards=*rewards>42,37;site access=*access[]>8,97
+53|Exploration|behav|explore rate=expl.eps>47,45;novel sites visited=expl.novel>37,98;range=expl.range>51,30;risk taken=expl.risk>49,99;map coverage=expl.cov>37,61
+54|Escape|behav|flee vector=esc.v>41,51;threat distance=esc.d>99,22;burst cost=esc.atp>11,3;ink/expel=esc.expel>3,57;autotomy (drop limb)=esc.autotomy>7,92
+55|Mimicry|behav|model target=mim.target>22,68;match error=mim.err>2,38;shape copy=morph.target[]>2,1;signal copy=mim.sig>57,64;mimicry payoff=mim.payoff>87,99
+56|Camouflage|behav|background sample=camo.bg[]>22,97;pigment match=skin.rgb>5,2;stillness=beh.freeze>41,39;detect probability=camo.pDetect>99,87;cost=camo.atp>11,2
+57|Signaling|behav|light pulses=sig.light>5,61;colour flash=sig.flash>45,72;pheromone=sig.pher>18,63;honesty=sig.honest>70,87;receiver response=sig.resp>64,65
+58|Play|behav|play bout=play.on>42,47;practice skill=play.skill>39,68;safe signal=play.safe>57,70;energy budget=play.atp>11,80;social play=play.social>65,78
+59|Grooming/repair|behav|self-groom=groom.self>5,91;allo-groom=groom.allo>70,48;parasite load=groom.par>91,98;repair effort=groom.repair>92,11;calming effect=groom.calm>44,35
+60|Nest building|behav|nest site=nest.pos>97,77;material carried=nest.mat>8,19;shelter value=nest.shelter>16,99;defence=nest.def>67,41;nest memory=nest.mem>37,75
+61|Wireless field (SIMULATED)|social|broadcast amplitude=wf.amp>36,11;channel/frequency=wf.freq>63,82;payload vector=wf.payload[]>64,45;range falloff=wf.falloff>96,30;jamming=wf.jam>66,100
+62|Psychic coupling (SIMULATED)|social|coupling strength=psy.k>48,63;shared affect=psy.affect>45,41;sync phase=psy.phase>40,69;leakage=psy.leak>37,100;consent/gate=psy.gate>70,36
+63|Kin recognition|social|genome distance=kin.d>81,77;scent ID=chemo.id>21,72;field signature=wf.sig>61,48;kin bias=kin.bias>65,80;misrecognition=kin.err>100,66
+64|Communication|social|symbol set=comm.sym[]>57,68;recv decoder=*mind.recv>36,61;report=*mind.rep>36,57;vocab growth=comm.vocab>34,90;miscommunication=comm.err>100,70
+65|Cooperation|social|shared harvest=coop.share>19,77;reciprocity ledger=coop.ledger[]>37,70;group hunt=coop.hunt>69,99;cost=coop.atp>11,80;defection=coop.defect>66,43
+66|Competition|social|contest=comp.fight>67,92;resource overlap=comp.overlap>98,19;intensity=comp.k>43,46;win/loss memory=comp.mem>37,49;display=comp.display>57,3
+67|Dominance|social|rank=dom.rank>66,72;posture size=dom.size>3,1;submission=dom.submit>41,46;priority access=dom.access>52,19;rank stress=dom.stress>46,93
+68|Imitation learning|social|demonstrator=imit.demo>63,78;copy fidelity=imit.fid>55,37;mirror units=imit.mirror[]>31,36;cultural trait=imit.trait[]>90,64;error spread=imit.err>100,82
+69|Collective/swarm|social|neighbour count=swarm.n>98,99;alignment=swarm.align>51,61;quorum=swarm.quorum>65,60;dilution=swarm.dilute>99,41;emergent signal=swarm.sig>57,62
+70|Trust|social|trust[id]=trust.w[]>48,65;betrayal memory=trust.betray>37,43;signal reliability=sig.honest>57,64;openness=trust.open>49,62;repair=trust.repair>59,45
+71|Maturation|repro|age=*t>93,86;puberty gate=mat.gate>10,13;juvenile traits=mat.juv>86,78;maturity score=mat.score>72,74;hormone onset=mat.horm>35,46
+72|Mate choice|repro|mate preference=mate.pref[]>57,81;assessment=mate.assess>22,63;choosiness=mate.choose>13,49;inbreeding avoid=mate.inbreed>63,83;rejection=mate.reject>43,45
+73|Courtship|repro|display pattern=court.disp>57,2;duration=court.dur>11,99;synchrony=court.sync>62,40;gift/food=court.gift>19,20;success=court.ok>74,42
+74|Procreation|repro|mode (sexual/asexual/budding)=repro.mode>81,82;clutch size=repro.n>13,80;energy threshold=repro.th>11,13;offspring genome=repro.childGenome>83,82;fertility=repro.fert>46,93
+75|Gestation/egg|repro|embryo stage=gest.stage>86,10;yolk/nutrient=gest.yolk>13,80;egg site=gest.site>60,97;temperature dependence=gest.temp>16,96;loss=gest.loss>91,99
+76|Birth|repro|birth event=birth.ev>74,94;neonate mass=birth.mass>1,80;parent cost=birth.atp>11,46;first imprint=bond.imprint>48,71;birth defects=birth.defect>82,100
+77|Nurturing|repro|feeding young=nurt.feed>19,80;warming=nurt.warm>16,48;protection=nurt.guard>54,99;nurture affect=nurt.oxy>42,48;neglect=nurt.neglect>46,79
+78|Raising young|repro|teaching=raise.teach>68,64;juvenile skill=raise.skill>58,37;play partner=play.social>58,48;discipline=raise.disc>43,49;mortality of young=raise.mort>94,87
+79|Weaning/independence|repro|wean age=wean.age>71,80;conflict=wean.conflict>43,77;dispersal=wean.disperse>53,88;juvenile foraging=wean.forage>52,19;bond decay=bond.w[]>48,45
+80|Parental investment|repro|investment ratio=invest.r>13,74;offspring count=lineage.kids>87,88;self vs young tradeoff=invest.trade>11,46;bet-hedging=*persona.hedge>49,82;terminal investment=invest.term>93,94
+81|Genome|genome|developmental genome=*devGenome>86,31;organism genes=*genes>10,52;genome length=gen.len>90,82;body genes=gen.body[]>1,7;brain genes=gen.brain[]>31,32
+82|Mutation|genome|mutation rate=mut.rate>90,100;point mutations=mut.point>81,87;duplication=mut.dup>7,9;misfire jolts=*jolts>34,100;mutational load=mut.load>91,93
+83|Recombination|genome|crossover=rec.cross>74,81;linkage=rec.link[]>81,90;mate genome=mate.genome>72,63;hybrid vigour=rec.vigour>91,87;incompatibility=rec.incompat>88,74
+84|Gene expression|genome|expression levels=expr.lv[]>10,35;stress-induced=expr.stress>46,85;tissue specificity=expr.tissue[]>1,32;circadian expression=expr.circ>40,16;noise=expr.noise>100,82
+85|Epigenetics|genome|methylation marks=epi.marks[]>46,89;parental stress transmit=epi.parent>80,49;lifetime reset=epi.reset>71,93;environment memory=epi.env>96,98;reversibility=epi.rev>2,59
+86|Development|genome|grown wiring=*devStats>31,34;affinity=*devAff>33,81;target synapses=*devTarget>90,11;limb budding=dev.bud[]>7,8;critical periods=dev.crit>48,71
+87|Selection|genome|fitness=sel.fit>80,94;survival=*dead>94,11;offspring success=sel.kids>74,78;sexual selection=sel.sexual>72,57;environment pressure=sel.env>96,99
+88|Lineage/speciation|genome|lineage tree=lin.tree>81,87;divergence=lin.div>83,63;niche=lin.niche>98,97;population size=lin.pop>69,94;extinction=lin.ext>94,96
+89|Affect heritability|genome|inherited persona=*Affect.birth>49,80;vuln heritability=her.vuln>46,85;temperament spread=her.spread>82,49;mood genes=her.mood[]>45,81;cross-gen trauma=epi.parent>85,50
+90|Evolvability|genome|brain tier gene=gen.tier>31,11;modularity=evo.mod>86,32;robustness to flaws=evo.robust>100,87;innovation rate=evo.innov>82,47;open-endedness=evo.open>88,96
+91|Health/immunity|life|immune state=imm.state>46,92;pathogen load=imm.path>98,59;fever=imm.fever>16,40;sickness behaviour=*affect.sick>45,51;immune memory=imm.mem>37,85
+92|Injury/regeneration|life|tissue=*tissue>26,11;regrowth rate=regen.rate>10,12;scar=regen.scar>5,49;limb regrowth=regen.limb>7,8;neural repair=regen.neural>34,31
+93|Aging|life|age=*t>71,94;senescence=age.sen>82,11;plasticity decline=age.plast>34,37;telomere-like budget=age.budget>81,94;wisdom (stable priors)=age.priors>37,49
+94|Death|life|dead=*dead>87,95;cause of death=death.cause>12,99;dying process=death.decline>11,46;grief response (others)=bond.grief>48,69;legacy=death.legacy>80,68
+95|Decomposition|life|corpse mass=decomp.mass>98,18;nutrient release=decomp.nut>98,97;scavenger draw=decomp.scav>99,69;scent=decomp.scent>21,63;recycling to env=decomp.cycle>96,88
+96|Weather/climate|env|temperature=env.temp>16,27;light level=env.light>22,40;humidity=env.hum>17,5;seasonal cycle=env.season>74,13;storms=env.storm>41,51
+97|Terrain/substrate|env|elevation map=env.height[]>51,7;substrate type=env.sub[]>23,6;shelter spots=env.shelter[]>60,56;vibration conduction=env.cond>28,61;obstacles=env.obst[]>4,38
+98|Food ecology|env|site probability=*pBase[]>52,19;depletion=*depl[]>19,69;regrowth=env.regrow>96,95;food types=env.foodType[]>14,21;patch competition=env.patchComp>66,65
+99|Predators/threat|env|predator pos=env.pred[]>22,54;attack event=env.attack>26,92;threat field=*alien[1]>29,41;predator learning=env.predLearn>56,55;kill=env.kill>94,87
+100|Glitch self-model|env|sensor perm=*perm[]>21,22;leak rate=*FLAW_PARAMS.leakRate>37,34;motor reversal=*backwards>39,7;misfire jolts=*jolts>82,31;flaw awareness=glitch.aware>38,36"""
+areas=[]
+for line in S.strip().split("\n"):
+  i,name,sysn,rest=line.split("|"); atts=[]
+  for a in rest.split(";"):
+    nm,v=a.split("=",1); var,cp=v.split(">"); real="*" in var; var=var.replace("*","")
+    atts.append({"attribute":nm,"variable":var,"exists_today":real,"couples_to":[int(c) for c in cp.split(",")]})
+  assert len(atts)==5,(i,len(atts)); areas.append({"id":int(i),"area":name,"system":sysn,"attributes":atts})
+assert len(areas)==100 and [a["id"] for a in areas]==list(range(1,101))
+json.dump({"version":"glitchling-v2-blueprint","note":"exists_today=true means the variable is in core/ or glitchling.ts now; all others are planned. Variables marked SIMULATED areas (29,30,61,62) are in-sim mechanics, not real psychic phenomena.","areas":areas},open("data/areas.json","w"),indent=1)
+nm={a["id"]:a["area"] for a in areas}
+rows=["| # | Area | Sys | Attr 1 | Attr 2 | Attr 3 | Attr 4 | Attr 5 |","|---|---|---|---|---|---|---|---|"]
+for a in areas:
+  cells=[f'{t["attribute"]} `{t["variable"]}`{"✓" if t["exists_today"] else ""} →{",".join(map(str,t["couples_to"]))}' for t in a["attributes"]]
+  rows.append(f'| {a["id"]} | {a["area"]} | {a["system"]} | '+" | ".join(cells)+" |")
+open("data/areas_table.md","w").write("\n".join(rows)+"\n")
+n=sum(t["exists_today"] for a in areas for t in a["attributes"]); print("exists",n,"of 500")
+# --- CQM grounding (read-only survey of cqm-copy/src, Nov 2 2026). Paths relative to cqm-copy/src. Unlisted areas = NEW.
+import os
+P="sim/"
+CQM={1:[P+"super-body.ts",P+"morphotypes.ts"],2:[P+"super-body.ts",P+"nhi-body.ts",P+"morphic-field.ts"],3:[P+"super-body.ts"],4:[P+"super-body.ts"],5:[P+"creature-exterior-layers.ts",P+"creature-exterior-phenomena.ts"],
+7:[P+"super-body.ts"],9:[P+"super-body.ts"],10:[P+"growth-ramp.ts",P+"super-evolution.ts"],11:["../../core/organism.ts"],12:["../../core/organism.ts"],13:["../../core/organism.ts"],14:["../../core/organism.ts"],
+18:[P+"waste-ecology.ts"],19:[P+"edible-resource.ts",P+"dome-feeding.ts",P+"ad-forager.ts"],21:[P+"stigmergy.ts"],22:[P+"topdown-perception.ts",P+"perceptual-priority.ts"],24:[P+"embodiment.ts"],25:["../../core/organism.ts"],
+29:[P+"apex-field-organs.ts",P+"chaos-field.ts"],30:[P+"mind-field.ts"],31:[P+"connectome.ts",P+"entity-brain.ts","math/izhikevich.ts",P+"xenomimic-brain.ts"],32:[P+"entity-brain.ts"],33:["math/izhikevich.ts"],34:[P+"plastic-weights.ts",P+"online-learning.ts"],
+35:[P+"neuromodulation.ts"],36:["math/global-workspace.ts",P+"attention-controller.ts",P+"attention-schema.ts"],37:[P+"holographic-memory.ts",P+"narrative-memory.ts",P+"successor-representation.ts"],38:["math/predictive-coding.ts",P+"active-inference.ts",P+"embodiment.ts"],
+39:[P+"behaviors.ts"],40:["../../core/organism.ts"],41:["../../core/affect.ts"],42:["../../core/affect.ts",P+"valence-steering.ts"],43:["../../core/affect.ts"],44:["../../core/affect.ts"],45:["../../core/affect.ts",P+"nhsi-affect-binding.ts"],46:["../../core/affect.ts"],
+47:[P+"apex-novelty.ts",P+"empowerment.ts"],49:["../../core/affect.ts"],50:[P+"valence-steering.ts"],51:[P+"behaviors.ts",P+"habitat-roaming.ts",P+"wilderness-population.ts"],52:["../../glitchling.ts",P+"ad-forager.ts"],53:[P+"apex-novelty.ts",P+"habitat-roaming.ts"],
+55:[P+"xenomimics.ts",P+"xenomimic-brain.ts"],57:[P+"emergent-language.ts",P+"social-field.ts"],61:[P+"social-field.ts",P+"mind-field.ts","workers/social-field-worker.ts"],62:[P+"symbiosis.ts",P+"mind-field.ts"],63:[P+"lineage.ts"],
+64:[P+"emergent-language.ts",P+"archon-language.ts"],65:[P+"symbiosis.ts",P+"economy.ts"],66:[P+"factions.ts",P+"super-hunt.ts"],67:[P+"factions.ts"],68:[P+"theory-of-mind.ts"],69:[P+"stigmergy.ts",P+"social-field.ts",P+"mind-field.ts"],70:[P+"theory-of-mind.ts"],
+71:[P+"lineage.ts"],72:[P+"pantheon-breeding.ts"],74:[P+"genome.ts",P+"pantheon-breeding.ts"],77:[P+"lineage.ts"],78:[P+"lineage.ts"],81:[P+"genome.ts","../../core/develop.ts"],82:[P+"genome.ts","../../glitchling.ts"],83:[P+"genome.ts",P+"pantheon-breeding.ts"],
+86:["../../core/develop.ts"],87:[P+"super-evolution.ts",P+"self-evolution-loop.ts"],88:[P+"lineage.ts",P+"phyla.ts"],89:["../../core/affect.ts"],90:[P+"open-endedness.ts",P+"self-evolution-loop.ts"],91:[P+"portal-immune-bounce.ts"],
+93:[P+"mortality.ts"],94:[P+"mortality.ts",P+"gedanken-death.ts"],95:[P+"waste-ecology.ts",P+"dome-feeding.ts"],96:[P+"weather.ts",P+"atmosphere.ts"],97:[P+"terrain-deformation.ts",P+"terrain-profile.ts",P+"biome-strata.ts"],98:[P+"edible-resource.ts",P+"vegetation.ts",P+"alien-flora.ts"],
+99:[P+"super-hunt.ts",P+"xenomimics.ts"],100:["../../glitchling.ts"]}
+root="cqm-copy/src/"
+for a in areas:
+  fs_=CQM.get(a["id"],[]); ok=[]
+  for f in fs_:
+    p=os.path.normpath(root+f); assert os.path.exists(p),p; ok.append(p)
+  a["cqm_reuse"]=ok; a["status"]="reuse" if ok else "new"
+json.dump({"version":"glitchling-v2-blueprint","note":"exists_today=true: variable exists now in core/ or glitchling.ts. cqm_reuse: read-only source files in cqm-copy (or the jam core) to port/adapt; status=new means no existing code found. Areas 29,30,61,62 are SIMULATED in-sim mechanics, not real psychic phenomena.","areas":areas},open("data/areas.json","w"),indent=1)
+rows=["| # | Area | Sys | Attr 1 | Attr 2 | Attr 3 | Attr 4 | Attr 5 | Reuse |","|---|---|---|---|---|---|---|---|---|"]
+for a in areas:
+  cells=[f'{t["attribute"]} `{t["variable"]}`{"✓" if t["exists_today"] else ""} →{",".join(map(str,t["couples_to"]))}' for t in a["attributes"]]
+  re_=", ".join(p.replace("cqm-copy/src/sim/","").replace("cqm-copy/src/","") for p in a["cqm_reuse"]) or "NEW"
+  rows.append(f'| {a["id"]} | {a["area"]} | {a["system"]} | '+" | ".join(cells)+f" | {re_} |")
+open("data/areas_table.md","w").write("\n".join(rows)+"\n")
+print("reuse",sum(a["status"]=="reuse" for a in areas),"new",sum(a["status"]=="new" for a in areas))

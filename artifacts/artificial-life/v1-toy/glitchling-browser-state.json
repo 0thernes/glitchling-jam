@@ -1,0 +1,22 @@
+{
+  "st": {
+    "ticks": 21,
+    "x": -0.014021623311864129,
+    "z": 0.21613197875328483,
+    "counts": {
+      "senseScramble": 6,
+      "memoryLeak": 2,
+      "motorReverse": 5,
+      "mutationMisfire": 0
+    },
+    "actions": {
+      "seek": 10,
+      "wander": 4,
+      "spin": 4,
+      "sulk": 0,
+      "flee-food": 3
+    },
+    "eaten": 0
+  },
+  "errs": []
+}

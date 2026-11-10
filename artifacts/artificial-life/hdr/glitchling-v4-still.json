@@ -1,0 +1,8 @@
+{
+  "source": "/workspace/glitchling-jam/synthetic/state_v2.synthetic.jsonl",
+  "real": false,
+  "mode": "still",
+  "W": 3840,
+  "H": 2160,
+  "errs": []
+}

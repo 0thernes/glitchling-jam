@@ -1,0 +1,1453 @@
+{
+ "days": 2,
+ "nSeeds": 2,
+ "flawParams": {
+  "senseNoise": 0.25,
+  "leakRate": 0.06,
+  "mildLeakRate": 0.02,
+  "rewireEvery": 90,
+  "misfireEvery": 60,
+  "misfireSD": 0.3,
+  "synJolts": 20
+ },
+ "conditions": {
+  "baseline": [
+   {
+    "condition": "baseline",
+    "flaws": {},
+    "seed": 1,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 199,
+    "rewards": 85,
+    "sensorShuffles": 0,
+    "successRate": 0.427,
+    "glcMean": 4.321,
+    "glcEnd": 2.489,
+    "fatEnd": 390.4,
+    "bestSite": 15,
+    "firstHalf": {
+     "success": 0.373,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.506,
+     "bestSiteFrac": 0
+    },
+    "jolts": 0,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.864,
+      "fat": 391.4,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 85,
+      "rewards": 30,
+      "success": 0.353,
+      "glc": 6.382,
+      "fat": 392.6,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 33,
+      "rewards": 14,
+      "success": 0.424,
+      "glc": 3.686,
+      "fat": 400.8,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.65,
+      "fat": 396.4,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.721,
+      "fat": 387,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 58,
+      "rewards": 30,
+      "success": 0.517,
+      "glc": 5.859,
+      "fat": 389.5,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 23,
+      "rewards": 11,
+      "success": 0.478,
+      "glc": 3.264,
+      "fat": 395.3,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.489,
+      "fat": 390.4,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 13.074
+   },
+   {
+    "condition": "baseline",
+    "flaws": {},
+    "seed": 2,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 150,
+    "rewards": 41,
+    "sensorShuffles": 0,
+    "successRate": 0.273,
+    "glcMean": 3.134,
+    "glcEnd": 2.448,
+    "fatEnd": 339,
+    "bestSite": 6,
+    "firstHalf": {
+     "success": 0.27,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.276,
+     "bestSiteFrac": 0
+    },
+    "jolts": 0,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.858,
+      "fat": 391.1,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 48,
+      "rewards": 11,
+      "success": 0.229,
+      "glc": 3.884,
+      "fat": 381,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 15,
+      "rewards": 6,
+      "success": 0.4,
+      "glc": 3.078,
+      "fat": 377.5,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.676,
+      "fat": 367.5,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.65,
+      "fat": 355,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 59,
+      "rewards": 13,
+      "success": 0.22,
+      "glc": 4.022,
+      "fat": 345.2,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 28,
+      "rewards": 11,
+      "success": 0.393,
+      "glc": 2.806,
+      "fat": 347.2,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.448,
+      "fat": 339,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 93.295
+   }
+  ],
+  "scramble": [
+   {
+    "condition": "scramble",
+    "flaws": {
+     "scramble": true
+    },
+    "seed": 1,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 201,
+    "rewards": 68,
+    "sensorShuffles": 32,
+    "successRate": 0.338,
+    "glcMean": 3.505,
+    "glcEnd": 2.315,
+    "fatEnd": 366.7,
+    "bestSite": 14,
+    "firstHalf": {
+     "success": 0.326,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.349,
+     "bestSiteFrac": 0
+    },
+    "jolts": 0,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.861,
+      "fat": 391.1,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 62,
+      "rewards": 19,
+      "success": 0.306,
+      "glc": 3.715,
+      "fat": 386.5,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 30,
+      "rewards": 11,
+      "success": 0.367,
+      "glc": 2.911,
+      "fat": 387.1,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.611,
+      "fat": 380.3,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.586,
+      "fat": 369.3,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 75,
+      "rewards": 25,
+      "success": 0.333,
+      "glc": 4.574,
+      "fat": 368.1,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 34,
+      "rewards": 13,
+      "success": 0.382,
+      "glc": 3.857,
+      "fat": 370.7,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.315,
+      "fat": 366.7,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 169.839
+   },
+   {
+    "condition": "scramble",
+    "flaws": {
+     "scramble": true
+    },
+    "seed": 2,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 144,
+    "rewards": 51,
+    "sensorShuffles": 32,
+    "successRate": 0.354,
+    "glcMean": 3.258,
+    "glcEnd": 2.328,
+    "fatEnd": 350.8,
+    "bestSite": 8,
+    "firstHalf": {
+     "success": 0.458,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.302,
+     "bestSiteFrac": 0
+    },
+    "jolts": 0,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.882,
+      "fat": 391.2,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 31,
+      "rewards": 17,
+      "success": 0.548,
+      "glc": 5.228,
+      "fat": 383,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 17,
+      "rewards": 5,
+      "success": 0.294,
+      "glc": 3.03,
+      "fat": 382.3,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.662,
+      "fat": 373.3,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.587,
+      "fat": 361.3,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 58,
+      "rewards": 19,
+      "success": 0.328,
+      "glc": 5.508,
+      "fat": 353.6,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 38,
+      "rewards": 10,
+      "success": 0.263,
+      "glc": 2.67,
+      "fat": 357.7,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.328,
+      "fat": 350.8,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 26.595
+   }
+  ],
+  "leaky": [
+   {
+    "condition": "leaky",
+    "flaws": {
+     "leaky": true
+    },
+    "seed": 1,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 239,
+    "rewards": 72,
+    "sensorShuffles": 0,
+    "successRate": 0.301,
+    "glcMean": 3.664,
+    "glcEnd": 2.333,
+    "fatEnd": 371.4,
+    "bestSite": 14,
+    "firstHalf": {
+     "success": 0.25,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.357,
+     "bestSiteFrac": 0
+    },
+    "jolts": 0,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.867,
+      "fat": 391.1,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 72,
+      "rewards": 20,
+      "success": 0.278,
+      "glc": 3.7,
+      "fat": 387.3,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 52,
+      "rewards": 11,
+      "success": 0.212,
+      "glc": 2.902,
+      "fat": 387.6,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.596,
+      "fat": 381.2,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.592,
+      "fat": 370.4,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 83,
+      "rewards": 26,
+      "success": 0.313,
+      "glc": 4.915,
+      "fat": 370,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 32,
+      "rewards": 15,
+      "success": 0.469,
+      "glc": 4.467,
+      "fat": 374.7,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.333,
+      "fat": 371.4,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 53.712
+   },
+   {
+    "condition": "leaky",
+    "flaws": {
+     "leaky": true
+    },
+    "seed": 2,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 138,
+    "rewards": 54,
+    "sensorShuffles": 0,
+    "successRate": 0.391,
+    "glcMean": 3.303,
+    "glcEnd": 2.342,
+    "fatEnd": 354.9,
+    "bestSite": 8,
+    "firstHalf": {
+     "success": 0.51,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.322,
+     "bestSiteFrac": 0
+    },
+    "jolts": 0,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.887,
+      "fat": 391.2,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 35,
+      "rewards": 18,
+      "success": 0.514,
+      "glc": 5.481,
+      "fat": 383,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 16,
+      "rewards": 8,
+      "success": 0.5,
+      "glc": 2.973,
+      "fat": 385.5,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.585,
+      "fat": 377.7,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.567,
+      "fat": 366,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 52,
+      "rewards": 17,
+      "success": 0.327,
+      "glc": 4.688,
+      "fat": 358.6,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 35,
+      "rewards": 11,
+      "success": 0.314,
+      "glc": 2.684,
+      "fat": 361.9,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.342,
+      "fat": 354.9,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 16.817
+   }
+  ],
+  "backwards": [
+   {
+    "condition": "backwards",
+    "flaws": {
+     "backwards": true
+    },
+    "seed": 1,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 190,
+    "rewards": 68,
+    "sensorShuffles": 0,
+    "successRate": 0.358,
+    "glcMean": 3.518,
+    "glcEnd": 2.302,
+    "fatEnd": 367.1,
+    "bestSite": 14,
+    "firstHalf": {
+     "success": 0.333,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.381,
+     "bestSiteFrac": 0
+    },
+    "jolts": 0,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.861,
+      "fat": 391.1,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 66,
+      "rewards": 20,
+      "success": 0.303,
+      "glc": 4.109,
+      "fat": 386.6,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 27,
+      "rewards": 11,
+      "success": 0.407,
+      "glc": 2.839,
+      "fat": 387.5,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.571,
+      "fat": 381.1,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.609,
+      "fat": 370.3,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 62,
+      "rewards": 25,
+      "success": 0.403,
+      "glc": 4.548,
+      "fat": 369.3,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 35,
+      "rewards": 12,
+      "success": 0.343,
+      "glc": 3.59,
+      "fat": 371.5,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.302,
+      "fat": 367.1,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 10.686
+   },
+   {
+    "condition": "backwards",
+    "flaws": {
+     "backwards": true
+    },
+    "seed": 2,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 188,
+    "rewards": 46,
+    "sensorShuffles": 0,
+    "successRate": 0.245,
+    "glcMean": 3.175,
+    "glcEnd": 2.367,
+    "fatEnd": 344.5,
+    "bestSite": 8,
+    "firstHalf": {
+     "success": 0.29,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.218,
+     "bestSiteFrac": 0
+    },
+    "jolts": 0,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.882,
+      "fat": 391.2,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 46,
+      "rewards": 14,
+      "success": 0.304,
+      "glc": 4.632,
+      "fat": 381.6,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 23,
+      "rewards": 6,
+      "success": 0.261,
+      "glc": 3.121,
+      "fat": 380.1,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.676,
+      "fat": 370.7,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.628,
+      "fat": 358.5,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 70,
+      "rewards": 15,
+      "success": 0.214,
+      "glc": 3.937,
+      "fat": 350.1,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 49,
+      "rewards": 11,
+      "success": 0.224,
+      "glc": 2.749,
+      "fat": 352.1,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.367,
+      "fat": 344.5,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 5.067
+   }
+  ],
+  "misfire": [
+   {
+    "condition": "misfire",
+    "flaws": {
+     "misfire": true
+    },
+    "seed": 1,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 189,
+    "rewards": 68,
+    "sensorShuffles": 0,
+    "successRate": 0.36,
+    "glcMean": 3.552,
+    "glcEnd": 2.287,
+    "fatEnd": 366.9,
+    "bestSite": 14,
+    "firstHalf": {
+     "success": 0.357,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.362,
+     "bestSiteFrac": 0
+    },
+    "jolts": 48,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.871,
+      "fat": 391.1,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 61,
+      "rewards": 22,
+      "success": 0.361,
+      "glc": 4.422,
+      "fat": 387.7,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 23,
+      "rewards": 8,
+      "success": 0.348,
+      "glc": 2.926,
+      "fat": 387.6,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.602,
+      "fat": 380.4,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.601,
+      "fat": 369.3,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 65,
+      "rewards": 25,
+      "success": 0.385,
+      "glc": 4.334,
+      "fat": 368.8,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 40,
+      "rewards": 13,
+      "success": 0.325,
+      "glc": 3.551,
+      "fat": 371.3,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.287,
+      "fat": 366.9,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 5.113
+   },
+   {
+    "condition": "misfire",
+    "flaws": {
+     "misfire": true
+    },
+    "seed": 2,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 117,
+    "rewards": 56,
+    "sensorShuffles": 0,
+    "successRate": 0.479,
+    "glcMean": 3.404,
+    "glcEnd": 2.569,
+    "fatEnd": 357.7,
+    "bestSite": 3,
+    "firstHalf": {
+     "success": 0.439,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.517,
+     "bestSiteFrac": 0
+    },
+    "jolts": 48,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.884,
+      "fat": 391.2,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 39,
+      "rewards": 17,
+      "success": 0.436,
+      "glc": 5.504,
+      "fat": 382.2,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 18,
+      "rewards": 8,
+      "success": 0.444,
+      "glc": 2.957,
+      "fat": 384.5,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.577,
+      "fat": 376.5,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.571,
+      "fat": 364.8,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 42,
+      "rewards": 22,
+      "success": 0.524,
+      "glc": 5.906,
+      "fat": 358.7,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 18,
+      "rewards": 9,
+      "success": 0.5,
+      "glc": 2.953,
+      "fat": 364.5,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.569,
+      "fat": 357.7,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 3.771
+   }
+  ],
+  "all": [
+   {
+    "condition": "all",
+    "flaws": {
+     "scramble": true,
+     "leaky": true,
+     "backwards": true,
+     "misfire": true
+    },
+    "seed": 1,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 294,
+    "rewards": 89,
+    "sensorShuffles": 32,
+    "successRate": 0.303,
+    "glcMean": 4.446,
+    "glcEnd": 2.534,
+    "fatEnd": 392.8,
+    "bestSite": 15,
+    "firstHalf": {
+     "success": 0.291,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.315,
+     "bestSiteFrac": 0
+    },
+    "jolts": 48,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.864,
+      "fat": 391.4,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 108,
+      "rewards": 29,
+      "success": 0.269,
+      "glc": 6.316,
+      "fat": 390.6,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 40,
+      "rewards": 14,
+      "success": 0.35,
+      "glc": 3.69,
+      "fat": 399,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.655,
+      "fat": 394.6,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.711,
+      "fat": 385.1,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 85,
+      "rewards": 33,
+      "success": 0.388,
+      "glc": 7.094,
+      "fat": 388.4,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 61,
+      "rewards": 13,
+      "success": 0.213,
+      "glc": 4.839,
+      "fat": 395.5,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.534,
+      "fat": 392.8,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 6.356
+   },
+   {
+    "condition": "all",
+    "flaws": {
+     "scramble": true,
+     "leaky": true,
+     "backwards": true,
+     "misfire": true
+    },
+    "seed": 2,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 143,
+    "rewards": 43,
+    "sensorShuffles": 32,
+    "successRate": 0.301,
+    "glcMean": 3.171,
+    "glcEnd": 2.651,
+    "fatEnd": 341.4,
+    "bestSite": 6,
+    "firstHalf": {
+     "success": 0.246,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.351,
+     "bestSiteFrac": 0
+    },
+    "jolts": 48,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.858,
+      "fat": 391.1,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 49,
+      "rewards": 11,
+      "success": 0.224,
+      "glc": 3.954,
+      "fat": 380.5,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 20,
+      "rewards": 6,
+      "success": 0.3,
+      "glc": 3.079,
+      "fat": 377.3,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.672,
+      "fat": 367.3,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.647,
+      "fat": 354.8,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 42,
+      "rewards": 19,
+      "success": 0.452,
+      "glc": 4.833,
+      "fat": 347.8,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 32,
+      "rewards": 7,
+      "success": 0.219,
+      "glc": 2.96,
+      "fat": 349.7,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.651,
+      "fat": 341.4,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 3.221
+   }
+  ],
+  "all_mild": [
+   {
+    "condition": "all_mild",
+    "flaws": {
+     "scramble": true,
+     "leaky": true,
+     "backwards": true,
+     "misfire": true,
+     "mild": true
+    },
+    "seed": 1,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 313,
+    "rewards": 84,
+    "sensorShuffles": 0,
+    "successRate": 0.268,
+    "glcMean": 4.185,
+    "glcEnd": 2.45,
+    "fatEnd": 386.5,
+    "bestSite": 15,
+    "firstHalf": {
+     "success": 0.286,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.254,
+     "bestSiteFrac": 0
+    },
+    "jolts": 48,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.862,
+      "fat": 391.4,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 93,
+      "rewards": 27,
+      "success": 0.29,
+      "glc": 5.606,
+      "fat": 389.7,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 47,
+      "rewards": 13,
+      "success": 0.277,
+      "glc": 3.45,
+      "fat": 396.1,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.648,
+      "fat": 391.3,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.708,
+      "fat": 381.6,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 114,
+      "rewards": 29,
+      "success": 0.254,
+      "glc": 5.935,
+      "fat": 382.8,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 59,
+      "rewards": 15,
+      "success": 0.254,
+      "glc": 4.347,
+      "fat": 389.6,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.45,
+      "fat": 386.5,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 4.27
+   },
+   {
+    "condition": "all_mild",
+    "flaws": {
+     "scramble": true,
+     "leaky": true,
+     "backwards": true,
+     "misfire": true,
+     "mild": true
+    },
+    "seed": 2,
+    "alive": true,
+    "ticks": 2880,
+    "forages": 140,
+    "rewards": 44,
+    "sensorShuffles": 0,
+    "successRate": 0.314,
+    "glcMean": 3.157,
+    "glcEnd": 2.448,
+    "fatEnd": 342.3,
+    "bestSite": 6,
+    "firstHalf": {
+     "success": 0.31,
+     "bestSiteFrac": 0
+    },
+    "secondHalf": {
+     "success": 0.317,
+     "bestSiteFrac": 0
+    },
+    "jolts": 48,
+    "blocks": [
+     {
+      "hour": 6,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.86,
+      "fat": 391.1,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 12,
+      "forages": 41,
+      "rewards": 12,
+      "success": 0.293,
+      "glc": 3.877,
+      "fat": 381.4,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 18,
+      "forages": 17,
+      "rewards": 6,
+      "success": 0.353,
+      "glc": 3.077,
+      "fat": 378.3,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 24,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.685,
+      "fat": 368.4,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 30,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.647,
+      "fat": 356,
+      "bestSiteFrac": null
+     },
+     {
+      "hour": 36,
+      "forages": 51,
+      "rewards": 17,
+      "success": 0.333,
+      "glc": 4.484,
+      "fat": 348,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 42,
+      "forages": 31,
+      "rewards": 9,
+      "success": 0.29,
+      "glc": 2.811,
+      "fat": 350.1,
+      "bestSiteFrac": 0
+     },
+     {
+      "hour": 48,
+      "forages": 0,
+      "rewards": 0,
+      "success": null,
+      "glc": 2.448,
+      "fat": 342.3,
+      "bestSiteFrac": null
+     }
+    ],
+    "secs": 3.842
+   }
+  ]
+ }
+}

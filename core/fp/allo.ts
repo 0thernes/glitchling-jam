@@ -1,0 +1,6 @@
+// Isolated CQM10 module (original code): one-compartment glucose with an insulin controller (own basal 0.3) and a leptin-deficit feeding drive.
+// Arm A: drive = fat deficit (always high). Arm B: same drive inhibited by insulin above basal (Woods 1979; Könner 2007). Measure: fraction of time glucose in band.
+const B = Number(process.env.SEEDBASE ?? 0), N = 16; if (B < 2000) throw new Error("dev seeds only");
+const run = (s: number, gate: boolean) => { let q = s * 131 + 7; const r = () => { q = (q * 1103515245 + 12345) >>> 0; return q / 4294967296; }; let glc = 3, gut = 0, ins = 0.3, ok = 0;
+  for (let t = 0; t < 5000; t++) { const fatDef = 0.9; const drive = fatDef * (gate ? Math.max(0, Math.min(1, 2 - ins / 0.3)) : 1); if (r() < 0.2 * drive) gut += 1.5 * (0.5 + r()); const a = 0.1 * gut; gut -= a; glc += a - 0.02 - 0.05 * ins * glc / 3 + 0.02 * (r() - 0.5); ins += 0.1 * (Math.max(0, 0.3 + 1.5 * (glc / 3 - 1)) - ins); if (t >= 1000) ok += +(glc > 2 && glc < 4.5); } return ok / 4000; };
+const S = Array.from({ length: N }, (_, i) => B + i); console.log(JSON.stringify({ arms: { "insulin-gated drive": S.map((s) => run(s, true)), "ungated leptin-deficit drive": S.map((s) => run(s, false)) } }));

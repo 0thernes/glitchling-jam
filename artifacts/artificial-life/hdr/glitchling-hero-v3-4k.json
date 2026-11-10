@@ -1,0 +1,63 @@
+{
+  "tick": 720,
+  "W": 3840,
+  "H": 2160,
+  "opts": {
+    "bloom": true,
+    "ao": true,
+    "dof": true
+  },
+  "glow": {
+    "scramble": 1,
+    "backwards": 0.8649000000000001,
+    "misfire": 1,
+    "leaky": 1
+  },
+  "intended": 4,
+  "executed": 11,
+  "post": {
+    "caAmount": 0.0029999999999999996
+  },
+  "renderSecs": 32.727,
+  "events": [
+    {
+      "tick": 695,
+      "type": "motor_reversal"
+    },
+    {
+      "tick": 699,
+      "type": "motor_reversal"
+    },
+    {
+      "tick": 700,
+      "type": "motor_reversal"
+    },
+    {
+      "tick": 706,
+      "type": "motor_reversal"
+    },
+    {
+      "tick": 713,
+      "type": "motor_reversal"
+    },
+    {
+      "tick": 716,
+      "type": "motor_reversal"
+    },
+    {
+      "tick": 718,
+      "type": "motor_reversal"
+    },
+    {
+      "tick": 720,
+      "type": "misfire"
+    },
+    {
+      "tick": 720,
+      "type": "sensor_shuffle"
+    }
+  ],
+  "errs": [
+    "Failed to load resource: the server responded with a status of 404 (File not found)"
+  ]
+}

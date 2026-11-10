@@ -1,0 +1,28 @@
+{
+  "source": "real /workspace/glitchling-jam/glitchling.ts Glitchling(seed=1, all flaws), via cqm-copy adapter",
+  "ticks": 1440,
+  "simMinutes": 1440,
+  "msPerTick": 2.95,
+  "fireCounts": {
+    "scramble": 189,
+    "leaky": 1381,
+    "backwards": 189,
+    "misfire": 24
+  },
+  "fireRatePerTick": {
+    "scramble": 0.131,
+    "leaky": 0.959,
+    "backwards": 0.131,
+    "misfire": 0.017
+  },
+  "forages": 189,
+  "rewards": 41,
+  "mirrorTrips": 189,
+  "jolts": 24,
+  "alive": true,
+  "glcEnd": 2.651,
+  "final": {
+    "x": 8.36,
+    "z": 2.43
+  }
+}

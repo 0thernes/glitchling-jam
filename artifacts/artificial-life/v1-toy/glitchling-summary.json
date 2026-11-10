@@ -1,0 +1,31 @@
+{
+  "ticks": 400,
+  "glitchCounts": {
+    "senseScramble": 133,
+    "memoryLeak": 42,
+    "motorReverse": 106,
+    "mutationMisfire": 9
+  },
+  "glitchRatePerTick": {
+    "senseScramble": 0.333,
+    "memoryLeak": 0.105,
+    "motorReverse": 0.265,
+    "mutationMisfire": 0.022
+  },
+  "actions": {
+    "seek": 157,
+    "wander": 27,
+    "spin": 23,
+    "sulk": 104,
+    "flee-food": 89
+  },
+  "foodEaten": 1,
+  "longestFleeFoodStreak": 4,
+  "final": {
+    "x": 2.71,
+    "z": 0.43,
+    "size": 1.04,
+    "speed": 1.49,
+    "energy": 0
+  }
+}
