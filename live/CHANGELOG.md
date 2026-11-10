@@ -299,3 +299,17 @@ Yaw rate in the commanded direction (left / right, rad/s) and straight-line spee
 - **Headless Chromium:** phone 24.6 fps, desktop 13.1 fps, no console errors.
   - Motion: intact 8.3 / 7.5; MN lesioned 1.0 / 3.0; MOT lesioned 5.9 / 4.4.
 - Screenshots: `live-shots/s9-*.png`.
+
+## Pass 10: polish and final check
+- **Phone header.** At ≤640 px the chip reads "SIMULATION" and the HUD is tighter, so the fps readout is no longer clipped
+  at 390 px wide. The full "BROWSER SIMULATION" chip stays on wider screens.
+- **README.** Now has a pass 2–9 mechanism table and lists `memory.js`, `world.js` and the newer probes.
+- **honesty.js.** The turning entries were corrected to the pass-9 measurements (shipped ~0.34 rad/s mean vs 0.26 before;
+  still "physically weak").
+- **Final checks:**
+  - Symmetry probe (no turn command): yaw −0.05 / −0.03 / −0.05 rad/s, so no strong bias.
+  - Headless Chromium: phone 25.0 fps, desktop 11.6 fps (SwiftShader software GL, auto quality "low"), no console errors.
+  - Motion: intact 8.3 / 7.7; MN lesioned 1.0 / 2.5; MOT lesioned 4.0 / 4.8.
+  - One earlier desktop run produced a black first capture with the HUD still running. The re-run rendered normally, so
+    this was treated as a flaky SwiftShader frame and not investigated further.
+- Screenshots: `live-shots/s10-*.png`.
