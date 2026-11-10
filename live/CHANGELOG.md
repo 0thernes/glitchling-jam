@@ -164,3 +164,30 @@ Measured:
 - **Headless Chromium:** phone 20.7 fps, desktop 12.9 fps, no console errors.
   - Motion over 600 steps: intact 9.7 / 8.9; MN lesioned 0.1 / 1.1; MOT lesioned 6.4 / 5.0.
 - Screenshots: `live-shots/s4-*.png`.
+
+## Pass 5: Turing morphogen skin driven by hormones
+
+- **Gray-Scott reaction-diffusion layer** (U, V morphogens; 64×32 sheet; 6 iterations per skin step) added under the
+  FitzHugh–Nagumo chromatophore sheet. V modulates pigment (red channel) and leucophore whiteness (blue channel).
+  - Feed rate F = 0.03 + 0.02·leptin, from fat stores.
+  - Kill rate K = 0.059 + 0.007·cortisol − 0.002·DA.
+  - The pattern regime is therefore a readout of metabolic state, not a texture.
+  - Strongly excited FHN patches nucleate new 5×5 morphogen spots.
+  - Regimes were mapped first on a bare Gray-Scott grid.
+- **New lesion:** hormone → morphogen link off (F and K freeze).
+
+Measured (`test/turing_probe.mjs`, 60 simulated s with leptin and cortisol clamped, seeds 1–3; coverage = fraction of
+cells with V > 0.2, blobs = connected components):
+
+| hormone state | F / K | coverage | blobs |
+|---|---|---|---|
+| lean, calm | 0.031 / 0.059 | 0.37, 0.36, 0.42 | 4, 5, 1 |
+| lean, stressed | 0.031 / 0.065 | 0.12, 0.15, 0.11 | 5, 6, 7 (sparse spots) |
+| fat, stressed | 0.049 / 0.065 | 0.32, 0.33, 0.32 | 5, 7, 7 (spots) |
+| fat, calm | 0.049 / 0.059 | 1.0 | 1 (solid pigment) |
+
+- Behaviour is unchanged: the skin does not feed back into the brain. `measure` matches pass 4 exactly (dist 65.2,
+  fed 1.33, entropy 6.24).
+- **Headless Chromium:** phone 19.7 fps, desktop 13.9 fps, no console errors.
+  - Motion: intact 10.0 / 8.8; MN lesioned 0.3 / 1.1; MOT lesioned 4.9 / 6.1.
+- Screenshots: `live-shots/s5-*.png`.
