@@ -16,6 +16,7 @@ export const REAL = [
   '<b>Self-model:</b> the creature keeps running estimates of its own approach speed and turn rate, and the striatal race prices each site by the predicted travel time; it gives up on a goal when it stops making progress.',
   '<b>Vector-symbolic memory:</b> a hyperdimensional (FHRR, 512-dim phasor) cognitive map stores where food paid off and where the body has been as single superposed vectors; recall generalises to nearby unvisited places and feeds the race\'s value term and curiosity.',
   '<b>Associative memory:</b> a modern Hopfield network stores episode states; recognition re-activates a hippocampal neuron assembly, and REM dreams start from a pattern-completed memory retrieved from a half-masked cue.',
+  '<b>Predictive coding:</b> a two-level hierarchy (16 then 8 latent causes) predicts the 25-dim body-sense vector; inference and learning are local error-driven updates, sensory precision follows acetylcholine, and its normalised error drives the locus coeruleus (noradrenaline) and flushes the skin.',
 ];
 export const SIMPLIFIED = [
   'The Hopfield and HDC memories are small (256 episodes, 512 dimensions) and their encoders are fixed, not learned.',

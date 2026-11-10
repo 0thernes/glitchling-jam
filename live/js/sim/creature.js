@@ -5,6 +5,7 @@ import { mulberry, clamp, gauss, betaIG, IG0, sig } from './util.js';
 import { World, SITES } from './world.js';
 import { Body, CH, NS } from './body.js';
 import { HDCMap, Hopfield } from './memory.js';
+import { PredictiveCoding } from './mind.js';
 import { Brain, R0, RN, NNEU } from './brain.js';
 import { CPG, NCPG } from './cpg.js';
 import { Metab } from './metab.js';
@@ -13,6 +14,7 @@ import { Skin } from './skin.js';
 export const DEFAULT_FLAWS = { scramble: { on: false, period: 90, noise: 0.25 }, leaky: { on: false, rate: 0.06 }, backwards: { on: false }, misfire: { on: false, period: 60, sd: 0.3, jolts: 20 } };
 export const MOT_NAMES = ['forward', 'turn L', 'turn R', 'rear up', 'reach', 'grip', 'jump', 'curl'];
 export const GAIT = { sF: 2.2, sB: 0, gF: 1.8, gB: 0, eF: 1.0, eB: 0, eB2: 0, cS: 1.2, cO: 0, rS: 1.2, rO: 0, wv: 1, tauA: 0.35, gk: 5, cf: 1.3 };
+const PCMIX = globalThis.TW?.pcMix ?? 0.25;
 const NMN = CH.N * 2, NPHI = 16, NY = 25, NZ = 64 + 8;
 const PHI_NAMES = ['bearL', 'bearR', 'forage', 'obstacle', 'nearGoal', 'rockTouch', 'stuck', 'nocicept', 'upsideDown', 'springNear', 'bearSin', 'goalUp', 'dreamPrior', 'bias'];
 export class Creature {
@@ -30,7 +32,7 @@ export class Creature {
     // values and beliefs over the 16 sites (names follow the reference organism)
     this.wSite = new Float32Array(SITES).fill(0.25); this.bA = new Float64Array(SITES).fill(1); this.bB = new Float64Array(SITES).fill(1); this.wAv = new Float64Array(SITES); this.visits = new Float64Array(SITES); this.featC = new Float64Array(4).fill(0.15); this.featS = new Float64Array(4).fill(0.15);
     this.senPerm = [...Array(16).keys()]; this.goal = null; this.race = null; this.goalT = 0; this.lastDist = null; this.rBar = 0; this.da = 0; this.rpe = 0; this.nociception = 0; this.stuck = 0; this.progEMA = 0; this.recent = new Float64Array(SITES); this.selfV = 0.3; this.selfW = 0.25; this.goalBest = 1e9; this.goalBestT = 0;
-    this.Vimg = new Float64Array(8); this.episodes = []; this.novelty = new Float32Array(24 * 24); this.hdcVisit = new HDCMap(seed, 512, 0.45); this.hdcFood = new HDCMap(seed + 1, 512, 0.35); this.hop = new Hopfield(NZ, 256, 24); this.zMean = new Float64Array(NZ); this.familiar = 0; this.memStats = { stored: 0, retrievals: 0, dreamSim: 0, famMean: 0 }; this.stats = { eats: 0, rewards: 0, tries: 0, vetoes: 0, races: 0, dreams: 0, replays: 0, mirrored: 0, rewires: 0, misfires: 0, dist: 0, stings: 0, snacks: 0, urine: 0, feces: 0 };
+    this.Vimg = new Float64Array(8); this.episodes = []; this.novelty = new Float32Array(24 * 24); this.hdcVisit = new HDCMap(seed, 512, 0.45); this.hdcFood = new HDCMap(seed + 1, 512, 0.35); this.hop = new Hopfield(NZ, 256, 24); this.zMean = new Float64Array(NZ); this.familiar = 0; this.pc = new PredictiveCoding(seed, NY); this.memStats = { stored: 0, retrievals: 0, dreamSim: 0, famMean: 0 }; this.stats = { eats: 0, rewards: 0, tries: 0, vetoes: 0, races: 0, dreams: 0, replays: 0, mirrored: 0, rewires: 0, misfires: 0, dist: 0, stings: 0, snacks: 0, urine: 0, feces: 0 };
     this.events = []; this.motorHist = []; this.entropy = 0; this.lastCom = this.body.com(); this.growth = 0; this.raceLog = new Float64Array(SITES * 2); this.dreamLog = [];
     this.skin = new Skin(); this.speedEMA = 0;
   }
@@ -90,7 +92,7 @@ export class Creature {
     for (let i = 0; i < 8; i++) ext[R0.INS + i] = 0.6 + 1.2 * intero[i];
     for (let i = 0; i < 16; i++) ext[R0.HYP + i] = 0.5 + (i < 8 ? 1.2 * hunger : 0.8 * M.thirst + 0.6 * this.sleep.S);
     const ph = (2 * Math.PI * this.hour) / 24; for (let i = 0; i < 8; i++) ext[R0.SCN + i] = 0.7 + 0.6 * Math.max(0, Math.cos(ph - (i * 2 * Math.PI) / 8));
-    for (let i = 0; i < 6; i++) { ext[R0.VTA + i] = 0.9 + 3 * Math.max(0, this.rpe) - 1.5 * Math.max(0, -this.rpe); ext[R0.LC + i] = 0.8 + 2.5 * this.wm.surprise + 2 * clamp(this.nociception) + (awake ? 0.2 : -0.3); ext[R0.RAPHE + i] = 0.8 + 0.5 * clamp(1 - hunger) + (awake ? 0.2 : -0.2) * (this.sleep.stage === 4 ? -2 : 1); ext[R0.BF + i] = 0.8 + 0.6 * this.uncert() + (awake || this.sleep.stage === 4 ? 0.3 : -0.3); }
+    for (let i = 0; i < 6; i++) { ext[R0.VTA + i] = 0.9 + 3 * Math.max(0, this.rpe) - 1.5 * Math.max(0, -this.rpe); ext[R0.LC + i] = 0.8 + 2.5 * ((1 - PCMIX) * this.wm.surprise + PCMIX * this.pc.surprise) /* arousal from both world-model and predictive-coding surprise */ + 2 * clamp(this.nociception) + (awake ? 0.2 : -0.3); ext[R0.RAPHE + i] = 0.8 + 0.5 * clamp(1 - hunger) + (awake ? 0.2 : -0.2) * (this.sleep.stage === 4 ? -2 : 1); ext[R0.BF + i] = 0.8 + 0.6 * this.uncert() + (awake || this.sleep.stage === 4 ? 0.3 : -0.3); }
     const ens = clamp((M.gut.glc + M.gut.fat + M.gut.prot) / 6); for (let i = 0; i < 48; i++) ext[R0.ENS + i] = 0.6 + 0.8 * ens + 0.4 * M.para;
     for (let i = 0; i < RN.STR; i++) ext[R0.STR + i] = 0.4; for (let i = 0; i < RN.CTX; i++) ext[R0.CTX + i] = 0.55 + 0.3 * nm.ACh; for (let i = 0; i < RN.THAL; i++) ext[R0.THAL + i] = awake ? 0.5 : this.sleep.stage === 4 ? 0.45 : 0.2; for (let i = 0; i < RN.HIP; i++) ext[R0.HIP + i] = 0.5; if (this.familiar > 0 && this.hop.lastIdx >= 0) for (let j = 0; j < 8; j++) ext[R0.HIP + ((this.hop.lastIdx * 7 + j * 5) % RN.HIP)] += 1.4 * this.familiar; /* Hopfield recognition re-activates that memory's index assembly */
     if (this.race) this.raceDrive(ext);
@@ -148,7 +150,7 @@ export class Creature {
     const u = new Float64Array(NY + 8); u.set(this.y); for (let m = 0; m < 8; m++) u[NY + m] = this.mAvg[m]; this.ssm.step(u);
     const z = this.z; this.ssm.features(z); for (let m = 0; m < 8; m++) z[64 + m] = this.mAvg[m];
     if (this.frame > 12) { this.wm.learn(this.zPrev, this.y, 0.05 * (0.5 + this.brain.nm.ACh)); } this.zPrev.set(z);
-    for (let i = 0; i < NZ; i++) this.zMean[i] += 0.01 * (z[i] - this.zMean[i]);
+    for (let i = 0; i < NZ; i++) this.zMean[i] += 0.01 * (z[i] - this.zMean[i]); this.pc.lesionLearn = !!this.lesion.pc; this.pc.step(this.y, 0.6 + 0.8 * this.brain.nm.ACh);
     if (this.frame % 60 === 0 && this.sleep.stage === 0 && !this.lesion.hopfield) { const c = Float64Array.from(z, (v, i) => v - this.zMean[i]); const R = this.hop.retrieve(c); this.familiar = R ? clamp((R.sim - 0.4) / 0.5) : 0; this.memStats.famMean += 0.02 * (this.familiar - this.memStats.famMean); this.memStats.retrievals++;
       this.hop.store(c, { ep: this.episodes[this.episodes.length - 1], t: this.t }, this.r); this.memStats.stored++; }
     if (this.sleep.stage === 0 && this.episodes.length < 400 ? true : this.frame % 60 === 0) { const ctx = []; for (let i = 0; i < RN.CTX; i++) if (this.brain.rate[R0.CTX + i] > 15) ctx.push(i); const ep = { z: Float64Array.from(z), y: Float64Array.from(this.y), ssm: [Float64Array.from(this.ssm.re), Float64Array.from(this.ssm.im)], ctx, vf: this.vf };

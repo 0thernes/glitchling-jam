@@ -37,3 +37,21 @@ export class Sleep {
     if (!this.asleep) this.stage = 0; else { const u = this.ultra; this.stage = u < 0.1 ? 1 : u < 0.3 ? 2 : u < 0.75 - 0.25 * clamp(0.6 - this.S) ? (this.S > 0.35 ? 3 : 2) : 4; }
     this.drive = drive; return this.stage; }
 }
+/** Two-level predictive-coding hierarchy (Rao & Ballard 1999; Whittington & Bogacz 2017 learning rule).
+ *  Level-1 causes r1 (16) predict the 25-dim body-sense vector y (proprioceptive curvature, vestibular, foot contacts, goal
+ *  bearing) through W1; level-2 causes r2 (8) predict r1 through W2. Each 10 Hz tick runs K inference iterations that descend the
+ *  precision-weighted prediction-error energy, then updates W1, W2 with local Hebbian error x activity products. Causes persist
+ *  between ticks, so the previous state is the prior. Sensory precision is set by acetylcholine (as proposed for ACh). */
+export class PredictiveCoding {
+  constructor(seed, nY, n1 = 16, n2 = 8) { const r = mulberry(seed * 313 + 5); this.nY = nY; this.n1 = n1; this.n2 = n2; this.r1 = new Float64Array(n1); this.r2 = new Float64Array(n2);
+    this.W1 = Float64Array.from({ length: nY * n1 }, () => (r() - 0.5) * 0.2); this.W2 = Float64Array.from({ length: n1 * n2 }, () => (r() - 0.5) * 0.2); this.e0 = new Float64Array(nY); this.e1 = new Float64Array(n1);
+    this.err = 1; this.errSlow = 1; this.surprise = 0; this.lesionLearn = false; this.n = 0; }
+  step(y, prec = 1, K = 12, eta = 0.12, lr = 0.01) { const { nY, n1, n2, W1, W2, r1, r2, e0, e1 } = this; const f1 = new Float64Array(n1), f2 = new Float64Array(n2);
+    for (let k = 0; k < K; k++) { for (let i = 0; i < n1; i++) f1[i] = Math.tanh(r1[i]); for (let i = 0; i < n2; i++) f2[i] = Math.tanh(r2[i]);
+      for (let o = 0; o < nY; o++) { let p = 0; for (let i = 0; i < n1; i++) p += W1[o * n1 + i] * f1[i]; e0[o] = prec * (y[o] - p); }
+      for (let i = 0; i < n1; i++) { let p = 0; for (let j = 0; j < n2; j++) p += W2[i * n2 + j] * f2[j]; e1[i] = r1[i] - p; }
+      for (let i = 0; i < n1; i++) { let g = 0; for (let o = 0; o < nY; o++) g += W1[o * n1 + i] * e0[o]; r1[i] += eta * (g * (1 - f1[i] * f1[i]) - e1[i]); }
+      for (let j = 0; j < n2; j++) { let g = 0; for (let i = 0; i < n1; i++) g += W2[i * n2 + j] * e1[i]; r2[j] += eta * (g * (1 - f2[j] * f2[j]) - 0.05 * r2[j]); } }
+    if (!this.lesionLearn) { for (let o = 0; o < nY; o++) for (let i = 0; i < n1; i++) W1[o * n1 + i] += lr * e0[o] * Math.tanh(r1[i]); for (let i = 0; i < n1; i++) for (let j = 0; j < n2; j++) W2[i * n2 + j] += lr * e1[i] * Math.tanh(r2[j]); }
+    let se = 0; for (let o = 0; o < nY; o++) se += (e0[o] / prec) ** 2; se /= nY; this.err = se; this.errSlow += 0.01 * (se - this.errSlow); this.surprise = clamp(se / (this.errSlow + 1e-6) / 3); this.n++; return se; }
+}

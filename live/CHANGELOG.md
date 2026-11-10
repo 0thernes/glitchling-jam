@@ -130,3 +130,37 @@ Measured (`test/memory_probe.mjs`):
 - **Headless Chromium** (SwiftShader): phone 21.9 fps, desktop 13.2 fps, no console errors.
   - Motion over 600 steps: intact 10.1 / 9.0; MN lesioned 0.1 / 1.3; MOT lesioned 4.7 / 6.6.
 - Screenshots: `live-shots/s3-*.png`.
+
+## Pass 4: predictive-coding hierarchy
+
+- **Two-level predictive-coding network** (`PredictiveCoding` in `js/sim/mind.js`), after Rao & Ballard. The learning
+  rule follows Whittington & Bogacz.
+  - 16 level-1 causes predict the 25-dim body-sense vector: spine curvature, vestibular, foot contacts, goal bearing.
+  - 8 level-2 causes predict the level-1 causes.
+  - Each 10 Hz tick runs 12 inference iterations down the precision-weighted error energy, then local Hebbian
+    error × activity weight updates.
+  - Causes persist between ticks and act as the prior.
+  - Sensory precision is 0.6 + 0.8·ACh.
+- **Outputs:**
+  - The normalised error is a second surprise signal for the locus coeruleus, mixed with the world-model surprise
+    (weight 0.25).
+  - It also flushes the chromatophore skin, a startle pattern.
+- **UI:**
+  - The brain panel shows PC error and surprise.
+  - New lesion: PC learning off.
+
+Measured:
+- **`test/pc_probe.mjs`:** mean squared body-sense prediction error, first 30 s → last 30 s of 180 s, seeds 1–4.
+  - Learning on: 0.064→0.017, 0.042→0.015, 0.045→0.019, 0.059→0.021, roughly a 65–75% drop.
+  - Learning off: 0.095→0.087, 0.097→0.092, 0.091→0.093, 0.086→0.101.
+- **Poke response:** error in the 1 s after a poke ÷ the 1 s before = 0.91, 1.15, 1.14, 1.32. That is a weak signal;
+  pokes are small next to the body's own motion.
+- **Effect of feeding PC surprise into noradrenaline** on foraging (`forage_bench`, 240 s, seeds 1–8; feeds / arrivals):
+  - mix 0: 11 / 29
+  - mix 0.25: 9 / 18
+  - mix 0.5: 4 / 29
+  - More arousal seems to hurt foraging, but seed-to-seed variance is large. The shipped value is 0.25.
+- **`measure` intact:** dist 65.2, fed 1.33, entropy 6.24, upright 0.67. All MN lesioned: dist 6.1, entropy 0.15.
+- **Headless Chromium:** phone 20.7 fps, desktop 12.9 fps, no console errors.
+  - Motion over 600 steps: intact 9.7 / 8.9; MN lesioned 0.1 / 1.1; MOT lesioned 6.4 / 5.0.
+- Screenshots: `live-shots/s4-*.png`.
