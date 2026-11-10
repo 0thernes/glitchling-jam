@@ -217,3 +217,22 @@ Measured (`test/growth_probe.mjs`, seed 1, 8 simulated minutes):
 - **Headless Chromium:** phone 20.0 fps, desktop 11.6 fps, no console errors.
   - Motion: intact 8.4 / 8.4; MN lesioned 0.8 / 1.0; MOT lesioned 4.8 / 4.6.
 - Screenshots: `live-shots/s6-*.png`.
+
+## Pass 7: skin optics
+
+- **Iridophores now use physical thin-film interference.** Two-beam reflectance per RGB wavelength (650/532/450 nm)
+  from guanine platelets (n = 1.83 in cytoplasm, n = 1.33), with Snell refraction for the view angle. Platelet thickness
+  (120–380 nm) is set by the neural skin channel. This replaces the earlier hue-wheel rainbow.
+- **Schlick Fresnel term, plus a wet-skin GGX specular lobe** (roughness 0.28) lit by the actual sun direction.
+- **Back-lit translucency** through the thin body wall.
+- **Capillary network.** Ridged noise brightens on each heartbeat (beat phase from the metabolism's heart rate) and
+  scales with perfusion (blood glucose and heart rate).
+- Measured, headless Chromium (SwiftShader, CPU; auto quality "low", so bloom is off in these shots): phone 21.0 fps,
+  desktop 11.6 fps, no console or shader-compile errors.
+  - Motion: intact 8.3 / 8.4; MN lesioned 0.5 / 0.9; MOT lesioned 4.9 / 4.6.
+  - Simulation unchanged.
+- Screenshots: `live-shots/s7-*.png`. These are WebGL renders at the device's pixel ratio (max 2×); they are not HDR
+  output.
+- **Tried and dropped:** a climbing probe (`test/climb_probe.mjs`: rock placed on the path to a fixed goal, 40 s,
+  6 seeds). The creature never got 3+ particles onto the rock, intact or with MOT lesioned, so climbing is not yet a real
+  behaviour. It stays on the to-do list.

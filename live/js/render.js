@@ -64,23 +64,33 @@ export class View {
     for (let s = 0; s < RING_S; s++) for (let m = 0; m <= RING_M; m++) { const i = s * (RING_M + 1) + m; uv[2 * i] = s / (RING_S - 1); uv[2 * i + 1] = m / RING_M; if (s < RING_S - 1 && m < RING_M) { const a = i, b = i + RING_M + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); } }
     const g = (this.skinGeo = new THREE.BufferGeometry()); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(idx);
     this.chromaTex = new THREE.DataTexture(this.cr.skin.rgba, SW, SH, THREE.RGBAFormat); this.chromaTex.wrapS = THREE.RepeatWrapping; this.chromaTex.wrapT = THREE.RepeatWrapping; this.chromaTex.magFilter = THREE.LinearFilter; this.chromaTex.needsUpdate = true;
-    this.skinU = { chroma: { value: this.chromaTex }, t: { value: 0 }, ne: { value: 0.3 }, da: { value: 0.3 }, sleep: { value: 0 }, glitch: { value: 0 } };
+    this.skinU = { chroma: { value: this.chromaTex }, t: { value: 0 }, ne: { value: 0.3 }, da: { value: 0.3 }, sleep: { value: 0 }, glitch: { value: 0 }, sunDir: { value: new THREE.Vector3(0.4, 0.8, 0.3) }, sunI: { value: 1 }, beat: { value: 0 }, perf: { value: 0.5 } };
     this.skinMat = new THREE.ShaderMaterial({ uniforms: this.skinU, transparent: true, depthWrite: false, side: THREE.DoubleSide,
       vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix*vec4(position,1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix)*normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix*viewMatrix*w; }`,
-      fragmentShader: `uniform sampler2D chroma; uniform float t, ne, da, sleep, glitch; varying vec2 vUv; varying vec3 vN, vV, vW;
+      fragmentShader: `uniform sampler2D chroma; uniform float t, ne, da, sleep, glitch, sunI, beat, perf; uniform vec3 sunDir; varying vec2 vUv; varying vec3 vN, vV, vW;
         vec3 hue(float h){ return clamp(abs(mod(h*6.0+vec3(0.,4.,2.),6.)-3.)-1.,0.,1.); }
-        void main(){ vec2 uv = vec2(vUv.x, vUv.y); vec4 c = texture2D(chroma, uv); vec3 N = normalize(vN); if(!gl_FrontFacing) N = -N; float nv = clamp(dot(N, normalize(vV)), 0.0, 1.0);
-          // chromatophores: small dark/red/yellow sacs whose expansion = c.r (from the neural excitable sheet)
+        float hsh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453); }
+        float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(hsh(i), hsh(i+vec2(1,0)), f.x), mix(hsh(i+vec2(0,1)), hsh(i+vec2(1,1)), f.x), f.y); }
+        // thin-film interference of guanine-crystal platelets (n = 1.83 in cytoplasm n = 1.33): two-beam reflectance per wavelength,
+        // R(lambda) ~ 0.5 - 0.5 cos(4 pi n d cos(theta_t) / lambda + pi). Platelet thickness d (nm) is set by the neural skin channel.
+        vec3 thinFilm(float d, float cosI){ float n = 1.83; float sinT = sqrt(max(0.0, 1.0 - cosI*cosI)) * 1.33 / n; float cosT = sqrt(max(0.0, 1.0 - sinT*sinT)); float opd = 2.0*n*d*cosT; vec3 lam = vec3(650.0, 532.0, 450.0); return 0.5 - 0.5*cos(6.2831853*opd/lam + 3.14159265); }
+        void main(){ vec2 uv = vec2(vUv.x, vUv.y); vec4 c = texture2D(chroma, uv); vec3 N = normalize(vN); if(!gl_FrontFacing) N = -N; vec3 V = normalize(vV); float nv = clamp(dot(N, V), 0.0, 1.0); vec3 L = normalize(sunDir);
+          // chromatophores: small dark/red/yellow sacs whose expansion = c.r (from the neural excitable sheet + Turing layer)
           vec2 g = fract(uv*vec2(160.0, 70.0)) - 0.5; float sac = smoothstep(0.18 + 0.32*c.r, 0.05, length(g));
           vec3 pigment = mix(vec3(0.95,0.75,0.2), vec3(0.6,0.05,0.12), c.r) * sac;
-          // iridophores: thin-film interference, thickness modulated by c.g (neural) and view angle
-          float thick = 0.35 + 0.65*c.g + 0.25*sin(vW.y*3.0 + t*0.4); vec3 irid = hue(fract(thick*2.2 + (1.0-nv)*1.3 + 0.1*sin(t)));
+          float d = 120.0 + 260.0*c.g + 30.0*sin(vW.y*3.0 + t*0.4); vec3 irid = thinFilm(d, nv);
           vec3 leuco = vec3(0.6,0.75,1.0) * c.b;
-          float fres = pow(1.0 - nv, 3.0);
+          float fres = 0.04 + 0.96*pow(1.0 - nv, 5.0);
+          // capillaries: a vein network (ridged noise) that brightens on each heartbeat and with blood perfusion
+          float vein = 1.0 - abs(vn(uv*vec2(38.0, 16.0))*2.0 - 1.0); vein = smoothstep(0.86, 0.98, vein) * (0.25 + 0.75*beat) * perf;
+          // wet-skin GGX specular (roughness 0.28) and back-lit translucency through the thin body wall
+          vec3 H = normalize(L + V); float nh = max(dot(N, H), 0.0); float a2 = 0.28*0.28*0.28*0.28; float D = a2 / (3.14159*pow(nh*nh*(a2-1.0)+1.0, 2.0)); float spec = D * fres * 0.25 * sunI;
+          float trans = pow(clamp(dot(V, -L + N*0.35), 0.0, 1.0), 3.0) * sunI;
           float band = 0.75 + 0.25*smoothstep(0.35, 0.5, abs(fract(uv.x*7.0) - 0.5));
-          vec3 col = (pigment*0.9 + irid*(0.12 + 0.55*fres) + leuco*0.22 + vec3(1.0,0.2,0.9)*fres*0.8*(0.5+ne) + hue(fract(uv.x*1.5 - t*0.05))*c.a*0.45) * band;
+          vec3 col = (pigment*0.9 + irid*(0.18 + 0.7*fres) + leuco*0.22 + vec3(1.0,0.2,0.9)*fres*0.5*(0.5+ne) + hue(fract(uv.x*1.5 - t*0.05))*c.a*0.35) * band;
+          col += vec3(0.9, 0.08, 0.15)*vein*0.6 + vec3(1.0, 0.45, 0.6)*trans*0.35 + vec3(spec);
           col *= 1.0 - 0.55*sleep; col += vec3(1.0,0.1,0.1)*glitch*step(0.5, fract(uv.x*20.0 + t*9.0));
-          float alpha = clamp(0.28 + 0.5*fres + 0.3*sac*c.r, 0.0, 0.9); gl_FragColor = vec4(col, alpha); }` });
+          float alpha = clamp(0.28 + 0.5*fres + 0.3*sac*c.r + 0.25*vein + min(spec, 0.4), 0.0, 0.92); gl_FragColor = vec4(col, alpha); }` });
     this.skin = new THREE.Mesh(g, this.skinMat); this.skin.renderOrder = 10; this.skin.frustumCulled = false; this.cg.add(this.skin);
     // insides
     const glow = (c, i = 2) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: i, roughness: 0.4, transparent: true, opacity: 0.9 });
@@ -135,7 +145,7 @@ export class View {
     const stg = cr.sleep.stage; this.skinU.t.value = t; this.skinU.ne.value = nm.NE; this.skinU.da.value = nm.DA; this.skinU.sleep.value = stg >= 2 ? 1 : stg === 1 ? 0.4 : 0; this.skinU.glitch.value = Math.max(0, (this.skinU.glitch.value || 0) * 0.92);
     // organs: placed in the body frame of their segment; sizes and colours come from metabolic state
     const M = cr.metab; const at = (seg, du, ds, df, obj, sc) => { const c = B.c[seg], fr = F[seg]; obj.position.set(X[c] + fr.u[0] * du + fr.s[0] * ds + fr.f[0] * df, Y[c] + fr.u[1] * du + fr.s[1] * ds + fr.f[1] * df, Z[c] + fr.u[2] * du + fr.s[2] * ds + fr.f[2] * df); obj.scale.setScalar(sc); };
-    this.heartPh += dtReal * (M.hr / 60) * (cr.speed || 1); const beat = Math.pow(Math.max(0, Math.sin(this.heartPh * Math.PI * 2)), 6); at(4, 0.05, 0, 0, this.heart, 1 + 0.45 * beat); this.heart.material.emissiveIntensity = 1.5 + 4 * beat;
+    this.heartPh += dtReal * (M.hr / 60) * (cr.speed || 1); const beat = Math.pow(Math.max(0, Math.sin(this.heartPh * Math.PI * 2)), 6); this.skinU.beat.value = beat; this.skinU.perf.value = Math.min(1, 0.3 + M.blood.glc / 6 + (M.hr - 60) / 120); this.skinU.sunDir.value.copy(this.sun.position).sub(this.sun.target.position).normalize(); this.skinU.sunI.value = this.sun.intensity / 2.6; at(4, 0.05, 0, 0, this.heart, 1 + 0.45 * beat); this.heart.material.emissiveIntensity = 1.5 + 4 * beat;
     at(3, -0.02, 0.06, 0, this.liver, 0.7 + M.liverGly / 40); this.liver.material.emissive.setHSL(0.75 - 0.25 * Math.min(1, M.liverGly / 40), 0.9, 0.45);
     at(1, -0.06, 0, -0.05, this.bladder, 0.6 + 1.6 * M.bladder); at(0, 0, 0, 0.1, this.colonM, 0.5 + 1.2 * M.colon); at(2, 0.06, -0.05, 0, this.fatM, 0.6 + M.fat / 400);
     const gutFill = M.gut.glc + M.gut.fat + M.gut.prot; const ensR = cr.brain.rate; this.gutBalls.forEach((g, i) => { const f = 1 + (i / 9) * 3.6; const seg = Math.floor(f), tt2 = f - seg; const ens = ensR[R0.ENS + i * 4] / 40; const sc = 0.5 + 0.35 * Math.min(2, gutFill / 3) + 0.5 * ens; at(seg, -0.05 + 0.03 * Math.sin(i + t * 2 * M.motility), 0, tt2 * 0.4, g, sc); g.material.emissiveIntensity = 0.6 + 2.5 * ens; });
