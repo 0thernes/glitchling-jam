@@ -361,3 +361,54 @@ Measured (`test/memory2_probe.mjs`):
 - Screenshots: `live-shots/s11-*.png`.
 - **Inactive code.** `body.js` now also contains an optional Coulomb contact model (off; only enabled by test overrides)
   used in the turning work below.
+
+## Pass 12 — evolved motor genome, head direction, path integration, motor babbling
+
+Fix 2 of Alex's review ("turning is weak, distant sites are never reached").
+
+- **Developmental genome** (`js/sim/genome.js`). 44 motor genes grow the wiring instead of hand-placed synapses:
+  per-segment gradients for CPG→long-muscle weights, ascending/descending CPG coupling, leg/arm stance-swing-grip
+  weights, mirrored left/right turn wiring for MOT1/MOT2, and righting weights. 17 steering genes grow the sense→MOT
+  matrix.
+- **CMA-ES offline** (`test/evolve_genome.mjs`, own implementation, worker threads, training bodies 1–3, brain M):
+  - Fitness (`test/genome_eval.mjs`): forced trials of forward / turn-left / turn-right / flipped.
+    `2·v_fwd − sideways + 0.25·min(4, yawL+yawR) + 0.7·min(1.8, yawL, yawR) + 0.6·min(upright, 0.92)
+    − max(0, 0.85 − upright) − 0.3·yaw_during_forward − 0.04·righting_time`.
+  - Run 1: 43 generations × 16, started at the centre of the gene bounds (not the hand design). Its fitness counted
+    displacement in any direction, which bred sideways gaits; kept only as the warm start.
+  - Run 2: 30 generations × 16 with travel measured along the heading. Shipped genome = run 2 best (generation 4).
+- **Head-direction ring attractor** (`js/sim/nav.js`): 36 units, cosine recurrent kernel with global inhibition,
+  shifted by the vestibular turn rate through a self-calibrated sine kernel; a Hebbian sun-compass map anchors it;
+  the vestibular gain is learned by LMS against the visual rotation.
+- **Path integration and grid cells:** body-frame velocity (8% noise) rotated by the ring's heading; three grid
+  modules (3, 5.2, 9 units) read the estimate out; a plant or pool seen within 5 units in front resets it.
+- **Vector navigation:** a goal more than 9 units away is no longer sensed directly; the bearing comes from the
+  estimated position and the remembered site.
+- **Motor babbling:** random 0.75-s synergy blocks for the first 12 s; the yaw per unit turn command is regressed and
+  the bearing→turn weights are scaled so the loop gain matches the reference body. Lesionable ("babble").
+- New lesions: path integration (nav), babbling, course-over-ground steering (kept in code, gene kCourse = 0: it
+  lowered arrivals from 4/8 to 1/7 near in a test).
+
+Measured (brain S, the shipped default):
+
+| | pass 10/11 (hand wiring) | pass 12 |
+|---|---|---|
+| forced turn, full command (`scale_probe`, rad/s L / R) | 0.34 (pass 9) | 2.31 / 2.46 |
+| forced turns, held-out bodies 4–8, upright (`genome_eval`) | 0.36 | 0.84 |
+| near site (4–8 u) reached in 60 s (`nav_probe`, seeds 1–8) | 2/7 | 6/8 |
+| far site (14+ u) reached in 60 s | 0/8 | 2/8 (path integration lesioned: 0/8, near 5/8) |
+| upright during navigation | 0.57 | 0.67 |
+| `forage_bench` 240 s seeds 1–8, fed / arrivals | 6 / 16 | 15 / 26 |
+| thirst probe 300 s seeds 1–4, seeds that drank | 0/4 (pass 9), 1/4 (pass 8) | 1/4 |
+| `measure` intact dist / entropy / upright | 59–65 / 6.2–6.4 / 0.67–0.71 | 68.1 / 4.13 / 0.61 |
+
+- Heading error of the ring was 0.01–0.05 rad and position error 0–0.8 u in a 60-s far trial (seed 1).
+- **Not met:** far arrival is still well below near arrival; upright during navigation is 0.67, not > 0.85; thirst
+  found water on 1/4 seeds. An ideal controller given the true bearing (test-only override of the MOT rates) reached
+  only 2–3/8 far sites with the same gait, so the bottleneck is now the gait on rough ground, not heading or steering.
+- A 14-generation CMA-ES run over the steering genes on navigation fitness (`test/evolve_steer.mjs`, brain S) never beat
+  its generation-1 best and was stopped; the steering genes stay hand-set.
+- Behaviour entropy fell (6.2 → 4.1 bits): the evolved gait spends more time in a few motor patterns.
+- **Headless Chromium:** no console errors; phone 24.0 fps (sim 3.5 ms), desktop 11.6 fps (sim 8.4 ms; software-rendered WebGL,
+  render-bound). Screenshots: `live-shots/s12-*.png`.
+

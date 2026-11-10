@@ -5,6 +5,9 @@ import { mulberry, clamp, gauss, betaIG, IG0, sig } from './util.js';
 import { World, SITES } from './world.js';
 import { Body, CH, NS } from './body.js';
 import { HDCMap, Hopfield } from './memory.js';
+import { develop, developSteer } from './genome.js';
+import { Nav, VIEW } from './nav.js';
+import { STARTER, STARTER_INFO } from './starter_genome.js';
 import { PredictiveCoding } from './mind.js';
 import { Brain, R0, RN, NNEU } from './brain.js';
 import { CPG, NCPG } from './cpg.js';
@@ -15,12 +18,13 @@ export const DEFAULT_FLAWS = { scramble: { on: false, period: 90, noise: 0.25 },
 export const MOT_NAMES = ['forward', 'turn L', 'turn R', 'rear up', 'reach', 'grip', 'jump', 'curl'];
 export const GAIT = { sF: 2.2, sB: 0, gF: 1.8, gB: 0, eF: 1.0, eB: 0, eB2: 0, cS: 1.2, cO: 0, rS: 1.2, rO: 0, wv: 1, tauA: 0.35, gk: 5, cf: 1.3 };
 const PCMIX = globalThis.TW?.pcMix ?? 0.25;
+const SUN_AZ = 0.8; /* fixed world azimuth of the sun (the compass cue) */
 const NMN = CH.N * 2, NPHI = 16, NY = 25, NZ = 64 + 8;
 const PHI_NAMES = ['bearL', 'bearR', 'forage', 'obstacle', 'nearGoal', 'rockTouch', 'stuck', 'nocicept', 'upsideDown', 'springNear', 'bearSin', 'goalUp', 'dreamPrior', 'bias'];
 export class Creature {
   constructor(seed = 1, opts = {}) {
     this.seed = seed; const r = (this.r = mulberry(seed)); this.gr = mulberry(seed * 9973 + 7); this.flaws = JSON.parse(JSON.stringify(opts.flaws || DEFAULT_FLAWS));
-    this.world = new World(seed); this.body = new Body(this.world, 0, 0, r() * Math.PI * 2); this.brain = new Brain(seed); this.G = { ...GAIT, ...(globalThis.TW?.gait || {}) }; this.cpg = new CPG(seed, this.G); this.liftK = globalThis.TW?.lift ?? 0.5; if (globalThis.TW?.coulomb) this.body.coulomb = globalThis.TW.coulomb; this.metab = new Metab(); this.sleep = new Sleep();
+    this.world = new World(seed); this.body = new Body(this.world, 0, 0, r() * Math.PI * 2); this.brain = new Brain(seed); this.gen = { ...STARTER, ...(globalThis.TW?.genome || {}) }; const gn = this.gen; this.G = { ...GAIT, cS: gn.cS, cO: gn.cO, rS: gn.rS, rO: gn.rO, tauA: gn.tauA, cf: gn.cf, wvAsc: gn.wvAsc, wvDesc: gn.wvDesc, ...(globalThis.TW?.gait || {}) }; this.cpg = new CPG(seed, this.G); this.liftK = globalThis.TW?.lift ?? gn.lift; if (globalThis.TW?.coulomb) this.body.coulomb = globalThis.TW.coulomb; this.metab = new Metab(); this.sleep = new Sleep(); { const F3 = this.body.F[3], c0 = this.body.com(); this.prevHdg = Math.atan2(F3.f[2], F3.f[0]); this.nav = new Nav(seed, this.prevHdg); this.nav.px = c0[0]; this.nav.pz = c0[2]; this.navErr = { hd: 0, pos: 0 }; }
     this.ssm = new SelectiveSSM(NY + 8, 32, seed); this.wm = new WorldModel(NZ, NY); this.z = new Float64Array(NZ); this.y = new Float64Array(NY); this.yPrev = new Float64Array(NY); this.zPrev = new Float64Array(NZ);
     this.lesion = { mot: false, cpg: false, mn: false, stdp: false, wm: false, astro: false, learnMotor: false, efe: false, veto: false, dream: false };
     this.t = 0; this.frame = 0; this.tick = 0; this.hour = 8; this.dayLen = 1440;
@@ -40,25 +44,15 @@ export class Creature {
   mn(ch, ant) { return ch * 2 + (ant ? 1 : 0); }
   initMotorWiring() { const r = mulberry(this.seed * 211 + 9), C = NCPG; const wc = (ch, ant, k, v) => { this.Wc[this.mn(ch, ant) * C + k] += v; }, wm = (ch, ant, m, v) => { this.Wm[this.mn(ch, ant) * 8 + m] += v; }, wp = (ch, ant, p, v) => { this.Wp[this.mn(ch, ant) * NPHI + p] += v; };
     for (let i = 0; i < this.Wc.length; i++) this.Wc[i] = (r() - 0.5) * 0.3; for (let i = 0; i < this.Wm.length; i++) this.Wm[i] = (r() - 0.5) * 0.15; for (let i = 0; i < this.Wp.length; i++) this.Wp[i] = (r() - 0.5) * 0.1;
-    for (let s = 0; s < 6; s++) { const L = 2 * s, R = L + 1, lch = CH.long + s * 4 + 1, rch = CH.long + s * 4 + 3; const WV = { ...GAIT, ...(globalThis.TW?.gait || {}) }.wv; wc(lch, 0, L, 2.2 * WV); wc(rch, 1, L, 1.2 * WV); wc(rch, 0, R, 2.2 * WV); wc(lch, 1, R, 1.2 * WV);
-      wc(CH.long + s * 4, 0, L, (r() - 0.5) * 0.8); wc(CH.long + s * 4 + 2, 0, R, (r() - 0.5) * 0.8); wc(CH.radial + s, 0, L, 0.4); wc(CH.radial + s + 1, 1, R, 0.4); }
-    const G = { ...GAIT, ...(globalThis.TW?.gait || {}) }; // leg-gait genome (trained offline by test/evolve_gait.mjs; see CHANGELOG pass 2)
-    for (let l = 0; l < 4; l++) { const F = 12 + 2 * l, B = F + 1, sw = CH.leg + l * 2; wc(sw, 0, F, G.sF); wc(sw, 1, B, G.sF); wc(sw, 0, B, G.sB); wc(sw, 1, F, G.sB); wc(CH.legGrip + l, 1, F, G.gF); wc(CH.legGrip + l, 0, B, G.gF); wc(CH.legGrip + l, 0, F, G.gB); wc(CH.legGrip + l, 1, B, G.gB); wc(sw + 1, 0, F, G.eF); wc(sw + 1, 0, B, G.eB); wc(sw + 1, 1, F, G.eB2); }
-    for (let a = 0; a < 2; a++) { const F = 20 + 2 * a, B = F + 1, sw = CH.arm + a * 3; wc(sw, 0, F, 1.8); wc(sw, 1, B, 1.8); wc(sw + 2, 0, F, 1.2); wc(sw + 2, 1, B, 0.6); wc(CH.armGrip + a, 0, B, 1.5); }
-    const TK = globalThis.TW?.turnK ?? 1; for (const s of (globalThis.TW?.turnSegs ?? [2, 3, 4, 5])) { /* contracting the left longitudinal muscles bends/yaws the body left (measured in test/gait_probe.mjs) */ wm(CH.long + s * 4 + 1, 0, 1, 2.4 * TK); wm(CH.long + s * 4 + 3, 1, 1, 1.6 * TK); wm(CH.long + s * 4 + 3, 0, 2, 2.4 * TK); wm(CH.long + s * 4 + 1, 1, 2, 1.6 * TK); wm(CH.long + s * 4, 0, 3, 1.6); }
+    develop(this.gen, CH, wc, wm, wp); /* innate locomotion / turning / righting wiring grown from the genome (genome.js) */
+    for (let s = 0; s < 6; s++) wm(CH.long + s * 4, 0, 3, 1.6); /* hand-set: pitch synergy */
     for (let s = 0; s < 6; s++) { wm(CH.long + s * 4 + 2, 0, 7, 1.6); wm(CH.radial + s, 1, 7, 0.8); } wm(CH.radial + 6, 0, 6, 1.5);
     for (let a = 0; a < 2; a++) { wm(CH.arm + a * 3, 0, 4, 1.5); wm(CH.arm + a * 3 + 1, 0, 4, 1.2); wm(CH.arm + a * 3 + 2, 0, 3, 1.4); wm(CH.armGrip + a, 0, 5, 1.6); }
     for (let l = 0; l < 4; l++) { wm(CH.legGrip + l, 0, 5, 1.4); wm(CH.leg + l * 2 + 1, 0, 6, 2.4); } for (let i = 0; i < 7; i++) wm(CH.radial + i, 0, 6, 1.4);
     for (let s = 0; s < 2; s++) { wm(CH.stalk + s * 2, 0, 1, 0.8); wm(CH.stalk + s * 2, 1, 2, 0.8); }
-    { const kr = globalThis.TW?.radTurn ?? 1.5; for (const sg of [3, 4, 5, 6]) { wm(CH.radial + sg, 0, 1, kr); wm(CH.radial + sg, 0, 2, kr); } } // turning: front radial muscles contract (lifts scales)
-    { const kg = globalThis.TW?.gripTurn ?? 0; for (let l = 0; l < 4; l++) { const left = !(l & 1); /* inner-side feet loosen their grip, outer-side feet grip harder */ wm(CH.legGrip + l, left ? 1 : 0, 1, kg); wm(CH.legGrip + l, left ? 0 : 1, 2, kg); } }
     for (let e = 0; e < 3; e++) { wp(CH.gaze + e * 2, 0, 10, 1.6); wp(CH.gaze + e * 2, 1, 10, -1.6); wp(CH.gaze + e * 2 + 1, 0, 11, 1.2); wp(CH.gaze + e * 2 + 1, 1, 11, -1.2); }
-    // vestibulospinal righting reflex (innate, plastic): when lying on a side, extend the legs/arms on the DOWN side and contract the
-    // ventral longitudinal muscles. Pattern found by test/roll_probe.mjs (rights the body from either side in 4/4 trials).
-    for (const [p, down] of [[14, 1], [15, 3]]) { for (let l = 0; l < 4; l++) if ((l & 1 ? 3 : 1) === down) wp(CH.leg + l * 2 + 1, 0, p, 1.8); for (let a = 0; a < 2; a++) if ((a ? 3 : 1) === down) wp(CH.arm + a * 3 + 1, 0, p, 1.4); for (let sg = 0; sg < 6; sg++) wp(CH.long + sg * 4 + 2, 0, p, 1.2); }
     const M = (m, p, v) => { this.Wmot[m * NPHI + p] = v; }; // innate sense -> MOT drive (learning reweights these)
-    M(0, 2, 2.2); M(0, 6, -0.4); if (globalThis.TW?.slowTurn) { M(0, 0, -globalThis.TW.slowTurn); M(0, 1, -globalThis.TW.slowTurn); } M(1, 0, 1.8); M(2, 1, 1.8); M(3, 3, 1.5); M(3, 5, 0.6); M(4, 4, 1.8); M(5, 5, 1.4); M(5, 3, 0.5); M(6, 6, 0.7); M(6, 9, 1.0); M(7, 7, 1.6); M(7, 8, 1.6); M(0, 12, 0.5);
-    for (let m = 0; m < 8; m++) M(m, 13, 0.55); }
+    developSteer(this.gen, M); }
   /** per limb: rate of change of the swing muscle's stretch (muscle-spindle velocity signal), low-passed */
   updateSwingVel() { const B = this.body; if (!this.gripOf) { this.gripOf = new Int8Array(CH.N).fill(-1); B.limbs.forEach((L, k) => { this.gripOf[L.grip] = k; }); this.swingVel = new Float64Array(B.limbs.length); this.swingPrev = new Float64Array(B.limbs.length); }
     B.limbs.forEach((L, k) => { const sw = L.kind === 'leg' ? CH.leg + L.idx * 2 : CH.arm + L.idx * 3; const st = B.stretch[sw]; const v = (st - this.swingPrev[k]) * 60; this.swingPrev[k] = st; this.swingVel[k] += 0.3 * (v - this.swingVel[k]); }); }
@@ -69,6 +63,11 @@ export class Creature {
   sense() {
     const B = this.body, F = B.F, W = this.world, hd = B.head(), fr = F[this.bearSeg ?? (+(globalThis.process?.env?.BSEG ?? 6))]; B.curvature(); const tg = this.target(); let bear = 0, dist = 0, up = 0;
     if (tg) { const dx = tg[0] - hd[0], dy = tg[1] - hd[1], dz = tg[2] - hd[2]; const ff = dx * fr.f[0] + dz * fr.f[2], ss = dx * fr.s[0] + dz * fr.s[2]; bear = Math.atan2(ss, ff); dist = Math.hypot(dx, dz); up = clamp(dy / 3, -1, 1); }
+    this.navMode = 'sight'; if (tg && dist > VIEW && !globalThis.TW?.omni) { /* beyond view range the goal is not seen: steer by the head-direction / path-integration estimate (vector navigation) */
+      if (this.lesion.nav) { bear = 0; this.navMode = 'none'; } else { const N = this.nav, ex = tg[0] - N.px, ez = tg[2] - N.pz; const a = Math.atan2(ez, ex) - N.heading(); bear = Math.atan2(Math.sin(a), Math.cos(a)); dist = Math.hypot(ex, ez); this.navMode = 'path-integration'; } }
+    /* course over ground (optic-flow direction of travel, ~0.3 s smoothing): steering compares the goal direction with where the body is actually going, so a gait that travels at an angle to the head still homes in */
+    { const v = this.vel || [0, 0, 0]; this.vEMA = this.vEMA || [0, 0]; this.vEMA[0] += 0.05 * (v[0] - this.vEMA[0]); this.vEMA[1] += 0.05 * (v[2] - this.vEMA[1]); const sp = Math.hypot(this.vEMA[0], this.vEMA[1]) * 60;
+      if (tg && sp > 0.12 && !this.lesion.course) { const hdgHead = Math.atan2(fr.f[2], fr.f[0]), course = Math.atan2(this.vEMA[1], this.vEMA[0]); let off = course - hdgHead; off = Math.atan2(Math.sin(off), Math.cos(off)); const w = (this.gen.kCourse ?? 0) * Math.min(1, (sp - 0.12) / 0.2); bear = Math.atan2(Math.sin(bear - w * off), Math.cos(bear - w * off)); } }
     this.bear = bear; this.dist = dist; const [vx, vy, vz] = this.vel || [0, 0, 0];
     const vf = (vx * fr.f[0] + vy * fr.f[1] + vz * fr.f[2]) * 60, vl = (vx * fr.s[0] + vy * fr.s[1] + vz * fr.s[2]) * 60; this.vf = vf; this.speedEMA += 0.02 * (Math.hypot(vx, vz) * 60 - this.speedEMA);
     // rock directly ahead? (obstacle), spring nearby?, tilt
@@ -123,10 +122,10 @@ export class Creature {
     const stage = this.sleep.stage, awake = stage === 0; br.atonia = stage >= 2 ? 3 : stage === 1 ? 0.8 : 0; br.sleepStage = stage; br.lesion.stdp = this.lesion.stdp; br.lesion.astro = this.lesion.astro; br.lesion.mot = this.lesion.mot;
     const back = this.flaws.backwards.on; const cext = new Float64Array(NCPG); const mnI = new Float64Array(NMN); const GK = this.lesion.gripReflex ? 0 : this.G.gk; this.updateSwingVel();
     for (let s = 0; s < 8; s++) {
-      for (let m = 0; m < 8; m++) this.motRate[m] = this.forceMot ? this.forceMot[m] : (globalThis.TW?.motSat ? 1.2 * Math.tanh(br.rate[R0.MOT + (back ? 7 - m : m)] / 45) : br.rate[R0.MOT + (back ? 7 - m : m)] / 40);
-      const mr = this.motRate; if (!this.forceMot && !this.lesion.motNorm) { let tot = 0; for (let m = 0; m < 8; m++) tot += mr[m]; for (let m = 0; m < 8; m++) mr[m] = mr[m] / (1 + 0.3 * (tot - mr[m])); } /* divisive normalisation across MOT synergies (shared inhibitory pool) */ const fwd = mr[0], turn = mr[1] - mr[2];
+      for (let m = 0; m < 8; m++) this.motRate[m] = this.forceMot ? this.forceMot[m] : this.babble?.on ? this.babble.mot[m] : (globalThis.TW?.motSat ? 1.2 * Math.tanh(br.rate[R0.MOT + (back ? 7 - m : m)] / 45) : br.rate[R0.MOT + (back ? 7 - m : m)] / 40);
+      const mr = this.motRate; if (!this.forceMot && !this.babble?.on && !this.lesion.motNorm) { let tot = 0; for (let m = 0; m < 8; m++) tot += mr[m]; for (let m = 0; m < 8; m++) mr[m] = mr[m] / (1 + 0.3 * (tot - mr[m])); } /* divisive normalisation across MOT synergies (shared inhibitory pool) */ const fwd = mr[0], turn = mr[1] - mr[2];
       for (let i = 0; i < NCPG; i++) cext[i] = this.lesion.cpg ? -6 : (awake ? 0.15 : -0.6) + this.G.cf * fwd + 0.5 * mr[6] + 0.3 * mr[4];
-      for (let o = 2; o < 6; o++) { cext[2 * o] += (globalThis.TW?.cturn ?? 1.4) * turn; cext[2 * o + 1] -= (globalThis.TW?.cturn ?? 1.4) * turn; } { const kL = globalThis.TW?.legTurn ?? 0; for (let l = 0; l < 4; l++) { const sgn = l & 1 ? 1 : -1; /* right legs (odd) speed up, left legs slow down for a left turn */ cext[12 + 2 * l] += kL * sgn * turn; cext[13 + 2 * l] += kL * sgn * turn; } } for (let o = 0; o < 6; o++) { cext[2 * o] += 0.35 * clamp(B.stretch[CH.long + o * 4 + 3] * 4, -1, 1); cext[2 * o + 1] += 0.35 * clamp(B.stretch[CH.long + o * 4 + 1] * 4, -1, 1); } // stretch-receptor (edge cell) feedback entrains the rhythm
+      for (let o = 2; o < 6; o++) { cext[2 * o] += this.gen.cturn * turn; cext[2 * o + 1] -= this.gen.cturn * turn; } { const kL = this.gen.legTurn; for (let l = 0; l < 4; l++) { const sgn = l & 1 ? 1 : -1; /* right legs (odd) speed up, left legs slow down for a left turn */ cext[12 + 2 * l] += kL * sgn * turn; cext[13 + 2 * l] += kL * sgn * turn; } } for (let o = 0; o < 6; o++) { cext[2 * o] += 0.35 * clamp(B.stretch[CH.long + o * 4 + 3] * 4, -1, 1); cext[2 * o + 1] += 0.35 * clamp(B.stretch[CH.long + o * 4 + 1] * 4, -1, 1); } // stretch-receptor (edge cell) feedback entrains the rhythm
       cpg.step(0.002, cext); const y = cpg.x;
       for (let n = 0; n < NMN; n++) { let I = 0.55 + this.xi[n] + this.mnHomeo[n]; const oc = n * NCPG; for (let k = 0; k < NCPG; k++) I += this.Wc[oc + k] * y[k]; const om = n * 8; for (let m = 0; m < 8; m++) I += this.Wm[om + m] * mr[m]; const op = n * NPHI; for (let p = 0; p < NPHI; p++) I += this.Wp[op + p] * this.phi[p];
         const ch = n >> 1; I -= 0.4 * clamp(B.stretch[ch] * (n & 1 ? -1 : 1) * -3, -1, 1); // stretch reflex: a lengthened agonist is excited
@@ -140,11 +139,24 @@ export class Creature {
     }
     for (let c = 0; c < CH.N; c++) B.u[c] = clamp((this.muscleGain ?? 2.4) * (this.mnAct[2 * c] - this.mnAct[2 * c + 1]), -1, 1);
     B.limbs.forEach((L, k) => { const sw = L.kind === 'leg' ? CH.leg + L.idx * 2 : CH.arm + L.idx * 3; this.limbUse[k] += Math.abs(B.u[sw]) + Math.abs(B.u[sw + 1]) + 0.5 * Math.abs(B.u[L.grip]); }); this.limbUseN++;
-    B.scaleLift = this.lesion.scales ? 0 : this.liftK; B.step(1 / 120); B.step(1 / 120); const com = B.com(); this.vel = [com[0] - this.lastCom[0], com[1] - this.lastCom[1], com[2] - this.lastCom[2]]; this.stats.dist += Math.hypot(this.vel[0], this.vel[2]); this.lastCom = com;
+    B.scaleLift = this.lesion.scales ? 0 : this.liftK; B.step(1 / 120); B.step(1 / 120); const com = B.com(); this.vel = [com[0] - this.lastCom[0], com[1] - this.lastCom[1], com[2] - this.lastCom[2]]; this.navStep(dt, com); this.stats.dist += Math.hypot(this.vel[0], this.vel[2]); this.lastCom = com;
     this.nociception *= 0.97; if (this.race) this.raceCheck(dt); this.interact();
     if (this.frame % 6 === 0) this.tenHz(); if (this.frame % 4 === 0) this.skin.step(this); if (this.frame % 15 === 0) this.minute();
     this.updateNM(dt);
   }
+  /** head-direction ring + path integration (nav.js): vestibular yaw rate, sun compass (daytime), proprioceptive velocity */
+  navStep(dt, com) { const F3 = this.body.F[3], N = this.nav; const h = Math.atan2(F3.f[2], F3.f[0]); let w = h - this.prevHdg; w = Math.atan2(Math.sin(w), Math.cos(w)); this.prevHdg = h; const omega = (w / dt) * (1 + 0.05 * gauss(this.gr));
+    const az = this.light > 0.35 ? Math.atan2(Math.sin(SUN_AZ - h), Math.cos(SUN_AZ - h)) : null; N.step(dt, omega, az); this.omega = omega; this.babbleStep(dt); const [vx, , vz] = this.vel; const vf = (vx * F3.f[0] + vz * F3.f[2]) / dt, vl = (vx * F3.s[0] + vz * F3.s[2]) / dt; N.integrate(dt, vf, vl);
+    if (this.frame % 6 === 0) { const hd = this.body.head(); let fix = false; for (const L of [...this.world.plants, ...this.world.pools]) { const dx = L.x - hd[0], dz = L.z - hd[2], d = Math.hypot(dx, dz); if (d < 5 && (dx * F3.f[0] + dz * F3.f[2]) > 0) { fix = true; break; } } if (fix && !this.lesion.nav) N.reset(com[0], com[2], 0.15); /* a recognised landmark nearby gives a position fix */
+      let e = N.heading() - h; this.navErr.hd = Math.abs(Math.atan2(Math.sin(e), Math.cos(e))); this.navErr.pos = Math.hypot(N.px - com[0], N.pz - com[2]); } }
+  /** neonatal motor babbling (pass 12): for the first 12 s of life random synergy commands replace the brain's MOT output while
+   *  the creature regresses its measured yaw rate on the turn command. The resulting turn gain rescales the evolved
+   *  bearing -> turn weights so the steering loop has the same gain on this particular body as on the bodies evolution used. */
+  babbleStep(dt) { if (!this.babble) { this.babble = { on: !this.lesion.babble && !this.forceMot && !globalThis.TW?.noBabble, t: 0, next: 0, mot: new Float64Array(8), sc: 0, cc: 0, yaw: 0 }; } const b = this.babble; if (!b.on) return;
+    b.t += dt; b.yaw += this.omega * dt; if (b.t >= b.next) { if (b.t > 1.5) { const c = b.mot[1] - b.mot[2], y = -b.yaw / 0.75; b.sc += c * y; b.cc += c * c; } b.yaw = 0; b.next += 0.75; b.mot.fill(0); const k = Math.floor(this.gr() * 5); b.mot[0] = k < 3 ? 0.4 + 0.6 * this.gr() : 0.2; if (k === 1 || k === 3) b.mot[1] = 0.3 + 0.7 * this.gr(); if (k === 2 || k === 4) b.mot[2] = 0.3 + 0.7 * this.gr(); }
+        if (b.t >= 12) { b.on = false; this.turnGain = b.sc / Math.max(1e-6, b.cc); const g0 = STARTER_INFO.turnGain0 || 1; const k = clamp(g0 / Math.max(0.05, this.turnGain), 0.4, 2.5); this.babbleScale = k;
+      for (const [m, p] of [[1, 0], [2, 1]]) { this.Wmot[m * NPHI + p] *= k; this.Wmot0[m * NPHI + p] *= k; } this.selfW = Math.max(this.selfW ?? 0, 0.5 * Math.abs(this.turnGain));
+      this.ev('babble', `motor babbling done: turn gain ${this.turnGain.toFixed(2)} rad/s per unit command, steering weights x${k.toFixed(2)}`); } }
   updateNM(dt) { const br = this.brain, nm = br.nm; const lp = (k, v, tau) => { nm[k] += (dt / tau) * (v - nm[k]); };
     const vta = br.regionRate('VTA'); this.vtaBase = (this.vtaBase ?? vta) + 0.002 * (vta - (this.vtaBase ?? vta)); lp('DA', clamp(0.3 + (vta - this.vtaBase) / 20, 0, 1.2), 0.3); /* DA = phasic VTA firing relative to its own slow baseline */ lp('NE', clamp(0.2 + br.regionRate('LC') / 50, 0, 1.2), 0.4); lp('5HT', clamp(0.2 + br.regionRate('RAPHE') / 45, 0, 1.2), 1.0); lp('ACh', clamp(0.1 + br.regionRate('BF') / 40, 0, 1.2), 0.6); nm.cortisol = this.metab.cortisol; }
   // ------------------------------------------------------------------ 10 Hz: SSM, world model, motor learning, behaviour statistics

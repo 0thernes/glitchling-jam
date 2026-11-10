@@ -24,7 +24,7 @@ metabolism: gut → blood → liver glycogen → fat, ketones, gluconeogenesis, 
 sleep: adenosine S + circadian C, WAKE/N1/N2/N3/REM, atonia, NREM replay, REM dreaming
 ```
 
-## Mechanisms added in passes 2–11
+## Mechanisms added in passes 2–12
 
 Each one can be switched off from the brain panel ("lesions"). The effect of each, as measured, is in CHANGELOG.md.
 
@@ -38,6 +38,7 @@ Each one can be switched off from the brain panel ("lesions"). The effect of eac
 | 7 | physical skin optics | thin-film (guanine) interference, Fresnel, GGX highlights, translucency and heartbeat capillaries in the shader |
 | 8 | thirst vs hunger, cephalic insulin | pools, drinking, probabilistic drive competition, humidity sense + HDC water map; seeing food raises the insulin set point early |
 | 9 | front arching reflex, ventral scale lift | turn commands contract front radial muscles; radial activation lowers sideways friction |
+| 12 | evolved motor genome, head-direction ring, path integration, grid cells, motor babbling | CMA-ES-evolved developmental genome grows the CPG/MOT→muscle wiring (turning 0.3 → 2.3 rad/s); a 36-unit ring attractor tracks heading, dead reckoning tracks position, sight of a known site resets it; goals beyond 9 units are steered to by vector; 12 s of random synergy babbling calibrates the steering gain |
 | 11 | learned / consolidated memory | delta-rule HDC maps (1024-dim) with sleep-time feature resampling; 1024-slot Hopfield store with usage-based forgetting, sleep merging and a contrastively learned key map |
 
 ## Files
@@ -49,6 +50,9 @@ Each one can be switched off from the brain panel ("lesions"). The effect of eac
 | `js/sim/body.js` | Verlet soft body, muscles, friction, grip, collisions, Taylor-jet curvature |
 | `js/sim/creature.js` | wiring, motor learning, striatal race, veto, eating, flaws, replay, dreams |
 | `js/sim/mind.js` | selective SSM, world model, two-level predictive coding, two-process sleep |
+| `js/sim/genome.js` | 44 motor + 17 steering genes and the developmental rules that grow synapses from them |
+| `js/sim/starter_genome.js` | the shipped (evolved) genome and how it was found |
+| `js/sim/nav.js` | head-direction ring attractor, sun compass, path integration, grid-cell readout |
 | `js/sim/memory.js` | hyperdimensional (FHRR) place maps and a modern Hopfield episodic memory |
 | `js/sim/metab.js` | metabolism, hormones, fluids, waste |
 | `js/sim/skin.js` | excitable-medium chromatophore sheet plus a Gray-Scott pattern layer tuned by hormones |
@@ -70,6 +74,8 @@ node test/measure.mjs                   # distance, behaviour entropy, intact vs
 node test/memory2_probe.mjs a           # HDC held-out regression: superposition vs delta rule vs delta rule + learned features
 node test/memory2_probe.mjs b 2         # Hopfield: pass-3 store vs 1024 slots + sleep vs + learned keys, on a real 600-s run
 node test/scale_probe.mjs               # forced-turn yaw rates (pass 9); see also righting/memory/pc/turing/growth/water probes
+node test/nav_probe.mjs 1,2,3,4 [nav]   # near (4-8 u) vs far (14+ u) site arrival in 60 s; 'nav' lesions path integration
+node test/evolve_genome.mjs 30 16 8 1,2,3 out.json   # CMA-ES over the motor genome (fitness: test/genome_eval.mjs)
 CHROME=/path/to/chrome PLAYWRIGHT=/path/to/playwright-core/index.mjs node test/browser_check.mjs http://127.0.0.1:8899/live/ ./shots tag
 ```
 
