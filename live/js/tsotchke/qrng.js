@@ -1,17 +1,34 @@
-// 10-Qubit Open-Quantum Lindblad / Kraus Monte-Carlo Wavefunction (MCWF) Simulator & Toeplitz-Whitened RNG + Opt-In Live
-// Physical Photonic / Vacuum-Fluctuation Hardware QRNG Entropy — upgraded in pass 16 from tsotchke/quantum_rng (MIT, © Tsotchke).
+// 12-Qubit (DIM = 4,096) WebAssembly-Accelerated Open-Quantum Lindblad / Kraus MCWF Simulator & Toeplitz-Whitened RNG +
+// Multi-Source CORS-Enabled Physical Quantum / Threshold-Beacon Entropy — upgraded in pass 17 from tsotchke/quantum_rng.
 //
-// Physics & honesty:
-//  1) Simulates a 10-qubit open quantum register (DIM = 1,024) evolving under Hadamard, data-dependent Rz(theta), nearest-
-//     neighbour Ising ZZ(phi) crosstalk, a ring of CNOTs, AND Lindblad / Kraus open-system dissipation (T1 spontaneous-emission
-//     amplitude damping K0/L1 + T2 phase-flip dephasing via Dalibard-Castin-Molmer quantum trajectories), tracking Born-rule
-//     Shannon entropy, trajectory purity estimate Tr(rho^2), and spontaneous quantum jump count.
+// Physics & execution:
+//  1) Instantiates an inline W3C WebAssembly f64 statevector kernel (`wasm_quantum.js`) over a 12-qubit register (DIM = 4,096),
+//     executing Hadamard H^{⊗12}, data-dependent Rz(theta) + nearest-neighbour Ising ZZ(phi) crosstalk diagonal phases, and a
+//     12-qubit CNOT ring in native WASM machine code, coupled to Dalibard-Castin-Molmer Lindblad T1 amplitude-damping and T2
+//     dephasing quantum trajectories.
 //  2) Reproducible when seeded (`seed > 0`); mixes WebCrypto OS entropy (`crypto.getRandomValues`) when `seed === 0`.
-//  3) Opt-in `fetchHardwareEntropy()` queries real public physical photonic / vacuum-fluctuation QRNG hardware over HTTPS
-//     (LFDR ID-Quantique optical beam-splitter QRNG, ANU homodyne vacuum-fluctuation QRNG, NIST randomness beacon v2), runs
-//     NIST SP 800-90B Repetition-Count & Adaptive-Proportion health tests on the raw bytes, and mixes verified physical
-//     quantum entropy into the 10-qubit statevector and Toeplitz whitener (falling back cleanly offline).
-export const NQ = 10, DIM = 1 << NQ, BUF = 64;
+//  3) `fetchHardwareEntropy()` queries CORS-friendly public randomness/quantum endpoints (`drand` League-of-Entropy BLS beacon,
+//     NIST Randomness Beacon v2, LFDR ID-Quantique photonic QRNG, ANU homodyne vacuum-fluctuation QRNG), runs NIST SP 800-90B
+//     Repetition-Count, Adaptive-Proportion, and lag-1 serial correlation tests, and rotates the 4,096-amplitude register.
+import { createWasmQuantumKernel } from './wasm_quantum.js';
+
+export const NQ = 12, DIM = 1 << NQ, BUF = 512;
+
+// Precompute Ising ZZ nearest-neighbour bond parity sum_q Z_q Z_{q+1} & default ZZ phases for all 4,096 basis states
+const ZZ_PARITY = new Int8Array(DIM);
+const ZZ_COS_DEF = new Float64Array(DIM);
+const ZZ_SIN_DEF = new Float64Array(DIM);
+for (let b = 0; b < DIM; b++) {
+  let aligned = 0;
+  for (let q = 0; q < NQ; q++) {
+    const bq = (b >> q) & 1, bq1 = (b >> ((q + 1) % NQ)) & 1;
+    aligned += bq === bq1 ? 1 : -1;
+  }
+  ZZ_PARITY[b] = aligned;
+  const ang = -0.085 * aligned;
+  ZZ_COS_DEF[b] = Math.cos(ang);
+  ZZ_SIN_DEF[b] = Math.sin(ang);
+}
 
 function mix32(h) {
   h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
@@ -19,27 +36,35 @@ function mix32(h) {
   return (h ^ (h >>> 16)) >>> 0;
 }
 
-/** NIST SP 800-90B Repetition Count Test (RCT) & Adaptive Proportion Test (APT) on a byte array */
+/** NIST SP 800-90B Repetition Count Test (RCT), Adaptive Proportion Test (APT) & lag-1 serial correlation check */
 export function nistHealthCheck(bytes) {
-  if (!bytes || bytes.length < 16) return { healthy: false, minEntropy: 0 };
-  // 1) Repetition Count Test (cutoff C = 6 identical bytes in a row -> alpha < 2^-40 for uniform bytes)
+  if (!bytes || bytes.length < 16) return { healthy: false, minEntropy: 0, serialCorr: 1 };
   let run = 1, maxRun = 1;
   const counts = new Uint16Array(256);
   counts[bytes[0]]++;
+  let sumX = bytes[0], sumX2 = bytes[0] * bytes[0], sumXY = 0;
   for (let i = 1; i < bytes.length; i++) {
-    counts[bytes[i]]++;
-    if (bytes[i] === bytes[i - 1]) {
+    const b = bytes[i], prev = bytes[i - 1];
+    counts[b]++;
+    sumX += b;
+    sumX2 += b * b;
+    sumXY += prev * b;
+    if (b === prev) {
       run++;
       if (run > maxRun) maxRun = run;
     } else run = 1;
   }
-  // 2) Adaptive Proportion / Empirical Min-Entropy H_inf = -log2(max_b p_b)
   let maxCnt = 0;
   for (let b = 0; b < 256; b++) if (counts[b] > maxCnt) maxCnt = counts[b];
   const pMax = maxCnt / bytes.length;
   const minEntropy = -Math.log2(Math.max(1 / 256, pMax));
-  const healthy = maxRun < 6 && maxCnt <= Math.ceil(bytes.length * 0.22 + 4);
-  return { healthy, minEntropy, maxRun };
+  const n = bytes.length;
+  const mu = sumX / n;
+  const varX = Math.max(1e-9, sumX2 / n - mu * mu);
+  const cov = sumXY / (n - 1) - mu * mu;
+  const serialCorr = Math.abs(cov / varX);
+  const healthy = maxRun < 6 && maxCnt <= Math.ceil(bytes.length * 0.22 + 4) && serialCorr < 0.45;
+  return { healthy, minEntropy, maxRun, serialCorr };
 }
 
 function hexToBytes(hex) {
@@ -54,12 +79,14 @@ export class TsotchkeQRNG {
   constructor(seed = 1, opts = {}) {
     this.seed = seed >>> 0;
     this.unseeded = seed === 0;
-    this.gamma1 = opts.gamma1 ?? 0.016; // T1 amplitude-damping rate per circuit layer
-    this.gammaPhi = opts.gammaPhi ?? 0.012; // T2 pure-dephasing rate per circuit layer
-    this.zzCoupling = opts.zz ?? 0.09; // nearest-neighbour ZZ crosstalk angle (rad)
+    this.gamma1 = opts.gamma1 ?? 0.014;   // T1 amplitude-damping rate per layer
+    this.gammaPhi = opts.gammaPhi ?? 0.010; // T2 pure-dephasing rate per layer
+    this.zzCoupling = opts.zz ?? 0.085;   // nearest-neighbour Ising ZZ crosstalk angle (rad)
 
-    this.re = new Float64Array(DIM);
-    this.im = new Float64Array(DIM);
+    this.wasm = createWasmQuantumKernel(DIM);
+    this.wasmActive = !!this.wasm;
+    this.re = this.wasm ? this.wasm.re : new Float64Array(DIM);
+    this.im = this.wasm ? this.wasm.im : new Float64Array(DIM);
     this.marginal = new Float64Array(NQ);
     this.buckets = new Float64Array(16);
     this.buf = new Float64Array(BUF);
@@ -71,10 +98,9 @@ export class TsotchkeQRNG {
     this.quantumJumps = 0;
     this.spare = null;
 
-    // Optional live physical photonic QRNG pool
     this.hwPool = null;
     this.hwPtr = 0;
-    this.hwSource = 'sim-10q-lindblad';
+    this.hwSource = this.wasmActive ? 'wasm-12q-lindblad' : 'js-12q-lindblad';
     this.hwBytes = 0;
     this.hwHealthy = null;
 
@@ -83,11 +109,10 @@ export class TsotchkeQRNG {
       const os = new Uint32Array(2);
       globalThis.crypto.getRandomValues(os);
       initSeed = (os[0] ^ mix32(os[1])) >>> 0;
-      this.hwSource = 'sim-10q+os-csprng';
+      this.hwSource = this.wasmActive ? 'wasm-12q+os-csprng' : 'js-12q+os-csprng';
     }
     this.ctr = mix32(initSeed ^ 0x9e3779b9);
 
-    // Initialise 10-qubit statevector |psi> and run 2 open-quantum Lindblad/Kraus warmup layers
     const inv = 1 / Math.sqrt(DIM);
     let st = mix32(initSeed ^ 0x6a09e667);
     for (let b = 0; b < DIM; b++) {
@@ -112,7 +137,6 @@ export class TsotchkeQRNG {
     return h / 4294967296;
   }
 
-  /** Inject verified physical photonic / vacuum-fluctuation QRNG bytes into the 10-qubit register & Toeplitz pool */
   injectHardwareBytes(bytes, sourceName = 'photonic-qrng') {
     const chk = nistHealthCheck(bytes);
     this.hwHealthy = chk.healthy;
@@ -121,9 +145,8 @@ export class TsotchkeQRNG {
     this.hwPool = new Uint8Array(bytes);
     this.hwPtr = 0;
     this.hwBytes += bytes.length;
-    this.hwSource = sourceName;
+    this.hwSource = sourceName + (this.wasmActive ? '+wasm12q' : '+12q');
 
-    // Apply physical quantum phase rotations Rz(phi_hw) directly onto the 1024-amplitude statevector
     const re = this.re, im = this.im, nB = bytes.length;
     for (let b = 0; b < DIM; b++) {
       const ph = ((bytes[b % nB] ^ bytes[(b * 7 + 3) % nB]) / 256) * Math.PI * 2;
@@ -133,12 +156,12 @@ export class TsotchkeQRNG {
       im[b] = r0 * s + i0 * c;
     }
     this.evolve();
-    return { ok: true, source: sourceName, bytes: bytes.length, minEntropy: chk.minEntropy };
+    return { ok: true, source: this.hwSource, bytes: bytes.length, minEntropy: chk.minEntropy, serialCorr: chk.serialCorr };
   }
 
   /**
-   * Opt-in asynchronous HTTPS fetch of genuine physical photonic / vacuum-fluctuation quantum random bytes.
-   * Tries LFDR (ID Quantique Quantis optical QRNG), ANU (vacuum-fluctuation homodyne QRNG), then NIST Beacon v2.
+   * Asynchronous HTTPS fetch of live physical photonic / vacuum-fluctuation / CORS-open randomness beacon bytes.
+   * Tries LFDR (ID Quantique photonic QRNG), ANU (vacuum-fluctuation QRNG), NIST Beacon v2, and drand League-of-Entropy.
    */
   async fetchHardwareEntropy() {
     if (typeof fetch !== 'function') return { ok: false, source: this.hwSource, reason: 'no-fetch' };
@@ -149,21 +172,26 @@ export class TsotchkeQRNG {
         parse: (j) => (j && j.qrn ? hexToBytes(j.qrn) : null),
       },
       {
-        name: 'ANU-VacuumFluctuation',
-        url: 'https://qrng.anu.edu.au/API/jsonI.php?length=64&type=uint8',
-        parse: (j) => (j && Array.isArray(j.data) && j.data.length >= 16 ? Uint8Array.from(j.data) : null),
-      },
-      {
         name: 'NIST-Beacon-v2-Photonic',
         url: 'https://beacon.nist.gov/beacon/2.0/pulse/last',
         parse: (j) => (j?.pulse?.localRandomValue ? hexToBytes(j.pulse.localRandomValue) : null),
+      },
+      {
+        name: 'drand-LeagueOfEntropy',
+        url: 'https://api.drand.sh/public/latest',
+        parse: (j) => (j?.randomness ? hexToBytes(j.randomness + (j.signature ? j.signature.slice(0, 64) : '')) : null),
+      },
+      {
+        name: 'ANU-VacuumFluctuation',
+        url: 'https://qrng.anu.edu.au/API/jsonI.php?length=64&type=uint8',
+        parse: (j) => (j && Array.isArray(j.data) && j.data.length >= 16 ? Uint8Array.from(j.data) : null),
       },
     ];
 
     for (const ep of endpoints) {
       try {
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 3800);
+        const timer = setTimeout(() => ctrl.abort(), 3500);
         const res = await fetch(ep.url, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
         clearTimeout(timer);
         if (!res.ok) continue;
@@ -174,63 +202,87 @@ export class TsotchkeQRNG {
           if (out.ok) return out;
         }
       } catch {
-        // Try next physical quantum source
+        // Try next source
       }
     }
     return { ok: false, source: this.hwSource, reason: 'endpoints-unreachable' };
   }
 
-  /** One 10-qubit open-quantum circuit + Kraus/MCWF Lindblad dissipation layer + Toeplitz-whitened Born readout */
+  /** One 12-qubit WASM-accelerated open-quantum circuit + Kraus/MCWF Lindblad layer + Toeplitz-whitened Born readout */
   evolve() {
-    const re = this.re, im = this.im, s2 = Math.SQRT1_2;
+    const re = this.re, im = this.im;
     this.ctr = mix32(this.ctr + (++this.steps) * 0x9e3779b9);
 
-    // 1) Single-qubit Hadamard + Rz(theta_q) on all 10 qubits
+    const thetas = new Float64Array(NQ);
     for (let q = 0; q < NQ; q++) {
-      const bit = 1 << q;
-      const th = (this._trajUniform(q) * 2 - 1) * Math.PI * 0.73 + 0.31 * this.marginal[q];
-      const cz = Math.cos(th), sz = Math.sin(th);
-      for (let base = 0; base < DIM; base += bit << 1) {
-        for (let j = 0; j < bit; j++) {
-          const i0 = base + j, i1 = i0 + bit;
-          const r0 = (re[i0] + re[i1]) * s2, m0 = (im[i0] + im[i1]) * s2;
-          const r1 = (re[i0] - re[i1]) * s2, m1 = (im[i0] - im[i1]) * s2;
-          re[i0] = r0; im[i0] = m0;
-          re[i1] = r1 * cz - m1 * sz;
-          im[i1] = r1 * sz + m1 * cz;
-        }
-      }
+      thetas[q] = (this._trajUniform(q) * 2 - 1) * Math.PI * 0.73 + 0.31 * this.marginal[q];
     }
 
-    // 2) CNOT entangling ring + nearest-neighbour Ising ZZ(phi) crosstalk across the 10-qubit ring
-    const cZZ = Math.cos(this.zzCoupling), sZZ = Math.sin(this.zzCoupling);
-    for (let q = 0; q < NQ; q++) {
-      const cBit = 1 << q, tBit = 1 << ((q + 1) % NQ);
-      for (let b = 0; b < DIM; b++) {
-        if ((b & cBit) && !(b & tBit)) {
-          const b2 = b ^ tBit;
-          const tr = re[b], ti = im[b];
-          re[b] = re[b2]; im[b] = im[b2];
-          re[b2] = tr; im[b2] = ti;
+    if (this.wasm) {
+      // 1) Native WASM H^{⊗12}
+      this.wasm.hadamardAll(NQ);
+      // 2) Exact binary-expansion recurrence for Rz(theta_q) phases (12 cos/sin calls instead of 4,096!) + WASM phase & CNOT ring
+      const pCos = this.wasm.phaseCos, pSin = this.wasm.phaseSin;
+      pCos[0] = 1; pSin[0] = 0;
+      for (let q = 0; q < NQ; q++) {
+        const bit = 1 << q, cq = Math.cos(thetas[q]), sq = Math.sin(thetas[q]);
+        for (let j = 0; j < bit; j++) {
+          const c0 = pCos[j], s0 = pSin[j];
+          pCos[j + bit] = c0 * cq - s0 * sq;
+          pSin[j + bit] = c0 * sq + s0 * cq;
         }
       }
-    }
-    for (let b = 0; b < DIM; b++) {
-      // Parity of ZZ nearest-neighbour bonds exp(-i * zzCoupling * sum_q Z_q Z_{q+1})
-      let aligned = 0;
-      for (let q = 0; q < NQ; q++) {
-        const bq = (b >> q) & 1, bq1 = (b >> ((q + 1) % NQ)) & 1;
-        aligned += bq === bq1 ? 1 : -1;
+      this.wasm.applyDiagonalPhasesAndNorm();
+      this.wasm.cnotRing(NQ);
+      const zz = this.zzCoupling;
+      if (zz === 0.085) {
+        pCos.set(ZZ_COS_DEF);
+        pSin.set(ZZ_SIN_DEF);
+      } else {
+        for (let b = 0; b < DIM; b++) {
+          const ang = -zz * ZZ_PARITY[b];
+          pCos[b] = Math.cos(ang);
+          pSin[b] = Math.sin(ang);
+        }
       }
-      if (aligned !== 0) {
-        const c = aligned > 0 ? cZZ : cZZ, s = aligned > 0 ? -sZZ : sZZ;
+      this.wasm.applyDiagonalPhasesAndNorm();
+    } else {
+      const s2 = Math.SQRT1_2;
+      for (let q = 0; q < NQ; q++) {
+        const bit = 1 << q, cz = Math.cos(thetas[q]), sz = Math.sin(thetas[q]);
+        for (let base = 0; base < DIM; base += bit << 1) {
+          for (let j = 0; j < bit; j++) {
+            const i0 = base + j, i1 = i0 + bit;
+            const r0 = (re[i0] + re[i1]) * s2, m0 = (im[i0] + im[i1]) * s2;
+            const r1 = (re[i0] - re[i1]) * s2, m1 = (im[i0] - im[i1]) * s2;
+            re[i0] = r0; im[i0] = m0;
+            re[i1] = r1 * cz - m1 * sz;
+            im[i1] = r1 * sz + m1 * cz;
+          }
+        }
+      }
+      for (let q = 0; q < NQ; q++) {
+        const cBit = 1 << q, tBit = 1 << ((q + 1) % NQ);
+        for (let b = 0; b < DIM; b++) {
+          if ((b & cBit) && !(b & tBit)) {
+            const b2 = b ^ tBit;
+            const tr = re[b], ti = im[b];
+            re[b] = re[b2]; im[b] = im[b2];
+            re[b2] = tr; im[b2] = ti;
+          }
+        }
+      }
+      const zz = this.zzCoupling;
+      for (let b = 0; b < DIM; b++) {
+        const ang = -zz * ZZ_PARITY[b];
+        const c = Math.cos(ang), s = Math.sin(ang);
         const r0 = re[b], i0 = im[b];
         re[b] = r0 * c - i0 * s;
         im[b] = r0 * s + i0 * c;
       }
     }
 
-    // 3) Open-Quantum Lindblad / Kraus Dissipation (T1 amplitude damping + T2 pure dephasing MCWF trajectory)
+    // 3) Open-Quantum Lindblad / Kraus Dissipation (T1 amplitude damping + T2 dephasing MCWF trajectory)
     const g1 = this.gamma1, gPhi = this.gammaPhi;
     const stayScale = Math.sqrt(Math.max(0, 1 - g1));
     let jumpOccurred = 0;
@@ -243,9 +295,7 @@ export class TsotchkeQRNG {
           p1 += re[i1] * re[i1] + im[i1] * im[i1];
         }
       }
-      const pJump = g1 * p1;
-      if (this._trajUniform(100 + q) < pJump && p1 > 1e-15) {
-        // Spontaneous T1 emission quantum jump L_1 = |0><1|_q
+      if (this._trajUniform(100 + q) < g1 * p1 && p1 > 1e-15) {
         const invP1 = 1 / Math.sqrt(p1);
         for (let base = 0; base < DIM; base += bit << 1) {
           for (let j = 0; j < bit; j++) {
@@ -257,7 +307,6 @@ export class TsotchkeQRNG {
         this.quantumJumps++;
         jumpOccurred++;
       } else {
-        // Non-Hermitian no-jump Kraus evolution K_0 = |0><0| + sqrt(1 - g1)|1><1|
         for (let base = 0; base < DIM; base += bit << 1) {
           for (let j = 0; j < bit; j++) {
             const i1 = base + j + bit;
@@ -265,7 +314,6 @@ export class TsotchkeQRNG {
           }
         }
       }
-      // T2 pure-dephasing Kraus Z_q phase kick with probability gPhi / 2
       if (this._trajUniform(200 + q) < 0.5 * gPhi) {
         for (let base = 0; base < DIM; base += bit << 1) {
           for (let j = 0; j < bit; j++) {
@@ -285,7 +333,7 @@ export class TsotchkeQRNG {
     this.marginal.fill(0);
     this.buckets.fill(0);
     let H = 0, sumMag = 0;
-    const bucketShift = NQ - 4; // 10 - 4 = 6 -> 16 histogram buckets
+    const bucketShift = NQ - 4; // 12 - 4 = 8 -> 16 histogram buckets
     for (let b = 0; b < DIM; b++) {
       re[b] *= invN; im[b] *= invN;
       const p = re[b] * re[b] + im[b] * im[b];
@@ -294,19 +342,18 @@ export class TsotchkeQRNG {
       for (let q = 0; q < NQ; q++) if (b & (1 << q)) this.marginal[q] += p;
     }
     for (let q = 0; q < NQ; q++) {
-      // Single-qubit reduced Bloch purity Tr(rho_q^2) = 1 - 2 p_q(1 - p_q) modulated by T1/T2 decoherence rate
       const pq = this.marginal[q];
       sumMag += (2 * pq - 1) ** 2;
     }
     const instPurity = Math.max(1 / DIM, Math.exp(-NQ * (0.4 * g1 + 0.6 * gPhi)) * (0.65 + 0.35 * (sumMag / NQ)) - 0.02 * jumpOccurred);
     this.purity = 0.9 * this.purity + 0.1 * Math.min(1, Math.max(0.05, instPurity));
-    this.entropy = H / NQ; // normalised to [0, 1] (1.0 = maximally uniform 10-qubit Born distribution)
+    this.entropy = H / NQ; // normalised to [0, 1] across 12 qubits
 
-    // 5) Toeplitz hash whitening across 1024 Born probabilities (+ physical photonic pool when loaded) -> 64 53-bit doubles
+    // 5) Toeplitz hash whitening across 4,096 Born probabilities -> 512 53-bit doubles
     let accA = this.ctr >>> 0, accB = mix32(this.ctr ^ 0xbb67ae85);
     const mask = DIM - 1;
     for (let k = 0; k < BUF; k++) {
-      const b0 = (k * 16) & mask, b1 = (b0 + 5) & mask, b2 = (b0 + 11) & mask, b3 = (b0 + 15) & mask;
+      const b0 = (k * 8) & mask, b1 = (b0 + 17) & mask, b2 = (b0 + 137) & mask, b3 = (b0 + 503) & mask;
       const p0 = ((re[b0] * re[b0] + im[b0] * im[b0]) * 4294967296) >>> 0;
       const p1 = ((re[b1] * re[b1] + im[b1] * im[b1]) * 4294967296) >>> 0;
       const p2 = ((re[b2] * re[b2] + im[b2] * im[b2]) * 4294967296) >>> 0;
@@ -318,20 +365,18 @@ export class TsotchkeQRNG {
       }
       accA = mix32(accA ^ p0 ^ hwMix ^ ((p2 << 7) | (p2 >>> 25)) ^ Math.imul(k + 1, 0x9e3779b9));
       accB = mix32(accB ^ p1 ^ ((p3 << 13) | (p3 >>> 19)) ^ Math.imul(accA | 1, 0x85ebca6b));
-      const hi = accA >>> 5, lo = accB >>> 6; // 27 + 26 = 53 bits
+      const hi = accA >>> 5, lo = accB >>> 6;
       this.buf[k] = (hi * 67108864 + lo) * (1 / 9007199254740992);
     }
     this.pos = 0;
   }
 
-  /** Uniform double in [0, 1) */
   next01() {
     if (this.pos >= BUF) this.evolve();
     this.draws++;
     return this.buf[this.pos++];
   }
 
-  /** Standard normal N(0, 1) via Box-Muller */
   gauss() {
     if (this.spare !== null) { const s = this.spare; this.spare = null; return s; }
     const u1 = Math.max(1e-12, this.next01()), u2 = this.next01();
@@ -340,6 +385,5 @@ export class TsotchkeQRNG {
     return r * Math.cos(th);
   }
 
-  /** Drop-in closure matching mulberry(seed) */
   stream() { return () => this.next01(); }
 }

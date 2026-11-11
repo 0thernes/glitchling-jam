@@ -43,7 +43,32 @@ export const STEER_GENES = [
   ['kBias', 0, 1.2], ['kBiasPost', -1.0, 0.5], ['kNearF', -2, 1], ['kCourse', 0, 1.2],
   ['kObstTurn', 0, 4.0], ['kObstSlow', -2.0, 0.5],
 ];
-export const FULL_GENES = [...GENES, ...STEER_GENES];
+
+/**
+ * Heritable 3D Evo-Devo Body Morphology & Neural-Allocation Genome (14 genes, total FULL_GENES = 92):
+ * Co-evolves body segment spacing, rostro-caudal taper, radial muscle girth, forelimb/hindlimb proportions,
+ * binocular eye-stalk baseline, dorsal thermoregulatory/display fin-crest, caudal tail fluke, ventral scute
+ * friction anisotropy, anisotropic I4 myofibril continuum stiffness, chromatophore pigment hue, thermal niche,
+ * hippocampal place/trisynaptic gain allocation, and cortical/neuromuscular plasticity gain!
+ */
+export const MORPH_GENES = [
+  ['bodyLen', 0.85, 1.18],        // axial spine segment length multiplier (1.0 = starter)
+  ['bodyTaper', -0.22, 0.22],     // rostro-caudal radius taper gradient (0.0 = starter)
+  ['bodyGirth', 0.86, 1.16],      // radial muscle cross-section multiplier (1.0 = starter)
+  ['foreLimb', 0.82, 1.24],       // anterior manipulator arm length multiplier (1.0 = starter)
+  ['hindLimb', 0.84, 1.24],       // quadrupedal leg length multiplier (1.0 = starter)
+  ['stalkHeight', 0.78, 1.32],    // binocular eye-stalk elevation & stereo baseline (1.0 = starter)
+  ['crestFin', 0.20, 1.50],       // dorsal bioluminescent fin-crest height (0.65 = starter)
+  ['tailFluke', 0.20, 1.50],      // caudal counter-balance & aquatic fluke span (0.60 = starter)
+  ['scuteAniso', 0.75, 1.28],     // ventral directional scute ratchet anisotropy (1.0 = starter)
+  ['fiberStiff', 0.72, 1.38],     // anisotropic I4 continuum collagen/myofibril stiffness (1.0 = starter)
+  ['pigmentHue', 0.0, 1.0],       // heritable chromatophore baseline hue (0.52 = starter)
+  ['thermOpt', 0.25, 0.75],       // metabolic thermal optimum (0.50 = starter)
+  ['neuroHipAlloc', 0.78, 1.32],  // hippocampal place/trisynaptic drive allocation (1.0 = starter)
+  ['neuroCtxPlastic', 0.70, 1.40],// cortical & motor STDP / 3-factor plasticity multiplier (1.0 = starter)
+];
+
+export const FULL_GENES = [...GENES, ...STEER_GENES, ...MORPH_GENES];
 
 /** Legacy pass-1..14 hand values kept solely as an ablation comparison point */
 export const HAND_STEER = {

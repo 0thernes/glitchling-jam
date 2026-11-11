@@ -2,46 +2,65 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark"><meta name="theme-color" content="#05030a">
-<title>Glitchling v2 · live 3D creature</title>
-<meta name="description" content="Glitchling v2: a 3D soft-bodied creature whose every movement comes from spiking neurons, an LTC pattern generator and muscle physics, simulated live in your browser.">
+<title>Glitchling v2 · live 3D A-Life biosphere</title>
+<meta name="description" content="Glitchling v2: an open-ended 3D soft-bodied A-Life biosphere with 4-compartment Hodgkin-Huxley spiking neurons (up to 1.05M MEGA), 336-tet continuum FEM + Biot-Darcy FSI, foveated V1-V2-V4-IT vision, multimodal +2.0s Transformer-XL, 12-qubit WASM quantum kernel, and Three.js + p5.js HDR16F / 4K UHD graphics.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23c58bff'/%3E%3Ccircle cx='6' cy='7' r='1.5' fill='%23000'/%3E%3Ccircle cx='10.5' cy='6' r='1' fill='%23000'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
+<script src="vendor/p5/p5.min.js"></script>
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}</script>
 </head><body>
-<canvas id="gl" aria-label="3D view of the Glitchling simulation. Drag to orbit, pinch or scroll to zoom." tabindex="0"></canvas>
+<canvas id="gl" aria-label="3D view of the Glitchling A-Life biosphere. Drag to orbit, pinch or scroll to zoom." tabindex="0"></canvas>
 <header class="bar">
   <a class="home" href="../" title="Back to Glitchling home">◀</a>
-  <h1>GLITCHLING <span>v2 live</span></h1>
-  <span class="chip sim" title="Everything here is computed in your browser"><i class="wide">BROWSER </i>SIMULATION</span>
+  <h1>GLITCHLING <span>v2 A-Life</span></h1>
+  <span class="chip sim" title="Everything here is computed live in your browser (Three.js + p5.js + WASM)"><i class="wide">BROWSER </i>BIOSPHERE</span>
   <div class="hud" aria-live="off"><span id="hud-stage">WAKE</span> <span id="hud-clock">08:00</span> <span id="hud-fps">-- fps</span> <span id="hud-q">auto</span></div>
 </header>
 <nav class="tools" aria-label="Interaction tools">
   <button data-tool="orbit" class="on" title="Orbit / zoom the camera">🎥<span>Look</span></button>
+  <button id="cam-btn" title="Cycle camera mode: Orbit -> Creature Eye POV -> Auto-Director -> Overhead (C)">👁<span id="cam-lbl">Orbit</span></button>
   <button data-tool="food" title="Tap the ground to drop food">🍬<span>Food</span></button>
   <button data-tool="poke" title="Tap the creature to poke it">👉<span>Poke</span></button>
   <button data-tool="rock" title="Tap the ground to spawn a climbable rock">🪨<span>Rock</span></button>
   <button data-tool="spring" title="Tap the ground to spawn a spring pad">🌀<span>Spring</span></button>
+  <button data-tool="vent" title="Tap the ground to spawn a geothermal hydrothermal vent">🌋<span>Vent</span></button>
+  <button id="p5-btn" title="Cycle p5.js Live Studio: PiP -> Split -> Off (P)">🎨<span>p5</span></button>
+  <button id="audio-btn" title="Toggle WebAudio bio-acoustic syrinx &amp; world synth (M)">🔇<span>Audio</span></button>
+  <button id="snap4k-btn" title="Render &amp; download a Fixed 4K UHD (3840x2160) HDR16F PNG">📸<span>4K</span></button>
   <button id="pause" title="Pause / resume (space)">⏸<span>Pause</span></button>
-  <button id="panel-btn" aria-expanded="false" aria-controls="panel" title="Brain, body, flaws and settings">🧠<span>Brain</span></button>
+  <button id="panel-btn" aria-expanded="false" aria-controls="panel" title="Brain, body, ecology, flaws and settings">🧠<span>Brain</span></button>
 </nav>
 <aside id="panel" class="panel" hidden>
   <div class="tabs" role="tablist">
-    <button role="tab" data-tab="brain" aria-selected="true">Brain</button><button role="tab" data-tab="body">Body</button><button role="tab" data-tab="flaws">Flaws</button><button role="tab" data-tab="world">World</button><button role="tab" data-tab="lab">Lesions</button><button role="tab" data-tab="about">Real?</button>
+    <button role="tab" data-tab="brain" aria-selected="true">Brain</button><button role="tab" data-tab="body">Body</button><button role="tab" data-tab="eco">Ecology</button><button role="tab" data-tab="flaws">Flaws</button><button role="tab" data-tab="world">World</button><button role="tab" data-tab="lab">Lesions</button><button role="tab" data-tab="about">Real?</button>
   </div>
   <section data-pane="brain">
-    <div class="row"><b>Spikes</b> <small id="spk-label">3,268 neurons, rows coloured by region, newest on the right</small></div>
+    <div class="row"><b>Spikes</b> <small id="spk-label">3,268 4-comp HH neurons, rows coloured by region</small></div>
     <canvas id="raster" width="360" height="213"></canvas>
     <div id="regions" class="legend"></div>
     <div class="grid2"><div><b>Neuromodulators</b><div id="nm"></div></div><div><b>MOT (8)</b><div id="mot"></div></div></div>
-    <div class="row"><b>2D Binocular retina &amp; V1</b> <small>24×12 L/R sheets · 12×6 Gabor columns · SLAM</small></div><canvas id="retina" width="360" height="58"></canvas>
-    <div class="row"><b>Striatal race (21)</b> <small>16 sites · 3 pools · snack · explore (D1 up / D2 down)</small></div><canvas id="race" width="360" height="70"></canvas>
+    <div class="row"><b>Log-Polar Foveated Retina &amp; IT</b> <small>64×32 L/R (4,096 ch) · V1→V2→V4→IT · SLAM</small></div><canvas id="retina" width="360" height="58"></canvas>
+    <div class="row"><b>Striatal race (21)</b> <small>16 sites · 3 pools · snack · explore/bask (D1 / D2)</small></div><canvas id="race" width="360" height="70"></canvas>
     <div class="row"><b>LTC pattern generator</b> <small>24 liquid neurons</small></div><canvas id="cpg" width="360" height="60"></canvas>
     <div class="row"><b>Selective SSM (RTRL)</b> <small>32 modes |h|, Δ (online diagonal RTRL)</small></div><canvas id="ssm" width="360" height="40"></canvas>
-    <div class="row"><b>Transformer-XL world model</b> <small>Causal RoPE-SwiGLU · 1-step, 5-step MSE &amp; σ²</small></div><canvas id="wm" width="360" height="50"></canvas>
-    <div class="row"><b>Thought curvature &amp; metacog</b> <small>Eshkol Taylor-jet Frenet κ(t), τ(t) &amp; calibration</small></div><canvas id="metacog" width="360" height="44"></canvas>
+    <div class="row"><b>Multimodal Transformer-XL WM</b> <small>+0.1s / +0.5s / +2.0s BPTT + 8×4 RGB pixels</small></div><canvas id="wm" width="360" height="50"></canvas>
+    <div class="row"><b>Thought curvature &amp; MERA/MPS</b> <small>Eshkol κ(t), τ(t), χ=16 Vidal MPS &amp; Binary MERA</small></div><canvas id="metacog" width="360" height="44"></canvas>
     <div id="mindstats" class="stats"></div>
   </section>
   <section data-pane="body" hidden><div id="bodystats" class="stats"></div><canvas id="meta" width="360" height="90"></canvas></section>
+  <section data-pane="eco" hidden>
+    <p class="small">Open-ended multi-agent A-Life biosphere: autonomous conspecific Glitchlings forage, court, cross over diploid <b>92-gene Evo-Devo genomes</b>, lay thermally incubated 3D eggs, follow wind-advected <code>64×64×3</code> pheromone plumes, fertilize a <code>32×32</code> mycelial soil network, snap photonic bio-mites, and evade the patrolling Shadow-Leviathan.</p>
+    <label>Conspecific population (<span id="eco-peers-val">5</span>) <input type="range" id="eco-peers" min="0" max="14" step="1" value="5"></label>
+    <label>Photonic bio-mites (<span id="eco-mites-val">28</span>) <input type="range" id="eco-mites" min="0" max="56" step="2" value="28"></label>
+    <label>Shadow-Leviathan predators (<span id="eco-preds-val">1</span>) <input type="range" id="eco-preds" min="0" max="3" step="1" value="1"></label>
+    <label>Season cycle <select id="eco-season"><option value="auto" selected>Auto 4-season cycle</option><option value="spring">Spring (bloom)</option><option value="summer">Summer (warm)</option><option value="autumn">Autumn (amber)</option><option value="winter">Winter (vent basking)</option></select></label>
+    <div class="btns">
+      <button id="eco-spawn-peer">+ Spawn Conspecific</button>
+      <button id="eco-lay-egg">🥚 Lay Fertilized Egg</button>
+      <button id="eco-pred-btn">🐉 Summon Leviathan</button>
+    </div>
+    <div id="ecostats" class="stats"></div>
+  </section>
   <section data-pane="flaws" hidden>
     <p class="small">The four engineered flaws act on the neural pathways, as in the reference <code>glitchling.ts</code>.</p>
     <label class="sw"><input type="checkbox" id="f-scramble"> <b>Scramble</b> senses: SENS neurons re-permuted every <input id="f-scramble-p" type="number" min="5" max="600" value="90"> min + noise</label>
@@ -51,16 +70,17 @@
     <div class="btns"><button id="f-none">Healthy clone</button><button id="f-all">All flaws</button></div>
   </section>
   <section data-pane="world" hidden>
+    <label>Camera mode <select id="cam-mode"><option value="orbit" selected>Orbit follow</option><option value="pov">Creature Eye POV (binocular gaze)</option><option value="director">Auto-Director cinema</option><option value="overhead">Biosphere overhead</option></select></label>
     <label>Gravity tilt X <input type="range" id="gx" min="-0.5" max="0.5" step="0.01" value="0"></label>
     <label>Gravity tilt Z <input type="range" id="gz" min="-0.5" max="0.5" step="0.01" value="0"></label>
     <label>Gravity strength <input type="range" id="gs" min="2" max="20" step="0.5" value="9.8"></label>
     <label>Sim speed <select id="speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></label>
-    <label>Biological clock <select id="clock-mode"><option value="circadian" selected>240× demo (6-min day)</option><option value="ultradian">60× ultradian (24-min day)</option><option value="realtime">1× biological real-time (24-hr day)</option></select></label>
-    <label>Quality <select id="quality"><option value="auto" selected>auto (adaptive)</option><option value="0">low</option><option value="1">medium</option><option value="2">high</option><option value="3">ultra (shadows)</option></select></label>
-    <label>Brain scale <select id="brain-scale"><option value="S">S (436 neurons)</option><option value="M" selected>M (3,268 · default)</option><option value="L">L (11,972 · 532k syn)</option><option value="XL">XL (25,924 · 1.18M syn)</option><option value="XXL">XXL (104,904 · 4.76M syn)</option></select></label>
-    <label>Brain backend <select id="brain-backend"><option value="auto" selected>Auto (CPU S/M · Worker L–XXL)</option><option value="cpu">Main thread (Typed CSR)</option><option value="worker">Web Worker (off-thread)</option><option value="webgpu">WebGPU compute shader</option></select> <small id="backend-status"></small></label>
-    <label>World model <select id="wm-scale"><option value="std" selected>Standard (110k params)</option><option value="large">Large (546k params)</option><option value="xl">XL (1.17M params)</option></select></label>
-    <div class="btns"><button id="qrng-fetch" title="Fetch live photonic/vacuum-fluctuation quantum random bits over HTTPS (LFDR / ANU / NIST) with NIST SP 800-90B health tests">Fetch live photonic QRNG</button> <small id="qrng-status"></small></div>
+    <label>Biological clock <select id="clock-mode"><option value="realtime" selected>1× biological real-time (24-hr day · default)</option><option value="wall">1× local wall-clock solar sync</option><option value="ultradian">60× ultradian (24-min day)</option><option value="circadian">240× fast demo (6-min day)</option></select></label>
+    <label>Quality / 4K HDR <select id="quality"><option value="auto" selected>auto (adaptive HDR16F)</option><option value="0">low</option><option value="1">medium</option><option value="2">high (HDR16F + SSAO)</option><option value="3">ultra (shadows + HDR16F)</option><option value="4">Fixed 4K UHD (3840×2160 · HDR16F)</option></select></label>
+    <label>Brain scale <select id="brain-scale"><option value="S">S (436 neurons)</option><option value="M" selected>M (3,268 · default)</option><option value="L">L (11,972 · 531k syn)</option><option value="XL">XL (25,924 · 1.18M syn)</option><option value="XXL">XXL (104,904 · 4.74M syn)</option><option value="MEGA">MEGA (1,048,644 · 16.78M syn)</option></select></label>
+    <label>Brain backend <select id="brain-backend"><option value="auto" selected>Auto (CPU S/M · Worker L–MEGA)</option><option value="cpu">Main thread (Typed CSR)</option><option value="worker">Web Worker (off-thread)</option><option value="webgpu">WebGPU compute shader</option></select> <small id="backend-status"></small></label>
+    <label>World model <select id="wm-scale"><option value="std" selected>Standard (171k params)</option><option value="large">Large (647k params)</option><option value="xl">XL (1.30M params)</option><option value="ultra">Ultra (3.76M params)</option></select></label>
+    <div class="btns"><button id="qrng-fetch" title="Fetch live photonic/vacuum-fluctuation quantum random bits over HTTPS (4 CORS beacons: NIST / CURBy / Drand / ANU) with NIST SP 800-90B health tests">Fetch live photonic QRNG</button> <small id="qrng-status"></small></div>
     <div class="btns"><button id="rain">Rain</button><button id="gust">Gust</button><button id="sleepy">Make sleepy</button><button id="wake">Wake</button><button id="follow">Camera: follow</button><button id="reset">New seed</button></div>
     <label>Seed <input type="number" id="seed" min="1" max="999999" value="1"></label>
   </section>
@@ -68,9 +88,9 @@
     <p class="small">Lesions cut real pathways. Watch what stops working.</p>
     <div id="lesions" class="lesions"></div>
     <div id="lesionlog" class="stats"></div>
-    <h3>Lineage (78-gene developmental connectome)</h3>
-    <p class="small">All innate motor, whole-body synergy, gaze, roll-damping and sense→MOT steering pathways grow from a 78-gene developmental genome. "Refine starter" runs a 6-generation variance-reduced Mirrored Separable CMA-ES around the current genome; "De-novo from random" initializes purely from uniform random <code>[0.05, 0.95]^78</code> weights (zero starter priors), screens a 12-member Stratified Latin-Hypercube primordial cohort, and evolves locomotion + closed-loop steering over 10 generations in background Web Workers. "Adopt" grows a new creature from the evolved genome; "Previous genome" steps back one adoption.</p>
-    <div class="btns"><button id="evo-run">Refine starter (6 gens)</button><button id="evo-denovo">De-novo from random (10 gens)</button><button id="evo-adopt" disabled>Adopt lineage</button><button id="evo-undo" disabled>Previous genome</button><button id="evo-reset">Starter genome</button></div>
+    <h3>Lineage (92-gene Evo-Devo body + brain co-evolution)</h3>
+    <p class="small">All innate motor, synergy, gaze, roll-damping, steering AND 14 3D morphological &amp; neuro-allocation traits (body length/girth, limbs, dorsal crest-fin, caudal tail fluke, eye/stalk proportions, pigment, thermal optimum, hippocampal/cortical allocation) grow from a <b>92-gene Evo-Devo genome</b>. "Refine starter" runs 6-generation Surrogate-Assisted Active Mirrored CMA-ES; "De-novo from random" initializes purely from uniform random <code>[0.05, 0.95]^92</code> weights (zero starter priors), screens a 14-member Latin-Hypercube cohort, and co-evolves 3D morphology + locomotion + steering over 12 generations using quadratic-surrogate pre-screening in Web Workers.</p>
+    <div class="btns"><button id="evo-run">Refine starter (6 gens)</button><button id="evo-denovo">De-novo 92-gene (12 gens)</button><button id="evo-adopt" disabled>Adopt lineage</button><button id="evo-undo" disabled>Previous genome</button><button id="evo-reset">Starter genome</button></div>
     <div id="evo-log" class="stats"></div>
   </section>
   <section data-pane="about" hidden>
@@ -78,9 +98,10 @@
     <p class="small">This is a <b>simulation that runs in your browser</b>. All numbers on this page are computed live by the code in <code>live/js/sim/</code> and <code>live/js/tsotchke/</code>. It makes no claim of awareness, feelings, sentience or consciousness.</p>
     <h3>Computed for real, every frame</h3><ul class="small" id="real-list"></ul>
     <h3>Simplified or designed by hand</h3><ul class="small" id="simp-list"></ul>
-    <p class="small">Graphics: rendered by WebGL (three.js r170, bundled locally) into half-float buffers, ACES-tonemapped to your display, with bloom. Resolution adapts to hold the frame rate; it is not a fixed 4K/HDR output. Source and change log: <a href="https://github.com/0thernes/glitchling-jam/tree/main/live">github.com/0thernes/glitchling-jam/live</a>.</p>
+    <p class="small">Graphics: rendered by WebGL2 (three.js r170 + p5.js v1.11.3, both bundled locally) into 16-bit HalfFloat HDR16F render targets with depth-buffer SSAO, crepuscular scattering, UnrealBloom, ACES Filmic tonemapping, and Display-P3 wide gamut when supported, plus selectable Fixed 4K UHD (<code>3840×2160</code>, <code>?q=4k</code>) &amp; 4K PNG export. Source and change log: <a href="https://github.com/0thernes/glitchling-jam/tree/main/live">github.com/0thernes/glitchling-jam/live</a>.</p>
   </section>
 </aside>
+<div id="p5-studio" class="p5-studio" aria-label="p5.js live A-Life telemetry studio"></div>
 <div id="events" class="events" aria-live="polite"></div>
 <noscript><p class="nojs">This page needs JavaScript and WebGL. The simpler 2D version is at <a href="../play/">play/</a>.</p></noscript>
 <div id="glfail" class="nojs" hidden>WebGL could not start on this device. Try the 2D version at <a href="../play/">play/</a>.</div>

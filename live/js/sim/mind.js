@@ -1,13 +1,18 @@
-// Learning machinery beside the spiking substrate (upgraded in pass 16):
+// Learning machinery beside the spiking substrate (upgraded in pass 17):
 //  - SelectiveSSM: 32-mode complex diagonal state-space model (S4D/Mamba selectivity) with exact online mode-wise RTRL
 //    eligibility traces for input matrix B, selective step-size gate Wd, gate bias bd, and modal frequencies omega.
 //    Prediction-error gradients from the Causal Transformer-SSM WorldModel flow back into SelectiveSSM online.
-//  - WorldModel: Transformer-XL Causal Multi-Head RoPE Self-Attention + RMSNorm + SwiGLU + RTRL-SSM Hybrid World Model
-//    over a T=8 causal token ring buffer (effective receptive field L*(T-1)+1 steps), predicting BOTH 1-step (+0.1 s)
-//    and action-conditioned 5-step (+0.5 s) nonlinear horizons + heteroscedastic predVar, with selectable scales:
-//      * 'std'   (L=2, d=64,  H=4, ffn=128 -> 114,484 params, real-time default)
-//      * 'large' (L=3, d=128, H=4, ffn=256 -> 549,940 params)
-//      * 'xl'    (L=4, d=168, H=6, ffn=320 -> 1,141,620 params, >1M-parameter causal Transformer)
+//  - WorldModel: Causal Multi-Head RoPE Self-Attention + RMSNorm + SwiGLU + RTRL-SSM Multimodal Transformer-XL
+//    over up to T=16 causal KV tokens (up to 9.1 s receptive field), ingesting BOTH 72-D neural-SSM state AND 96-D (8x4x3)
+//    raw foveal RGB visual pixels, and training via end-to-end analytical backpropagation across THREE horizons:
+//      1) +0.1 s (1-step) kinematics + raw foveal RGB pixel prediction + heteroscedastic predVar
+//      2) +0.5 s (5-step) action-conditioned nonlinear SwiGLU horizon
+//      3) +2.0 s (20-step multi-second) action-conditioned kinematic + raw foveal pixel end-to-end BPTT through all L blocks!
+//    Selectable scales (?wm=std|large|xl|ultra):
+//      * 'std'   (L=2, d=64,  H=4, ffn=128, T=12 ->   ~148k params, real-time default)
+//      * 'large' (L=3, d=128, H=4, ffn=256, T=12 ->   ~625k params)
+//      * 'xl'    (L=4, d=168, H=6, ffn=320, T=16 -> ~1.24M params)
+//      * 'ultra' (L=6, d=240, H=8, ffn=480, T=16 -> ~2.76M params, multi-million-parameter Transformer-XL)
 //  - Sleep: two-process (adenosine S + circadian C) flip-flop and ultradian N1/N2/N3/REM stage cycle.
 //  - PredictiveCoding: two-level Rao & Ballard / Whittington & Bogacz hierarchical inference & Hebbian error learning.
 import { mulberry, gauss, softplus, clamp } from './util.js';
@@ -18,15 +23,18 @@ const dsilu = (x) => {
   return s * (1 + x * (1 - s));
 };
 
+export const N_VIS_PATCH = 96; // 8x4x3 raw foveal RGB pixel patch from binocular retina
+
 export const WM_SCALES = {
-  std:   { L: 2, d: 64,  H: 4, ffn: 128, T: 8, d5: 64 },
-  large: { L: 3, d: 128, H: 4, ffn: 256, T: 8, d5: 96 },
-  xl:    { L: 4, d: 168, H: 6, ffn: 320, T: 8, d5: 112 },
+  std:   { L: 2, d: 64,  H: 4, ffn: 128, T: 12, d5: 64  },
+  large: { L: 3, d: 128, H: 4, ffn: 256, T: 12, d5: 96  },
+  xl:    { L: 4, d: 168, H: 6, ffn: 320, T: 16, d5: 112 },
+  ultra: { L: 6, d: 240, H: 8, ffn: 480, T: 16, d5: 144 },
 };
 
 function resolveWMScale(scaleArg) {
   if (typeof scaleArg === 'string' && WM_SCALES[scaleArg]) return scaleArg;
-  if (typeof scaleArg === 'number') return scaleArg >= 160 ? 'xl' : scaleArg >= 96 ? 'large' : 'std';
+  if (typeof scaleArg === 'number') return scaleArg >= 220 ? 'ultra' : scaleArg >= 160 ? 'xl' : scaleArg >= 96 ? 'large' : 'std';
   const g =
     globalThis.WM_SCALE ||
     globalThis.TW?.wmScale ||
@@ -198,7 +206,7 @@ export class SelectiveSSM {
 }
 
 export class WorldModel {
-  constructor(nZ, nY, seed = 1, scale = null) {
+  constructor(nZ, nY, seed = 1, scale = null, nVis = N_VIS_PATCH) {
     const r = mulberry(seed * 577 + 13);
     const scaleName = resolveWMScale(scale);
     const cfg = WM_SCALES[scaleName];
@@ -209,17 +217,20 @@ export class WorldModel {
     this.scaleName = scaleName;
     this.nZ = nZ;
     this.nY = nY;
+    this.nVis = nVis;
     this.nLayers = L;
     this.dModel = d;
-    this.H = d; // compatibility alias
+    this.H = d;
     this.nHeads = H;
     this.dHead = dh;
     this.dFFN = ffn;
     this.ctxLen = T;
     this.d5 = d5;
     this.K5 = 5;
+    this.K20 = 20; // +2.0 s multi-second horizon (20 steps @ 10 Hz)
     this.nAct = Math.min(8, nZ);
     this.nA5 = this.K5 * this.nAct;
+    this.nA20 = 4 * this.nAct; // 4 x 0.5-s temporal chunks across 2.0-s motor plan
 
     let pCount = 0;
     const allocF32 = (len, std) => {
@@ -235,11 +246,11 @@ export class WorldModel {
       return a;
     };
 
-    // Token input projection: z_t -> x^(0)_t in R^d
+    // Multimodal token input embedding: z_t (72-D) + raw foveal RGB pixel patch vis_t (96-D) -> x^(0)_t in R^d
     this.Win = allocF32(d * nZ, 0.75 / Math.sqrt(nZ));
+    this.WvisIn = allocF32(d * nVis, 0.35 / Math.sqrt(nVis));
     this.bin = allocF32(d, 0);
 
-    // Precompute multi-scale Rotary Position Embeddings (RoPE) for causal lags 0..T-1
     this.ropeCos = new Float32Array(T * halfDh);
     this.ropeSin = new Float32Array(T * halfDh);
     for (let lag = 0; lag < T; lag++) {
@@ -251,7 +262,6 @@ export class WorldModel {
       }
     }
 
-    // L Transformer-XL blocks: RMSNorm -> Causal Multi-Head RoPE Self-Attention -> RMSNorm -> SwiGLU FFN
     const sProj = 0.75 / Math.sqrt(d);
     const sRes = 0.35 / Math.sqrt(2 * L * d);
     const sFFN = 0.75 / Math.sqrt(d);
@@ -270,11 +280,9 @@ export class WorldModel {
         Wgate: allocF32(ffn * d, sFFN),
         Wup: allocF32(ffn * d, sFFN),
         Wdown: allocF32(d * ffn, sDown),
-        // Transformer-XL recurrent KV & normalized activation ring buffer for past T-1 tokens
         pastXNorm: new Float32Array(pastCap * d),
         pastKRaw: new Float32Array(pastCap * d),
         pastV: new Float32Array(pastCap * d),
-        // Forward cache for exact analytical backprop on active token
         xIn: new Float32Array(d),
         xNorm1: new Float32Array(d),
         invRms1: 1,
@@ -293,12 +301,17 @@ export class WorldModel {
       });
     }
 
-    // 1-step (+0.1 s) output head + causal velocity/linear skip highways
+    // 1-step (+0.1 s) kinematic + raw foveal RGB pixel decoder heads
     this.rmsOut = allocOnes(d);
     this.Wout = allocF32(nY * d, 0.14 / Math.sqrt(d));
     this.bout = allocF32(nY, 0);
     this.Wskip = allocF32(nY * nZ, 0);
-    this.Wvel = allocF32(nY * nZ, 0); // first-difference temporal skip (z_t - z_{t-1})
+    this.Wvel = allocF32(nY * nZ, 0);
+
+    // 1-step (+0.1 s) 96-D raw foveal RGB pixel prediction head (residual identity initialization around vis_t)
+    this.WvisOut = allocF32(nVis * d, 0.06 / Math.sqrt(d));
+    this.bvisOut = allocF32(nVis, 0);
+    this.WvisDiag = allocOnes(nVis); // identity temporal persistence anchor on each RGB pixel
 
     // 5-step (+0.5 s) action-conditioned nonlinear SwiGLU horizon head
     const nA5 = this.nA5;
@@ -314,22 +327,36 @@ export class WorldModel {
     this.Wskip5a = allocF32(nY * nA5, 0);
     this.Wvel5 = allocF32(nY * nZ, 0);
 
-    // Heteroscedastic uncertainty head (predicts expected MSE before observing y)
+    // 20-step (+2.0 s) multi-second action-conditioned SwiGLU kinematic + raw foveal RGB pixel horizon head
+    const nA20 = this.nA20;
+    this.Wg20h = allocF32(d5 * d, 0.6 / Math.sqrt(d));
+    this.Wg20a = allocF32(d5 * nA20, 0.85 / Math.sqrt(12));
+    this.bg20 = allocF32(d5, 0);
+    this.Wu20h = allocF32(d5 * d, 0.6 / Math.sqrt(d));
+    this.Wu20a = allocF32(d5 * nA20, 0.85 / Math.sqrt(12));
+    this.bu20 = allocF32(d5, 0);
+    this.Wout20 = allocF32(nY * d5, 0.04 / Math.sqrt(d5));
+    this.bout20 = allocF32(nY, 0);
+    this.Wvis20 = allocF32(nVis * d5, 0.04 / Math.sqrt(d5));
+    this.bvis20 = allocF32(nVis, 0);
+    this.Wskip20z = allocF32(nY * nZ, 0);
+    this.Wskip20a = allocF32(nY * nA20, 0);
+
+    // Heteroscedastic uncertainty head
     this.Wvar = allocF32(d, 0.05);
     this.bvar = -2.4;
     pCount += 1;
     this.predVar = 0.08;
     this.paramCount = pCount;
 
-    // Causal token history ring buffer (stores past T-1 tokens)
     this.pastCap = pastCap;
-    this.ringPtr = 0; // points to newest committed slot; -1 before any commit
+    this.ringPtr = 0;
     this.ringCount = 0;
     this.lastZ = new Float64Array(nZ);
     this.hasLastZ = false;
     this.attnEntropy = 0;
 
-    // 5-step (+0.5 s) causal FIFO buffer for online multi-horizon learning
+    // 5-step (+0.5 s) causal FIFO buffer
     this.fifo5 = Array.from({ length: this.K5 }, () => ({
       z: new Float64Array(nZ),
       dz: new Float64Array(nZ),
@@ -337,20 +364,38 @@ export class WorldModel {
       act: new Float64Array(this.nAct),
     }));
     this.fifoLen = 0;
-    this.fifoHead = 0; // oldest index when full
+    this.fifoHead = 0;
     this.actSeqBuf = new Float64Array(nA5);
     this.p5Buf = new Float64Array(nY);
     this.g5Buf = new Float32Array(d5);
     this.u5Buf = new Float32Array(d5);
     this.act5Buf = new Float32Array(d5);
 
-    // Forward/backward scratch buffers (zero GC churn)
+    // 20-step (+2.0 s) multi-second causal FIFO buffer for end-to-end Transformer-XL BPTT
+    this.fifo20 = Array.from({ length: this.K20 }, () => ({
+      z: new Float64Array(nZ),
+      vis: new Float32Array(nVis),
+      hasVis: false,
+      act: new Float64Array(this.nAct),
+    }));
+    this.fifo20Len = 0;
+    this.fifo20Head = 0;
+    this.actPlan20Buf = new Float64Array(nA20);
+    this.p20Buf = new Float64Array(nY);
+    this.vis20Buf = new Float32Array(nVis);
+    this.g20Buf = new Float32Array(d5);
+    this.u20Buf = new Float32Array(d5);
+    this.act20Buf = new Float32Array(d5);
+    this.dh20Buf = new Float32Array(d);
+
+    // Forward/backward scratch buffers
     this.xCur = new Float32Array(d);
     this.xNext = new Float32Array(d);
     this.hOutNorm = new Float32Array(d);
     this.invRmsOut = 1;
     this.dzBuf = new Float64Array(nZ);
     this.pBuf = new Float64Array(nY);
+    this.visPred = new Float32Array(nVis);
     this.dxBuf = new Float32Array(d);
     this.duBuf = new Float32Array(d);
     this.duNormBuf = new Float32Array(d);
@@ -366,16 +411,20 @@ export class WorldModel {
 
     this.err = new Float64Array(nY);
     this.err5 = new Float64Array(nY);
+    this.err20 = new Float64Array(nY);
     this.var = 1;
     this.surprise = 0;
     this.mse = 1;
     this.mse5 = 1;
+    this.mse20 = 1;
+    this.visMSE = 0.05;
+    this.visMSE20 = 0.08;
     this.n = 0;
     this.n5 = 0;
+    this.n20 = 0;
     this.lesion = false;
   }
 
-  /** Create an isolated causal KV rollout context for multi-step REM dream rollouts */
   newRolloutCtx() {
     const pastCap = this.pastCap, d = this.dModel, L = this.nLayers;
     return {
@@ -390,9 +439,9 @@ export class WorldModel {
     };
   }
 
-  /** Encode token z through Win + L Causal Multi-Head RoPE Self-Attention + SwiGLU blocks */
-  _encode(z, useHistory = true, ctx = null) {
-    const { nZ, dModel: d, nLayers: L, nHeads: H, dHead: dh, dFFN: ffn, Win, bin, ropeCos, ropeSin, pastCap } = this;
+  /** Encode multimodal token (z_t + optional 96-D foveal RGB patch) through L Causal RoPE-SwiGLU blocks */
+  _encode(z, useHistory = true, ctx = null, visPatch = null) {
+    const { nZ, nVis, dModel: d, nLayers: L, nHeads: H, dHead: dh, dFFN: ffn, Win, WvisIn, bin, ropeCos, ropeSin, pastCap } = this;
     const halfDh = dh >> 1;
     const invSqrtDh = 1 / Math.sqrt(dh);
     const x = this.xCur;
@@ -402,12 +451,16 @@ export class WorldModel {
       let s = bin[j];
       const off = j * nZ;
       for (let i = 0; i < nZ; i++) s += Win[off + i] * z[i];
+      if (visPatch) {
+        const offV = j * nVis;
+        for (let v = 0; v < nVis; v++) s += WvisIn[offV + v] * visPatch[v];
+      }
       x[j] = s;
     }
 
     const histCount = useHistory ? (ctx ? ctx.ringCount : this.ringCount) : 0;
     const histPtr = ctx ? ctx.ringPtr : this.ringPtr;
-    const nLags = 1 + histCount; // lag 0 = current token, lag 1..histCount = past causal tokens
+    const nLags = 1 + histCount;
     let entSum = 0;
 
     for (let l = 0; l < L; l++) {
@@ -433,7 +486,6 @@ export class WorldModel {
       const pK = ctx ? ctx.pastKRaw[l] : blk.pastKRaw;
       const pV = ctx ? ctx.pastV[l] : blk.pastV;
 
-      // Multi-head RoPE scaled dot-product causal self-attention
       for (let h = 0; h < H; h++) {
         const hOff = h * dh;
         const aOff = h * this.ctxLen;
@@ -493,7 +545,6 @@ export class WorldModel {
         entSum += hEnt;
       }
 
-      // Output projection + attention residual
       for (let j = 0; j < d; j++) {
         let s = x[j];
         const off = j * d;
@@ -501,7 +552,6 @@ export class WorldModel {
         blk.uMid[j] = s;
       }
 
-      // Pre-FFN RMSNorm + SwiGLU FFN + residual
       blk.invRms2 = rmsNormFwd(blk.uMid, blk.rms2, blk.uNorm2);
       const { Wgate, Wup, Wdown, uNorm2, gatePre, upPre, ffnAct } = blk;
       for (let k = 0; k < ffn; k++) {
@@ -528,7 +578,6 @@ export class WorldModel {
     this.attnEntropy = entSum / (L * H);
     this.invRmsOut = rmsNormFwd(x, this.rmsOut, this.hOutNorm);
 
-    // If a mutable rollout context was supplied (e.g. REM dream rollout), advance its KV ring buffer
     if (ctx) {
       const nextSlot = (ctx.ringPtr + 1) % pastCap;
       for (let l = 0; l < L; l++) {
@@ -541,7 +590,159 @@ export class WorldModel {
     return this.hOutNorm;
   }
 
-  /** Commit active token's normalized activations and KV projections into the live waking ring buffer */
+  /** Analytical backward pass through all L Transformer-XL blocks + input embeddings (z & raw visual pixels) */
+  _backpropBlocks(dOutNorm, z, visIn, etaTr, useHistory = false, outGradZ = null) {
+    const {
+      nZ, nVis, dModel: d, nLayers: L, nHeads: H, dHead: dh, dFFN: ffn,
+      Win, WvisIn, bin, ropeCos, ropeSin, pastCap,
+      dxBuf, duBuf, duNormBuf, dxNormBuf, dAttnBuf, dqBuf, dkRawBuf, dvBuf, dFfnBuf, dGateBuf, dUpBuf,
+    } = this;
+    const halfDh = dh >> 1;
+    const invSqrtDh = 1 / Math.sqrt(dh);
+    const etaNorm = 0.15 * etaTr;
+
+    dxBuf.fill(0);
+    rmsNormBwdUpdate(this.xCur, this.invRmsOut, this.rmsOut, dOutNorm, dxBuf, etaNorm);
+
+    const histCount = useHistory ? this.ringCount : 0;
+    const nLags = 1 + histCount;
+
+    for (let l = L - 1; l >= 0; l--) {
+      const blk = this.blocks[l];
+      const { Wq, Wk, Wv, Wo, Wgate, Wup, Wdown, uMid, uNorm2, gatePre, upPre, ffnAct, xIn, xNorm1, q, v0, alpha, kRotCache, attnOut } = blk;
+
+      duBuf.set(dxBuf);
+      dFfnBuf.fill(0);
+      for (let j = 0; j < d; j++) {
+        const dxj = clamp(dxBuf[j], -3, 3);
+        const off = j * ffn;
+        for (let k = 0; k < ffn; k++) {
+          dFfnBuf[k] += Wdown[off + k] * dxj;
+          Wdown[off + k] = clamp(Wdown[off + k] - etaTr * dxj * ffnAct[k], -2.5, 2.5);
+        }
+      }
+      duNormBuf.fill(0);
+      for (let k = 0; k < ffn; k++) {
+        const df = dFfnBuf[k];
+        const dg = clamp(df * upPre[k] * dsilu(gatePre[k]), -3, 3);
+        const du = clamp(df * silu(gatePre[k]), -3, 3);
+        dGateBuf[k] = dg;
+        dUpBuf[k] = du;
+        const off = k * d;
+        for (let i = 0; i < d; i++) {
+          const ui = uNorm2[i];
+          duNormBuf[i] += Wgate[off + i] * dg + Wup[off + i] * du;
+          Wgate[off + i] = clamp(Wgate[off + i] - etaTr * dg * ui, -2.5, 2.5);
+          Wup[off + i] = clamp(Wup[off + i] - etaTr * du * ui, -2.5, 2.5);
+        }
+      }
+      rmsNormBwdUpdate(uMid, blk.invRms2, blk.rms2, duNormBuf, duBuf, etaNorm);
+
+      dxBuf.set(duBuf);
+      dAttnBuf.fill(0);
+      for (let j = 0; j < d; j++) {
+        const duj = clamp(duBuf[j], -3, 3);
+        const off = j * d;
+        for (let i = 0; i < d; i++) {
+          dAttnBuf[i] += Wo[off + i] * duj;
+          Wo[off + i] = clamp(Wo[off + i] - etaTr * duj * attnOut[i], -2.5, 2.5);
+        }
+      }
+
+      dqBuf.fill(0);
+      dxNormBuf.fill(0);
+
+      for (let lag = 0; lag < nLags; lag++) {
+        dkRawBuf.fill(0);
+        dvBuf.fill(0);
+        const slot = lag === 0 ? -1 : (this.ringPtr - (lag - 1) + pastCap) % pastCap;
+        const rOff = lag * halfDh;
+        const rotBase = lag * d;
+
+        for (let h = 0; h < H; h++) {
+          const hOff = h * dh;
+          const aOff = h * this.ctxLen;
+          const wLag = alpha[aOff + lag];
+
+          for (let m = 0; m < dh; m++) dvBuf[hOff + m] = wLag * dAttnBuf[hOff + m];
+
+          let dotLag = 0, expectedDot = 0;
+          for (let lag2 = 0; lag2 < nLags; lag2++) {
+            let srcV2, vOff2;
+            if (lag2 === 0) {
+              srcV2 = v0;
+              vOff2 = hOff;
+            } else {
+              const s2 = (this.ringPtr - (lag2 - 1) + pastCap) % pastCap;
+              srcV2 = blk.pastV;
+              vOff2 = s2 * d + hOff;
+            }
+            let dvDot = 0;
+            for (let m = 0; m < dh; m++) dvDot += dAttnBuf[hOff + m] * srcV2[vOff2 + m];
+            if (lag2 === lag) dotLag = dvDot;
+            expectedDot += alpha[aOff + lag2] * dvDot;
+          }
+          const dScore = clamp(wLag * (dotLag - expectedDot) * invSqrtDh, -3, 3);
+
+          for (let m = 0; m < halfDh; m++) {
+            const c = ropeCos[rOff + m], s = ropeSin[rOff + m];
+            dqBuf[hOff + 2 * m] += dScore * kRotCache[rotBase + hOff + 2 * m];
+            dqBuf[hOff + 2 * m + 1] += dScore * kRotCache[rotBase + hOff + 2 * m + 1];
+            const q0 = dScore * q[hOff + 2 * m], q1 = dScore * q[hOff + 2 * m + 1];
+            dkRawBuf[hOff + 2 * m] = q0 * c + q1 * s;
+            dkRawBuf[hOff + 2 * m + 1] = -q0 * s + q1 * c;
+          }
+        }
+
+        const srcX = lag === 0 ? xNorm1 : blk.pastXNorm;
+        const xOff = lag === 0 ? 0 : slot * d;
+        const etaLag = lag === 0 ? etaTr : (0.5 * etaTr) / nLags;
+        for (let j = 0; j < d; j++) {
+          const dk = clamp(dkRawBuf[j], -3, 3), dv = clamp(dvBuf[j], -3, 3);
+          const off = j * d;
+          if (lag === 0) {
+            for (let i = 0; i < d; i++) {
+              const xi = srcX[i];
+              dxNormBuf[i] += Wk[off + i] * dk + Wv[off + i] * dv;
+              Wk[off + i] = clamp(Wk[off + i] - etaLag * dk * xi, -2.5, 2.5);
+              Wv[off + i] = clamp(Wv[off + i] - etaLag * dv * xi, -2.5, 2.5);
+            }
+          } else {
+            for (let i = 0; i < d; i++) {
+              const xi = srcX[xOff + i];
+              Wk[off + i] = clamp(Wk[off + i] - etaLag * dk * xi, -2.5, 2.5);
+              Wv[off + i] = clamp(Wv[off + i] - etaLag * dv * xi, -2.5, 2.5);
+            }
+          }
+        }
+      }
+
+      for (let j = 0; j < d; j++) {
+        const dq = clamp(dqBuf[j], -3, 3), off = j * d;
+        for (let i = 0; i < d; i++) {
+          dxNormBuf[i] += Wq[off + i] * dq;
+          Wq[off + i] = clamp(Wq[off + i] - etaTr * dq * xNorm1[i], -2.5, 2.5);
+        }
+      }
+      rmsNormBwdUpdate(xIn, blk.invRms1, blk.rms1, dxNormBuf, dxBuf, etaNorm);
+    }
+
+    for (let j = 0; j < d; j++) {
+      const dx = clamp(dxBuf[j], -3, 3), off = j * nZ;
+      for (let i = 0; i < nZ; i++) {
+        if (outGradZ) outGradZ[i] += Win[off + i] * dx;
+        Win[off + i] = clamp(Win[off + i] - etaTr * dx * z[i], -2.5, 2.5);
+      }
+      if (visIn) {
+        const offV = j * nVis;
+        for (let v = 0; v < nVis; v++) {
+          WvisIn[offV + v] = clamp(WvisIn[offV + v] - etaTr * dx * visIn[v], -2.5, 2.5);
+        }
+      }
+      bin[j] = clamp(bin[j] - etaTr * dx, -2.5, 2.5);
+    }
+  }
+
   _commitToken(z) {
     const { dModel: d, nLayers: L, pastCap } = this;
     const nextSlot = (this.ringCount === 0 ? 0 : (this.ringPtr + 1) % pastCap);
@@ -557,9 +758,9 @@ export class WorldModel {
     this.hasLastZ = true;
   }
 
-  /** 1-step (+0.1 s) prediction: y_{t+1} from z_t + causal T=8 token history */
-  predict(z, out, rolloutCtx = null, useHistory = true) {
-    const { nZ, nY, dModel: d, Wout, bout, Wskip, Wvel, dzBuf } = this;
+  /** 1-step (+0.1 s) prediction of kinematics y_{t+1} and (when visIn provided) 96-D raw foveal RGB pixels vis_{t+1} */
+  predict(z, out, rolloutCtx = null, useHistory = true, visIn = null, visOut = null) {
+    const { nZ, nY, nVis, dModel: d, Wout, bout, Wskip, Wvel, WvisOut, bvisOut, WvisDiag, dzBuf } = this;
     const hasPrev = useHistory && (rolloutCtx ? rolloutCtx.hasLastZ : this.hasLastZ);
     const prevZ = rolloutCtx ? rolloutCtx.lastZ : this.lastZ;
     if (hasPrev) {
@@ -568,7 +769,7 @@ export class WorldModel {
       dzBuf.fill(0);
     }
 
-    const h = this._encode(z, useHistory, rolloutCtx);
+    const h = this._encode(z, useHistory, rolloutCtx, visIn);
     if (rolloutCtx) {
       rolloutCtx.lastZ.set(z);
       rolloutCtx.hasLastZ = true;
@@ -582,13 +783,23 @@ export class WorldModel {
       out[o] = s;
     }
 
+    if (visIn) {
+      const vDst = visOut || this.visPred;
+      for (let v = 0; v < nVis; v++) {
+        let sv = bvisOut[v] + WvisDiag[v] * visIn[v];
+        const offV = v * d;
+        for (let j = 0; j < d; j++) sv += WvisOut[offV + j] * h[j];
+        vDst[v] = clamp(sv, 0, 1);
+      }
+    }
+
     let sv = this.bvar;
     for (let j = 0; j < d; j++) sv += this.Wvar[j] * h[j];
     this.predVar = softplus(clamp(sv, -8, 6)) + 1e-4;
     return out;
   }
 
-  /** 5-step (+0.5 s) action-conditioned multi-horizon prediction: y_{t+5} from (z_t, 5-step motor plan A_5) */
+  /** 5-step (+0.5 s) action-conditioned multi-horizon prediction */
   predict5(z0, actSeq40, out, hCtx = null, dz0 = null) {
     const { nZ, nY, dModel: d, d5, nA5, Wg5h, Wg5a, bg5, Wu5h, Wu5a, bu5, Wout5, bout5, Wskip5z, Wskip5a, Wvel5, g5Buf, u5Buf, act5Buf } = this;
     const h = hCtx || this._encode(z0, false, null);
@@ -623,7 +834,49 @@ export class WorldModel {
     return out;
   }
 
-  /** Online analytical backprop through the 5-step (+0.5 s) SwiGLU horizon head */
+  /** 20-step (+2.0 s) multi-second action-conditioned prediction of future kinematics y_{t+20} & raw foveal pixels vis_{t+20} */
+  predict20(z0, actPlan32, outY, outVis = null, vis0 = null, hCtx = null) {
+    const { nZ, nY, nVis, dModel: d, d5, nA20, Wg20h, Wg20a, bg20, Wu20h, Wu20a, bu20, Wout20, bout20, Wvis20, bvis20, Wskip20z, Wskip20a, g20Buf, u20Buf, act20Buf } = this;
+    const h = hCtx || this._encode(z0, false, null, vis0);
+
+    for (let k = 0; k < d5; k++) {
+      const offH = k * d, offA = k * nA20;
+      let sg = bg20[k], su = bu20[k];
+      for (let j = 0; j < d; j++) {
+        const hj = h[j];
+        sg += Wg20h[offH + j] * hj;
+        su += Wu20h[offH + j] * hj;
+      }
+      for (let a = 0; a < nA20; a++) {
+        const va = actPlan32[a];
+        sg += Wg20a[offA + a] * va;
+        su += Wu20a[offA + a] * va;
+      }
+      g20Buf[k] = sg;
+      u20Buf[k] = su;
+      act20Buf[k] = silu(sg) * su;
+    }
+
+    for (let o = 0; o < nY; o++) {
+      let s = bout20[o];
+      const off5 = o * d5, offZ = o * nZ, offA = o * nA20;
+      for (let k = 0; k < d5; k++) s += Wout20[off5 + k] * act20Buf[k];
+      for (let i = 0; i < nZ; i++) s += Wskip20z[offZ + i] * z0[i];
+      for (let a = 0; a < nA20; a++) s += Wskip20a[offA + a] * actPlan32[a];
+      outY[o] = s;
+    }
+
+    if (outVis) {
+      for (let v = 0; v < nVis; v++) {
+        let sv = bvis20[v] + (vis0 ? 0.85 * vis0[v] : 0.25);
+        const offV = v * d5;
+        for (let k = 0; k < d5; k++) sv += Wvis20[offV + k] * act20Buf[k];
+        outVis[v] = clamp(sv, 0, 1);
+      }
+    }
+    return outY;
+  }
+
   _learn5(z0, dz0, h0, actSeq40, yTarget, lr) {
     const { nZ, nY, dModel: d, d5, nA5, Wg5h, Wg5a, bg5, Wu5h, Wu5a, bu5, Wout5, bout5, Wskip5z, Wskip5a, Wvel5, g5Buf, u5Buf, act5Buf, p5Buf } = this;
     this.predict5(z0, actSeq40, p5Buf, h0, dz0);
@@ -637,7 +890,6 @@ export class WorldModel {
     for (let j = 0; j < d; j++) hh += h0[j] * h0[j];
     for (let k = 0; k < d5; k++) f5n += act5Buf[k] * act5Buf[k];
 
-    // zz and aa already start at 1 above, so joint linear norm = zz + aa - 1
     const linNorm5 = zz + aa - 1;
     const etaSkZ = (0.88 * lr) / linNorm5;
     const etaSkA = (0.88 * lr) / linNorm5;
@@ -645,7 +897,7 @@ export class WorldModel {
     const etaOut5 = (0.24 * lr) / (f5n + linNorm5);
     const etaHid5 = (0.9 * lr) / (hh + 2 * aa + 4);
 
-    const dAct5 = this.dFfnBuf; // length ffn >= d5
+    const dAct5 = this.dFfnBuf;
     for (let k = 0; k < d5; k++) dAct5[k] = 0;
 
     let se5 = 0;
@@ -692,20 +944,142 @@ export class WorldModel {
     return se5;
   }
 
-  /** Online analytical backprop through Output + L Causal RoPE-SwiGLU Transformer blocks + SelectiveSSM RTRL */
-  learn(z, y, lr = 0.05, ssm = null, isSeq = null) {
+  /**
+   * True Multi-Second (+2.0 s / 20 steps) End-to-End BPTT through BOTH future kinematics AND 96-D raw foveal pixels:
+   * re-encodes (z_{t-20}, vis_{t-20}) live through all L Transformer-XL blocks and backpropagates multi-second
+   * kinematic + visual error all the way into Wdown, Wgate, Wup, Wo, Wq, Wk, Wv, Win and WvisIn!
+   */
+  _learn20(z0, vis0, actPlan32, yTarget, visTarget, lr) {
+    const {
+      nZ, nY, nVis, dModel: d, d5, nA20,
+      Wg20h, Wg20a, bg20, Wu20h, Wu20a, bu20, Wout20, bout20, Wvis20, bvis20, Wskip20z, Wskip20a,
+      g20Buf, u20Buf, act20Buf, p20Buf, vis20Buf, dh20Buf,
+    } = this;
+
+    // Live forward pass at lag t-20 to populate Transformer-XL block caches for exact end-to-end BPTT
+    const h0 = this._encode(z0, false, null, vis0);
+    this.predict20(z0, actPlan32, p20Buf, visTarget ? vis20Buf : null, vis0, h0);
+
+    let zz = 1, aa = 1, hh = 1, f20n = 1;
+    for (let i = 0; i < nZ; i++) zz += z0[i] * z0[i];
+    for (let a = 0; a < nA20; a++) aa += actPlan32[a] * actPlan32[a];
+    for (let j = 0; j < d; j++) hh += h0[j] * h0[j];
+    for (let k = 0; k < d5; k++) f20n += act20Buf[k] * act20Buf[k];
+
+    const linNorm = zz + aa - 1;
+    const etaSk = (0.72 * lr) / linNorm;
+    const etaOut = (0.22 * lr) / (f20n + linNorm);
+    const etaHid = (0.75 * lr) / (hh + 2 * aa + 4);
+
+    const dAct20 = this.dFfnBuf;
+    for (let k = 0; k < d5; k++) dAct20[k] = 0;
+
+    let se20 = 0;
+    for (let o = 0; o < nY; o++) {
+      const gp = p20Buf[o] - yTarget[o];
+      this.err20[o] = -gp;
+      se20 += gp * gp;
+      const off5 = o * d5, offZ = o * nZ, offA = o * nA20;
+      for (let k = 0; k < d5; k++) {
+        dAct20[k] += Wout20[off5 + k] * gp;
+        Wout20[off5 + k] = clamp(Wout20[off5 + k] - etaOut * gp * act20Buf[k], -2.5, 2.5);
+      }
+      bout20[o] = clamp(bout20[o] - 0.2 * etaSk * gp, -2.5, 2.5);
+      for (let i = 0; i < nZ; i++) Wskip20z[offZ + i] = clamp(Wskip20z[offZ + i] - etaSk * gp * z0[i], -2.5, 2.5);
+      for (let a = 0; a < nA20; a++) Wskip20a[offA + a] = clamp(Wskip20a[offA + a] - etaSk * gp * actPlan32[a], -2.5, 2.5);
+    }
+    se20 /= nY;
+
+    if (visTarget) {
+      let vse20 = 0;
+      const wVis = 0.30;
+      for (let v = 0; v < nVis; v++) {
+        const gv = vis20Buf[v] - visTarget[v];
+        vse20 += gv * gv;
+        const offV = v * d5;
+        for (let k = 0; k < d5; k++) {
+          dAct20[k] += wVis * Wvis20[offV + k] * gv;
+          Wvis20[offV + k] = clamp(Wvis20[offV + k] - etaOut * gv * act20Buf[k], -2.0, 2.0);
+        }
+        bvis20[v] = clamp(bvis20[v] - 0.15 * etaSk * gv, -1.5, 1.5);
+      }
+      vse20 /= nVis;
+      this.visMSE20 = this.n20 === 0 ? vse20 : this.visMSE20 + 0.015 * (vse20 - this.visMSE20);
+    }
+
+    dh20Buf.fill(0);
+    for (let k = 0; k < d5; k++) {
+      const da = dAct20[k];
+      const dg = clamp(da * u20Buf[k] * dsilu(g20Buf[k]), -3, 3);
+      const du = clamp(da * silu(g20Buf[k]), -3, 3);
+      const offH = k * d, offA = k * nA20;
+      for (let j = 0; j < d; j++) {
+        const hj = h0[j];
+        dh20Buf[j] += Wg20h[offH + j] * dg + Wu20h[offH + j] * du;
+        Wg20h[offH + j] = clamp(Wg20h[offH + j] - etaHid * dg * hj, -2.5, 2.5);
+        Wu20h[offH + j] = clamp(Wu20h[offH + j] - etaHid * du * hj, -2.5, 2.5);
+      }
+      for (let a = 0; a < nA20; a++) {
+        const va = actPlan32[a];
+        Wg20a[offA + a] = clamp(Wg20a[offA + a] - etaHid * dg * va, -2.5, 2.5);
+        Wu20a[offA + a] = clamp(Wu20a[offA + a] - etaHid * du * va, -2.5, 2.5);
+      }
+      bg20[k] = clamp(bg20[k] - etaHid * dg, -2.5, 2.5);
+      bu20[k] = clamp(bu20[k] - etaHid * du, -2.5, 2.5);
+    }
+
+    // Backprop +2.0-s kinematic + raw-pixel gradients end-to-end through all L Transformer-XL blocks!
+    const etaBptt20 = (0.12 * lr) / (d + zz);
+    this._backpropBlocks(dh20Buf, z0, vis0, etaBptt20, false, null);
+
+    this.mse20 = this.n20 === 0 ? se20 : this.mse20 + 0.01 * (se20 - this.mse20);
+    this.n20++;
+    return se20;
+  }
+
+  /**
+   * Online analytical backprop across +0.1 s, +0.5 s & +2.0 s horizons + raw 96-D foveal RGB pixels + SelectiveSSM RTRL.
+   */
+  learn(z, y, lr = 0.05, ssm = null, isSeq = null, visPrev = null, visCur = null) {
     if (this.lesion) { this.surprise = 0; return 0; }
-    // Sequential waking call unless explicitly marked non-sequential (e.g. random sleep replay)
     const seq = isSeq !== null ? !!isSeq : (ssm !== null || this.n < 8);
     const {
-      nZ, nY, dModel: d, nLayers: L, nHeads: H, dHead: dh, dFFN: ffn,
-      Win, bin, Wout, bout, Wskip, Wvel, ropeCos, ropeSin, pastCap,
-      hOutNorm, dzBuf, pBuf, dxBuf, duBuf, duNormBuf, dxNormBuf, dAttnBuf, dqBuf, dkRawBuf, dvBuf, dFfnBuf, dGateBuf, dUpBuf, gradZ,
+      nZ, nY, nVis, dModel: d,
+      Wout, bout, Wskip, Wvel, WvisOut, bvisOut, WvisDiag,
+      hOutNorm, dzBuf, pBuf, visPred, duNormBuf, gradZ,
     } = this;
-    const halfDh = dh >> 1;
-    const invSqrtDh = 1 / Math.sqrt(dh);
 
-    this.predict(z, pBuf, null, seq);
+    // 1) Multi-second (+2.0 s) end-to-end BPTT step BEFORE overwriting current step's live forward cache
+    if (seq) {
+      const nAct = this.nAct, K20 = this.K20;
+      const actStart = nZ - nAct;
+      if (this.fifo20Len === K20 - 1) {
+        const oldest20 = this.fifo20[this.fifo20Head];
+        if ((this.n & 1) === 0) {
+          this.actPlan20Buf.fill(0);
+          for (let s = 0; s < K20 - 1; s++) {
+            const entry = this.fifo20[(this.fifo20Head + s) % K20];
+            const chunk = (s / 5) | 0;
+            for (let a = 0; a < nAct; a++) this.actPlan20Buf[chunk * nAct + a] += 0.2 * entry.act[a];
+          }
+          for (let a = 0; a < nAct; a++) this.actPlan20Buf[3 * nAct + a] += 0.2 * z[actStart + a];
+          this._learn20(oldest20.z, oldest20.hasVis ? oldest20.vis : null, this.actPlan20Buf, y, visCur, lr);
+        }
+        oldest20.z.set(z);
+        if (visPrev) { oldest20.vis.set(visPrev); oldest20.hasVis = true; } else oldest20.hasVis = false;
+        for (let a = 0; a < nAct; a++) oldest20.act[a] = z[actStart + a];
+        this.fifo20Head = (this.fifo20Head + 1) % K20;
+      } else {
+        const slot = this.fifo20[(this.fifo20Head + this.fifo20Len) % K20];
+        slot.z.set(z);
+        if (visPrev) { slot.vis.set(visPrev); slot.hasVis = true; } else slot.hasVis = false;
+        for (let a = 0; a < nAct; a++) slot.act[a] = z[actStart + a];
+        this.fifo20Len++;
+      }
+    }
+
+    // 2) Live 1-step (+0.1 s) multimodal forward & end-to-end backward pass
+    this.predict(z, pBuf, null, seq, visPrev, visCur ? visPred : null);
 
     let zz = 1, dzz = 1, hh = 1;
     for (let i = 0; i < nZ; i++) {
@@ -715,12 +1089,10 @@ export class WorldModel {
     for (let j = 0; j < d; j++) hh += hOutNorm[j] * hOutNorm[j];
 
     const hasVel = seq && this.hasLastZ;
-    // zz already starts at 1 above!
     const etaSkip = (0.86 * lr) / zz;
     const etaVel = hasVel ? (0.35 * lr) / (zz + dzz) : 0;
     const etaOut = (0.45 * lr) / (hh + 0.5 * zz);
     const etaTr = (0.65 * lr) / (d + zz);
-    const etaNorm = 0.15 * etaTr;
 
     let se = 0;
     const dOutNorm = duNormBuf;
@@ -728,7 +1100,7 @@ export class WorldModel {
     gradZ.fill(0);
 
     for (let o = 0; o < nY; o++) {
-      const gp = pBuf[o] - y[o]; // d(nY * L)/dp_o
+      const gp = pBuf[o] - y[o];
       this.err[o] = -gp;
       se += gp * gp;
       const offD = o * d, offZ = o * nZ;
@@ -745,151 +1117,28 @@ export class WorldModel {
     }
     se /= nY;
 
-    // Backprop through final RMSNorm into x^(L)
-    dxBuf.fill(0);
-    const xFinal = this.xCur;
-    rmsNormBwdUpdate(xFinal, this.invRmsOut, this.rmsOut, dOutNorm, dxBuf, etaNorm);
-
-    const histCount = seq ? this.ringCount : 0;
-    const nLags = 1 + histCount;
-
-    // Backprop analytically through all L Transformer-XL blocks (SwiGLU FFN + Multi-Head RoPE Self-Attention)
-    for (let l = L - 1; l >= 0; l--) {
-      const blk = this.blocks[l];
-      const { Wq, Wk, Wv, Wo, Wgate, Wup, Wdown, uMid, uNorm2, gatePre, upPre, ffnAct, xIn, xNorm1, q, v0, alpha, kRotCache, attnOut } = blk;
-
-      // 1) SwiGLU FFN backward: xNext = uMid + Wdown * (silu(gatePre) * upPre)
-      duBuf.set(dxBuf);
-      dFfnBuf.fill(0);
-      for (let j = 0; j < d; j++) {
-        const dxj = clamp(dxBuf[j], -3, 3);
-        const off = j * ffn;
-        for (let k = 0; k < ffn; k++) {
-          dFfnBuf[k] += Wdown[off + k] * dxj;
-          Wdown[off + k] = clamp(Wdown[off + k] - etaTr * dxj * ffnAct[k], -2.5, 2.5);
-        }
-      }
-      duNormBuf.fill(0);
-      for (let k = 0; k < ffn; k++) {
-        const df = dFfnBuf[k];
-        const dg = clamp(df * upPre[k] * dsilu(gatePre[k]), -3, 3);
-        const du = clamp(df * silu(gatePre[k]), -3, 3);
-        dGateBuf[k] = dg;
-        dUpBuf[k] = du;
-        const off = k * d;
-        for (let i = 0; i < d; i++) {
-          const ui = uNorm2[i];
-          duNormBuf[i] += Wgate[off + i] * dg + Wup[off + i] * du;
-          Wgate[off + i] = clamp(Wgate[off + i] - etaTr * dg * ui, -2.5, 2.5);
-          Wup[off + i] = clamp(Wup[off + i] - etaTr * du * ui, -2.5, 2.5);
-        }
-      }
-      rmsNormBwdUpdate(uMid, blk.invRms2, blk.rms2, duNormBuf, duBuf, etaNorm);
-
-      // 2) Multi-Head RoPE Self-Attention backward: uMid = xIn + Wo * attnOut
-      dxBuf.set(duBuf); // residual path into xIn
-      dAttnBuf.fill(0);
-      for (let j = 0; j < d; j++) {
-        const duj = clamp(duBuf[j], -3, 3);
-        const off = j * d;
-        for (let i = 0; i < d; i++) {
-          dAttnBuf[i] += Wo[off + i] * duj;
-          Wo[off + i] = clamp(Wo[off + i] - etaTr * duj * attnOut[i], -2.5, 2.5);
-        }
-      }
-
-      dqBuf.fill(0);
-      dxNormBuf.fill(0);
-
-      for (let lag = 0; lag < nLags; lag++) {
-        dkRawBuf.fill(0);
-        dvBuf.fill(0);
-        const slot = lag === 0 ? -1 : (this.ringPtr - (lag - 1) + pastCap) % pastCap;
-        const rOff = lag * halfDh;
-        const rotBase = lag * d;
-
-        for (let h = 0; h < H; h++) {
-          const hOff = h * dh;
-          const aOff = h * this.ctxLen;
-          const wLag = alpha[aOff + lag];
-
-          // Value gradient dv_lag = alpha[h, lag] * dAttn_h
-          for (let m = 0; m < dh; m++) dvBuf[hOff + m] = wLag * dAttnBuf[hOff + m];
-
-          // Softmax score gradient dScore[h, lag]
-          let dotLag = 0, expectedDot = 0;
-          for (let lag2 = 0; lag2 < nLags; lag2++) {
-            let srcV2, vOff2;
-            if (lag2 === 0) {
-              srcV2 = v0;
-              vOff2 = hOff;
-            } else {
-              const s2 = (this.ringPtr - (lag2 - 1) + pastCap) % pastCap;
-              srcV2 = blk.pastV;
-              vOff2 = s2 * d + hOff;
-            }
-            let dvDot = 0;
-            for (let m = 0; m < dh; m++) dvDot += dAttnBuf[hOff + m] * srcV2[vOff2 + m];
-            if (lag2 === lag) dotLag = dvDot;
-            expectedDot += alpha[aOff + lag2] * dvDot;
-          }
-          const dScore = clamp(wLag * (dotLag - expectedDot) * invSqrtDh, -3, 3);
-
-          // RoPE backward: dq_h += dScore * kRot_lag, dkRaw_lag = RoPE(-lag, dScore * q_h)
-          for (let m = 0; m < halfDh; m++) {
-            const c = ropeCos[rOff + m], s = ropeSin[rOff + m];
-            dqBuf[hOff + 2 * m] += dScore * kRotCache[rotBase + hOff + 2 * m];
-            dqBuf[hOff + 2 * m + 1] += dScore * kRotCache[rotBase + hOff + 2 * m + 1];
-            const q0 = dScore * q[hOff + 2 * m], q1 = dScore * q[hOff + 2 * m + 1];
-            dkRawBuf[hOff + 2 * m] = q0 * c + q1 * s;       // R(-lag) = R(lag)^T
-            dkRawBuf[hOff + 2 * m + 1] = -q0 * s + q1 * c;
-          }
-        }
-
-        // Update Wk and Wv for this causal lag (and accumulate dxNorm1 on lag 0)
-        const srcX = lag === 0 ? xNorm1 : blk.pastXNorm;
-        const xOff = lag === 0 ? 0 : slot * d;
-        const etaLag = lag === 0 ? etaTr : (0.5 * etaTr) / nLags;
+    // Raw 96-D foveal RGB pixel prediction loss & gradient injection into Transformer-XL trunk!
+    if (visPrev && visCur) {
+      let vse = 0;
+      const etaVis = (0.35 * lr) / (hh + 4);
+      const wVisTrunk = 0.18;
+      for (let v = 0; v < nVis; v++) {
+        const gv = visPred[v] - visCur[v];
+        vse += gv * gv;
+        const offV = v * d;
         for (let j = 0; j < d; j++) {
-          const dk = clamp(dkRawBuf[j], -3, 3), dv = clamp(dvBuf[j], -3, 3);
-          const off = j * d;
-          if (lag === 0) {
-            for (let i = 0; i < d; i++) {
-              const xi = srcX[i];
-              dxNormBuf[i] += Wk[off + i] * dk + Wv[off + i] * dv;
-              Wk[off + i] = clamp(Wk[off + i] - etaLag * dk * xi, -2.5, 2.5);
-              Wv[off + i] = clamp(Wv[off + i] - etaLag * dv * xi, -2.5, 2.5);
-            }
-          } else {
-            for (let i = 0; i < d; i++) {
-              const xi = srcX[xOff + i];
-              Wk[off + i] = clamp(Wk[off + i] - etaLag * dk * xi, -2.5, 2.5);
-              Wv[off + i] = clamp(Wv[off + i] - etaLag * dv * xi, -2.5, 2.5);
-            }
-          }
+          dOutNorm[j] += wVisTrunk * WvisOut[offV + j] * gv;
+          WvisOut[offV + j] = clamp(WvisOut[offV + j] - etaVis * gv * hOutNorm[j], -2.0, 2.0);
         }
+        bvisOut[v] = clamp(bvisOut[v] - 0.15 * etaVis * gv, -1.5, 1.5);
+        WvisDiag[v] = clamp(WvisDiag[v] - 0.15 * etaVis * gv * visPrev[v], 0.35, 1.05);
       }
-
-      // Update Wq and accumulate query gradient into dxNorm1
-      for (let j = 0; j < d; j++) {
-        const dq = clamp(dqBuf[j], -3, 3), off = j * d;
-        for (let i = 0; i < d; i++) {
-          dxNormBuf[i] += Wq[off + i] * dq;
-          Wq[off + i] = clamp(Wq[off + i] - etaTr * dq * xNorm1[i], -2.5, 2.5);
-        }
-      }
-      rmsNormBwdUpdate(xIn, blk.invRms1, blk.rms1, dxNormBuf, dxBuf, etaNorm);
+      vse /= nVis;
+      this.visMSE = this.n === 0 ? vse : this.visMSE + 0.015 * (vse - this.visMSE);
     }
 
-    // Backprop through input token embedding Win -> gradZ (for SelectiveSSM RTRL!)
-    for (let j = 0; j < d; j++) {
-      const dx = clamp(dxBuf[j], -3, 3), off = j * nZ;
-      for (let i = 0; i < nZ; i++) {
-        gradZ[i] += Win[off + i] * dx;
-        Win[off + i] = clamp(Win[off + i] - etaTr * dx * z[i], -2.5, 2.5);
-      }
-      bin[j] = clamp(bin[j] - etaTr * dx, -2.5, 2.5);
-    }
+    // Backprop analytically through all L Transformer-XL blocks + causal T-lag KV history + input embeddings
+    this._backpropBlocks(dOutNorm, z, visPrev, etaTr, seq, gradZ);
 
     // Heteroscedastic uncertainty head update
     const varErr = clamp(this.predVar - se, -2, 2);
@@ -898,12 +1147,11 @@ export class WorldModel {
     for (let j = 0; j < d; j++) this.Wvar[j] = clamp(this.Wvar[j] - gVar * hOutNorm[j], -2, 2);
     this.bvar = clamp(this.bvar - gVar * hh * 0.25, -6, 4);
 
-    // Online 5-step (+0.5 s) multi-horizon training on sequential waking streams
+    // Online 5-step (+0.5 s) multi-horizon training + KV ring commit
     if (seq) {
       const nAct = this.nAct, K5 = this.K5;
       const actStart = nZ - nAct;
       if (this.fifoLen === K5 - 1) {
-        // fifo holds [t-5, t-4, t-3, t-2]; combining with current z_{t-1}'s action yields exact 5-step plan -> y_t
         const oldest = this.fifo5[this.fifoHead];
         for (let s = 0; s < K5 - 1; s++) {
           const entry = this.fifo5[(this.fifoHead + s) % K5];
@@ -911,7 +1159,6 @@ export class WorldModel {
         }
         for (let a = 0; a < nAct; a++) this.actSeqBuf[(K5 - 1) * nAct + a] = z[actStart + a];
         this._learn5(oldest.z, oldest.dz, oldest.h, this.actSeqBuf, y, lr);
-        // Overwrite oldest slot with current step (z_{t-1}, dz_{t-1}, h_{t-1}, act_{t-1}) and advance head
         oldest.z.set(z);
         oldest.dz.set(dzBuf);
         oldest.h.set(hOutNorm);

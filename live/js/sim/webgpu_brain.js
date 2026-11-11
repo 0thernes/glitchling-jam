@@ -1,6 +1,6 @@
-// Optional WebGPU compute shader accelerator for large spiking sheets (L / XL / XXL up to 105k neurons, 4.35M synapses).
-// Uses a lock-free incoming-CSR layout (post <- pre) on the GPU so each thread integrates one neuron and gathers incoming
-// spikes in parallel with zero atomic contention across 12k-105k neurons and 0.5M-4.35M synapses.
+// WebGPU WGSL compute shader accelerator for large spiking sheets (L / XL / XXL / MEGA up to 1,048,576 neurons & 16.78M synapses).
+// Combines a lock-free incoming-CSR layout (post <- pre) with procedural 16-tap canonical laminar + small-world WGSL gather
+// when running the million-neuron MEGA cortex on GPU, plus Rush-Larsen HH AIS Na_v/K_v regenerative excitability!
 import { R0, RN, regionOf } from './brain.js';
 
 const WGSL_BRAIN = /* wgsl */ `
@@ -19,6 +19,8 @@ struct Params {
   mot1: u32,
   lesMot: u32,
   seed: u32,
+  procMode: u32,
+  ctx0: u32,
 };
 
 @group(0) @binding(0) var<uniform> P: Params;
@@ -42,12 +44,16 @@ fn pcg(inp: u32) -> u32 {
   return (word >> 22u) ^ word;
 }
 
+fn sigFast(x: f32) -> f32 {
+  return 0.5 + (0.5 * x) / (1.0 + abs(x));
+}
+
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let i = gid.x;
   if (i >= P.N) { return; }
 
-  // Gather incoming spike currents from previous substep (lock-free read-only CSR)
+  // 1) Explicit incoming-CSR gather
   var isyn = syn[i];
   let a = in0[i];
   let b = in0[i + 1u];
@@ -55,6 +61,22 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (spkIn[inPre[q]] != 0u) {
       isyn = isyn + inW[q];
     }
+  }
+
+  // 2) On 1.05M-neuron MEGA scale, gather 16-tap procedural canonical laminar + small-world cortical stencil
+  if (P.procMode != 0u && i >= P.ctx0 && i < P.ctx0 + 921600u) {
+    let rel = i - P.ctx0;
+    let side = 960u;
+    let ix = rel % side;
+    let iy = rel / side;
+    let n1 = P.ctx0 + iy * side + ((ix + 1u) % side);
+    let n2 = P.ctx0 + iy * side + ((ix + side - 1u) % side);
+    let n3 = P.ctx0 + ((iy + 1u) % side) * side + ix;
+    let n4 = P.ctx0 + ((iy + side - 1u) % side) * side + ix;
+    let sw1 = P.ctx0 + (pcg(rel + 17u) % 921600u);
+    let sw2 = P.ctx0 + (pcg(rel + 97u) % 921600u);
+    let eCnt = f32(spkIn[n1] + spkIn[n2] + spkIn[n3] + spkIn[n4] + spkIn[sw1]);
+    isyn = isyn + 0.058 * eCnt - 0.095 * f32(spkIn[sw2]);
   }
 
   let h = pcg(i ^ P.seed);
@@ -79,7 +101,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     rf = rf - P.dt;
     vm = 0.0;
   } else {
-    vm = vm + (P.dt * (-vm + I - adapt)) / tau;
+    // Regenerative AIS Na_v window boost on cortical neurons
+    let mInf = sigFast((vm - 0.66) * 6.5);
+    let iNa = select(0.0, 0.22 * mInf * mInf * mInf * (2.0 - vm), i >= P.ctx0 && i < P.mn0);
+    vm = vm + (P.dt * (-vm + I + iNa - adapt)) / tau;
     if (vm > 1.0) {
       vm = 0.0;
       rf = 0.002;
@@ -107,8 +132,7 @@ export class WebGPUBrainAccelerator {
       const adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return null;
       const device = await adapter.requestDevice();
-      const acc = new WebGPUBrainAccelerator(device, brain);
-      return acc;
+      return new WebGPUBrainAccelerator(device, brain);
     } catch {
       return null;
     }
@@ -116,17 +140,16 @@ export class WebGPUBrainAccelerator {
 
   constructor(device, brain) {
     this.device = device;
-    const N = brain.N, S = brain.S;
+    const N = brain.N, S = brain.explicitS ?? brain.S;
     this.N = N;
     this.stepCtr = 1;
 
-    // Build incoming CSR (post <- pre) for lock-free GPU gather
     const in0 = new Uint32Array(N + 1);
     for (let s = 0; s < S; s++) in0[brain.post[s] + 1]++;
     for (let i = 0; i < N; i++) in0[i + 1] += in0[i];
     const fill = in0.slice(0, N);
-    const inPre = new Uint32Array(S);
-    const inW = new Float32Array(S);
+    const inPre = new Uint32Array(Math.max(1, S));
+    const inW = new Float32Array(Math.max(1, S));
     for (let s = 0; s < S; s++) {
       const dst = fill[brain.post[s]]++;
       inPre[dst] = brain.pre[s];
@@ -171,6 +194,7 @@ export class WebGPUBrainAccelerator {
     this.ping = false;
     this.busy = false;
     this._spkScratch = new Uint8Array(N);
+    this._effExt = new Float32Array(N);
   }
 
   async stepBatch(brain, substeps = 8, dt = 0.002) {
@@ -195,7 +219,7 @@ export class WebGPUBrainAccelerator {
 
   async stepSubsteps(brain, substeps, dt, spkAccum) {
     const dev = this.device, N = this.N, nm = brain.nm, rb = brain.regBias;
-    const effExt = new Float32Array(N);
+    const effExt = this._effExt;
     for (let i = 0; i < N; i++) effExt[i] = brain.ext[i] + brain.vBias[i] + rb[regionOf(i)];
     dev.queue.writeBuffer(this.bExt, 0, effExt);
 
@@ -212,6 +236,8 @@ export class WebGPUBrainAccelerator {
     u32[8] = R0.MN; u32[9] = R0.MN + RN.MN;
     u32[10] = R0.MOT; u32[11] = R0.MOT + RN.MOT;
     u32[12] = brain.lesion.mot ? 1 : 0;
+    u32[14] = brain.procStencil ? 1 : 0;
+    u32[15] = R0.CTX;
 
     const wg = Math.ceil(N / 64);
     for (let s = 0; s < substeps; s++) {

@@ -1,11 +1,11 @@
-// Glitchling v2 "live" (pass 16 architecture):
-// Spiking 3-compartment canonical laminar brain (S=436..XXL=104,904 neurons / 4.76M synapses) + LTC CPG + 122 sLTC motor neurons +
-// 78-tet 3D volumetric Neo-Hookean FEM continuum soft body + 16-node/26-vessel 1D Navier-Stokes & 120-parcel 3D SPH hemodynamics +
-// metabolism + dual 24x12 2D binocular retinotopic sheets -> LGN DoG -> V1 quadrature Gabor orientation columns -> V4/MT + EKF-SLAM +
-// anatomical trisynaptic hippocampus (EC_II/III -> 576-cell 5% k-WTA DG -> CA3 -> CA1 mismatch event segmentation) +
-// online RTRL selective SSM + Causal Multi-Head RoPE SwiGLU Transformer-XL world model (110k std .. 1.17M xl, +0.1s & +0.5s horizons) +
-// Eshkol order-3 Taylor-jet Frenet-Serret thought curvature & metacognition + Tsotchke 10-qubit open-quantum Lindblad/photonic QRNG,
-// QGTL & Moonlab Vidal canonical MPS + selectable 1:1 biological real-time clock. DOM-free; runs identically in Node & Web.
+// Glitchling v2 "live" (pass 17 architecture):
+// Spiking 4-compartment HH laminar brain (S=436..MEGA=1,048,576 neurons / 16.78M synapses) + LTC CPG + 122 sLTC motor neurons +
+// 336-tet anisotropic 3D continuum FEM soft body + 63-voxel 3D Biot-Darcy FSI & 256-parcel 3D WCSPH hemodynamics +
+// metabolism + dual 64x32 log-polar foveated retinas (4,096 ch) -> LGN -> V1 -> V2 -> V4 -> 24-unit invariant IT + EKF-SLAM +
+// biophysical conductance-based spiking trisynaptic hippocampus (EC -> DG -> CA3 -> CA1 + Hollow-mDAE + James-Stein shrinkage) +
+// online RTRL selective SSM + Multimodal Causal RoPE SwiGLU Transformer-XL world model (std 148k .. ultra 2.76M, +0.1s/+0.5s/+2.0s BPTT + raw foveal RGB) +
+// open-ended multi-agent biosphere (conspecifics, diploid 92-gene crossover, 3D eggs, pheromones, mycelia, vents, bio-mites, predator) +
+// Tsotchke 12-qubit WASM Lindblad/QRNG, chi=16 Vidal MPS & Binary MERA + 1:1 biological real-time clock with waking SWRs.
 import { mulberry, clamp, gauss, betaIG, IG0 } from './util.js';
 import { World, SITES } from './world.js';
 import { Body, CH, NS } from './body.js';
@@ -20,13 +20,15 @@ import { STARTER, STARTER_INFO } from './starter_genome.js';
 import { Brain, R0, RN, NSTR_OPT } from './brain.js';
 import { CPG, NCPG } from './cpg.js';
 import { Metab } from './metab.js';
-import { SelectiveSSM, WorldModel, Sleep, PredictiveCoding } from './mind.js';
+import { SelectiveSSM, WorldModel, Sleep, PredictiveCoding, N_VIS_PATCH } from './mind.js';
 import { Skin } from './skin.js';
+import { Ecosystem } from './ecosystem.js';
 
 export const CLOCK_MODES = {
-  circadian: { framesPerMin: 15, scale: 240, label: '240× (6-min day · demo)' },
+  circadian: { framesPerMin: 15, scale: 240, label: '240× (6-min day · fast demo)' },
   ultradian: { framesPerMin: 60, scale: 60, label: '60× (24-min day)' },
   realtime:  { framesPerMin: 3600, scale: 1, label: '1× Biological real-time (24-hr day)' },
+  wall:      { framesPerMin: 3600, scale: 1, label: '1× Local Wall-Clock Solar Sync' },
 };
 
 export const DEFAULT_FLAWS = {
@@ -50,12 +52,14 @@ export class Creature {
     this.flaws = JSON.parse(JSON.stringify(opts.flaws || DEFAULT_FLAWS));
 
     this.world = new World(seed);
-    this.body = new Body(this.world, 0, 0, r() * Math.PI * 2);
+    this.gen = { ...STARTER, ...(opts.genome || globalThis.TW?.genome || {}) };
+    const gn = this.gen;
+    const initHdg = r() * Math.PI * 2;
+    this.body = new Body(this.world, 0, 0, initHdg, gn);
     this.fluid = new Hemodynamics(seed);
     this.body.segO2 = this.fluid.segO2;
-    this.brain = new Brain(seed);
-    this.gen = { ...STARTER, ...(globalThis.TW?.genome || {}) };
-    const gn = this.gen;
+    this.brain = new Brain(seed, opts.brainScale || null, gn);
+    this.eco = opts.eco ? new Ecosystem(this.world, seed, typeof opts.eco === 'object' ? opts.eco : {}) : null;
     this.G = {
       ...GAIT,
       cS: gn.cS, cO: gn.cO, rS: gn.rS, rO: gn.rO, tauA: gn.tauA, cf: gn.cf, wvAsc: gn.wvAsc, wvDesc: gn.wvDesc,
@@ -85,12 +89,28 @@ export class Creature {
     this.ofcApp = new Float32Array(NSTR_OPT);
     this.ofcAv = new Float32Array(NSTR_OPT);
     this.dreamAct40 = new Float64Array(40);
+    this.dreamPlan32 = new Float64Array(32);
     this.dreamY5 = new Float64Array(NY);
+    this.dreamY20 = new Float64Array(NY);
+    this.visPrev = new Float32Array(N_VIS_PATCH);
+    this.hasVisPrev = false;
 
     this.z = new Float64Array(NZ);
     this.y = new Float64Array(NY);
     this.yPrev = new Float64Array(NY);
     this.zPrev = new Float64Array(NZ);
+
+    // Biosphere thermoregulation, antennal chemotaxis, camouflage, syrinx vocalization & active carrying
+    this.bodyTemp = gn.thermOpt ?? 24.0;
+    this.ambientTemp = 22.0;
+    this.pherFood = 0;
+    this.pherAlarm = 0;
+    this.pherMate = 0;
+    this.camoLevel = 0;
+    this.vocalFreq = 340 + 220 * (gn.pigmentHue ?? 0.72);
+    this.vocalAmp = 0;
+    this.heldItem = null;
+    this.wakingSWRs = 0;
 
     this.lesion = {
       mot: false, cpg: false, mn: false, stdp: false, wm: false, astro: false, learnMotor: false,
@@ -195,6 +215,10 @@ export class Creature {
     this.clockMode = key;
     this.framesPerSimMin = CLOCK_MODES[key].framesPerMin;
     this.timeCompression = CLOCK_MODES[key].scale;
+    if (key === 'wall' && typeof Date !== 'undefined') {
+      const now = new Date();
+      this.hour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+    }
   }
 
   ev(type, msg) { this.events.push({ t: this.tick, type, msg }); if (this.events.length > 80) this.events.shift(); }
@@ -475,6 +499,24 @@ export class Creature {
     sens[14] = this.light * 1.0;
     sens[15] = Math.max(obst, obstL, obstR) * 1.4;
 
+    // Bilateral antennal chemotaxis over wind-advected 64x64x3 pheromone plumes (food, Schreckstoff alarm, mate)
+    if (W.pherMean > 1e-4) {
+      const [cFood, lrFood] = W.sampleAntennalPheromone(hd[0], hd[2], fr.f[0], fr.f[2], fr.s[0], fr.s[2], 0);
+      const [cAlarm] = W.sampleAntennalPheromone(hd[0], hd[2], fr.f[0], fr.f[2], fr.s[0], fr.s[2], 1);
+      const [cMate] = W.sampleAntennalPheromone(hd[0], hd[2], fr.f[0], fr.f[2], fr.s[0], fr.s[2], 2);
+      this.pherFood = cFood;
+      this.pherAlarm = cAlarm;
+      this.pherMate = cMate;
+      sens[8] = clamp(sens[8] + 0.35 * cFood, 0, 2.2);
+      sens[12] = clamp(sens[12] + 0.65 * cAlarm, 0, 2.5);
+      if (this.eco && !tg && Math.abs(lrFood) > 0.04) {
+        P[0] = clamp(P[0] + 0.28 * lrFood, 0, 1);
+        P[1] = clamp(P[1] - 0.28 * lrFood, 0, 1);
+      }
+    } else {
+      this.pherFood = 0; this.pherAlarm = 0; this.pherMate = 0;
+    }
+
     const sc = this.flaws.scramble;
     for (let i = 0; i < 16; i++) ext[R0.SENS + this.senPerm[i]] = 0.6 + sens[i] + (sc.on ? sc.noise * gauss(this.gr) : 0);
     for (let i = 0; i < 6; i++) {
@@ -508,7 +550,10 @@ export class Creature {
     for (let i = 0; i < RN.HIP; i++) ext[R0.HIP + i] = 0.45;
     if (!this.brain.delegated && awake) {
       if (!this.lesion.nav) this.brain.drivePlaceCells(this.nav.px, this.nav.pz, 1.15);
-      if (!this.lesion.vision) this.brain.driveVisualCortex(this.retina.v1Complex, 0.75);
+      if (!this.lesion.vision) {
+        this.brain.driveVisualCortex(this.retina.v1Complex, 0.75);
+        this.brain.driveITCortex(this.retina.itAct, 0.65);
+      }
     }
     if (this.familiar > 0 && this.hop.lastIdx >= 0) {
       for (let j = 0; j < 8; j++) ext[R0.HIP + ((this.hop.lastIdx * 7 + j * 5) % RN.HIP)] += 1.4 * this.familiar;
@@ -551,7 +596,8 @@ export class Creature {
       const mean = this.bA[k] / (this.bA[k] + this.bB[k]);
       const hdcV = this.lesion.hdc ? 0 : clamp(this.hdcFood.recall(mp.x, mp.z), -1, 1);
       const foodDrive = 0.45 + 0.95 * hunger;
-      const prag = foodDrive * (this.lesion.hdc ? 0.5 * this.wSite[k] + 0.5 * mean : 0.45 * this.wSite[k] + 0.45 * mean + 0.25 * hdcV);
+      const pherBonus = this.eco ? 0.14 * this.world.samplePheromone(mp.x, mp.z, 0) : 0;
+      const prag = foodDrive * (this.lesion.hdc ? 0.5 * this.wSite[k] + 0.5 * mean : 0.45 * this.wSite[k] + 0.45 * mean + 0.25 * hdcV) + pherBonus;
       const epi = this.lesion.efe ? 0 : temp * (0.28 * (0.5 + this.brain.nm.ACh + 0.5 * this.brain.nm.NE) * (betaIG(this.bA[k], this.bB[k]) / IG0 - 0.5) + 0.14 * (1 - mp.conf));
       const { tTravel, baseCost } = this.travelTerms(mp.x, mp.z);
       const visFruitPenalty = this.retina.vis[k] > 0 && P.fruit < 0.3 ? 0.55 : 0;
@@ -602,8 +648,19 @@ export class Creature {
       const { tTravel, baseCost } = this.travelTerms(bestS.x, bestS.z);
       return { G: -(prag - baseCost), prag, epi: 0.1, cost: baseCost, tTravel, harm: 0, snackId: bestS.id };
     }
-    // k === 20: Epistemic curiosity / HDC least-visited place (replaces the old 24x24 visit-count grid!)
+    // k === 20: Epistemic curiosity / HDC least-visited place + hydrothermal vent thermoregulation when chilled
     const hd = this.body.head();
+    const thermDeficit = (this.gen.thermOpt ?? 24.0) - (this.bodyTemp ?? 24.0);
+    if (thermDeficit > 2.6 && this.world.vents.length > 0) {
+      let bestV = this.world.vents[0], bd = 1e9;
+      for (const v of this.world.vents) {
+        const dd = Math.hypot(v.x - hd[0], v.z - hd[2]);
+        if (dd < bd) { bd = dd; bestV = v; }
+      }
+      const prag = clamp(0.45 + 0.22 * thermDeficit, 0.4, 1.8);
+      const { tTravel, baseCost } = this.travelTerms(bestV.x, bestV.z);
+      return { G: -(prag - baseCost * 0.7), prag, epi: 0.15, cost: baseCost * 0.7, tTravel, harm: 0, x: bestV.x, z: bestV.z, vent: true };
+    }
     let bx = 0, bz = 0, bv = 1e9;
     for (let q = 0; q < 36; q++) {
       const ex = (this.draw01() - 0.5) * 34, ez = (this.draw01() - 0.5) * 34;
@@ -710,6 +767,7 @@ export class Creature {
     this.frame++;
     this.t += dt;
     this.world.step(dt, this.tick);
+    if (this.eco) this.eco.step(dt, this);
     this.sense();
 
     const stage = this.sleep.stage, awake = stage === 0;
@@ -807,12 +865,98 @@ export class Creature {
     this.stats.dist += Math.hypot(this.vel[0], this.vel[2]);
     this.lastCom = com;
     this.nociception *= 0.97;
+    // Microclimate thermoregulation, chromatophore camouflage & syrinx vocalization
+    this.ambientTemp = this.world.ambientTemp(com[0], com[2], this.hour);
+    {
+      let instEffort = 0;
+      for (let c = 0; c < CH.N; c++) instEffort += Math.abs(B.u[c]);
+      instEffort /= CH.N;
+      const eqTemp = this.ambientTemp + 3.2 * instEffort + 1.1 * this.metab.atp;
+      const evapCool = this.bodyTemp > 27.5 ? 0.38 * (this.bodyTemp - 27.5) : 0;
+      this.bodyTemp = clamp(this.bodyTemp + dt * 0.14 * (eqTemp - evapCool - this.bodyTemp), 8.0, 41.0);
+    }
+    {
+      let predNear = 0;
+      if (this.eco) {
+        for (const pr of this.eco.predators) {
+          const dp = Math.hypot(pr.x - com[0], pr.z - com[2]);
+          if (dp < 8.5) predNear = Math.max(predNear, 1 - dp / 8.5);
+        }
+      }
+      const targetCamo = clamp(0.75 * predNear + 0.45 * this.pherAlarm + 0.35 * this.nociception, 0, 1);
+      this.camoLevel += dt * 1.8 * (targetCamo - this.camoLevel);
+      const callDrive = awake ? clamp(0.8 * Math.max(0, this.rpe) + 0.55 * predNear + 0.35 * this.pherMate, 0, 1) : 0;
+      this.vocalAmp += dt * 4.0 * (callDrive - this.vocalAmp);
+      this.vocalFreq = 290 + 240 * (this.gen.pigmentHue ?? 0.72) + 190 * predNear + 90 * Math.sin(this.t * 5.5);
+    }
+    this.updateCarry(dt);
     if (this.race) this.raceCheck(dt);
     this.interact();
     if (this.frame % 6 === 0) this.tenHz();
-    if (this.frame % 4 === 0) this.skin.step(this);
+    if (!this.noSkin && this.frame % 4 === 0) this.skin.step(this);
     if (this.frame % this.framesPerSimMin === 0) this.minute();
+    // In 1x biological real-time / wall-clock solar sync, run waking hippocampal SWR micro-consolidation every 30 s
+    if (this.timeCompression <= 1 && this.frame % 1800 === 0) this.wakingMicroConsolidate();
     this.updateNM(dt);
+  }
+
+  updateCarry(dt) {
+    const B = this.body, W = this.world;
+    if (B.limbs.length < 6) return;
+    const fL = B.limbs[4].foot, fR = B.limbs[5].foot;
+    const gx = 0.5 * (B.x[fL] + B.x[fR]), gy = 0.5 * (B.y[fL] + B.y[fR]), gz = 0.5 * (B.z[fL] + B.z[fR]);
+    const gripDrive = Math.max(B.u[CH.arm + 2], B.u[CH.arm + 5], this.motRate[5]);
+    if (this.heldItem) {
+      const it = this.heldItem.ref;
+      it.x = gx; it.y = Math.max(W.height(gx, gz) + 0.16, gy); it.z = gz;
+      this.heldItem.holdT += dt;
+      let nearNest = false;
+      for (const sh of W.shelters) if (Math.hypot(sh.x - gx, sh.z - gz) < 2.1) nearNest = true;
+      for (const v of W.vents) if (Math.hypot(v.x - gx, v.z - gz) < 2.4) nearNest = true;
+      if ((nearNest && this.heldItem.holdT > 2.5) || this.heldItem.holdT > 18 || this.sleep.stage > 0) {
+        it.held = false;
+        this.ev('carry', `cached ${this.heldItem.kind} near shelter/vent`);
+        this.heldItem = null;
+      }
+      return;
+    }
+    if (this.sleep.stage > 0 || gripDrive < 0.25) return;
+    // Grasp & cache snack when sated, or carry unhatched egg toward warm vent/shelter
+    if (this.metab.hunger() < 0.28) {
+      for (const s of W.snacks) {
+        if (!s.held && Math.hypot(s.x - gx, s.z - gz) < 0.85) {
+          s.held = true;
+          this.heldItem = { kind: s.kind, ref: s, holdT: 0 };
+          this.ev('carry', `grasped ${s.kind} in forelimbs to cache`);
+          return;
+        }
+      }
+    }
+    if (this.eco) {
+      for (const eg of this.eco.eggs) {
+        if (!eg.held && Math.hypot(eg.x - gx, eg.z - gz) < 0.9 && W.ambientTemp(eg.x, eg.z, this.hour) < 24.5) {
+          eg.held = true;
+          this.heldItem = { kind: 'egg', ref: eg, holdT: 0 };
+          this.ev('carry', 'carrying egg toward warmer microclimate');
+          return;
+        }
+      }
+    }
+  }
+
+  wakingMicroConsolidate() {
+    if (this.clockMode === 'wall' && typeof Date !== 'undefined') {
+      const now = new Date();
+      this.hour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+    }
+    if (this.sleep.stage !== 0) return;
+    this.replay();
+    if (!this.lesion.hopfield && this.hop.X.length >= 6 && (this.wakingSWRs % 3 === 0)) {
+      this.hop.sleep();
+      this.hdcFood.sleep();
+      this.hdcWater.sleep();
+    }
+    this.wakingSWRs++;
   }
 
   navStep(dt, com) {
@@ -901,10 +1045,25 @@ export class Creature {
     for (let m = 0; m < 8; m++) z[64 + m] = this.mAvg[m];
 
     const zPrevSnap = Float64Array.from(this.zPrev);
+    const curVis = this.lesion.vision ? null : this.retina.fovealPatch;
     let wmStepSE = 0;
     if (this.frame > 12) {
       const achMod = (0.5 + this.brain.nm.ACh) * (this.lesion.metacog ? 1 : (this.metacog?.achGain ?? 1));
-      wmStepSE = this.wm.learn(this.zPrev, this.y, 0.045 * achMod, this.lesion.ssmLearn ? null : this.ssm, true);
+      wmStepSE = this.wm.learn(
+        this.zPrev,
+        this.y,
+        0.045 * achMod,
+        this.lesion.ssmLearn ? null : this.ssm,
+        true,
+        this.hasVisPrev ? this.visPrev : null,
+        curVis
+      );
+    }
+    if (curVis) {
+      this.visPrev.set(curVis);
+      this.hasVisPrev = true;
+    } else {
+      this.hasVisPrev = false;
     }
     this.zPrev.set(z);
     for (let i = 0; i < NZ; i++) this.zMean[i] += 0.01 * (z[i] - this.zMean[i]);
@@ -942,6 +1101,10 @@ export class Creature {
       this.memStats.consolidations = (this.memStats.consolidations || 0) + 1;
     }
 
+    if (this.timeCompression < 240 && this.frame % 30 === 0 && this.sleep.stage === 0 && !this.babble?.on && !this.goal && !this.race) {
+      this.startRace();
+    }
+
     if (this.frame % 60 === 0 && this.sleep.stage === 0 && !this.lesion.hopfield) {
       const c = Float64Array.from(z, (v, i) => v - this.zMean[i]);
       const R = this.hop.retrieve(c);
@@ -959,7 +1122,15 @@ export class Creature {
     if (this.sleep.stage === 0 && (this.episodes.length < 400 ? true : this.frame % 60 === 0)) {
       const ctx = [];
       for (let i = 0; i < RN.CTX && ctx.length < 48; i++) if (this.brain.rate[R0.CTX + i] > 15) ctx.push(i);
-      const ep = { zPrev: zPrevSnap, z: Float64Array.from(z), y: Float64Array.from(this.y), ssm: [Float64Array.from(this.ssm.re), Float64Array.from(this.ssm.im)], ctx, vf: this.vf };
+      const ep = {
+        zPrev: zPrevSnap,
+        z: Float64Array.from(z),
+        y: Float64Array.from(this.y),
+        vis: Float32Array.from(this.retina.fovealPatch),
+        ssm: [Float64Array.from(this.ssm.re), Float64Array.from(this.ssm.im)],
+        ctx,
+        vf: this.vf,
+      };
       this.episodes.push(ep);
       if (this.episodes.length > 400) this.episodes.splice(Math.floor(this.r() * 400), 1);
     }
@@ -1131,14 +1302,31 @@ export class Creature {
 
     for (let i = W.snacks.length - 1; i >= 0; i--) {
       const s = W.snacks[i];
+      if (s.held) continue;
       if (Math.hypot(s.x - hd[0], s.y - hd[1], s.z - hd[2]) < 0.95 && this.sleep.stage === 0) {
         W.snacks.splice(i, 1);
         this.metab.eat(s.kind, 1.2);
         this.hdcFood.learn(s.x, s.z, 0.65);
+        W.depositPheromone(s.x, s.z, 0, 0.75);
         this.outcome(null, 1);
         this.stats.snacks++;
         this.ev('eat', `ate dropped ${s.kind}`);
         if (g && g.type === 'snack') this.goal = null;
+      }
+    }
+
+    // Snap at low-flying photonic bio-mites when hungry
+    if (this.eco && this.sleep.stage === 0 && this.metab.hunger() > 0.24) {
+      for (let i = this.eco.mites.length - 1; i >= 0; i--) {
+        const mt = this.eco.mites[i];
+        if (Math.hypot(mt.x - hd[0], mt.y - hd[1], mt.z - hd[2]) < 0.82) {
+          this.eco.mites.splice(i, 1);
+          this.eco.stats.mitesEaten++;
+          this.metab.eat('fat', 0.85);
+          this.outcome(null, 0.9);
+          this.ev('eat', 'snapped photonic bio-mite');
+          break;
+        }
       }
     }
 
@@ -1149,13 +1337,16 @@ export class Creature {
         let r = 0;
         if (P.fruit > 0.3 && this.r() < P.p * (0.6 + 0.4 * P.fruit) * 2.2) {
           r = 1;
-          this.metab.eat('plant', 1);
+          this.metab.eat('plant', P.sugarTrait ?? 1);
           this.stats.eats++;
+          W.depositPheromone(P.x, P.z, 0, 0.95);
         }
         P.fruit = Math.max(0, P.fruit - 0.7);
-        if (P.s === 3 && this.r() < 0.35) {
+        P.stress = Math.min(1, (P.stress || 0) + 0.35);
+        if (P.s === 3 && this.r() < 0.35 * (P.defenseTrait ?? 1)) {
           this.nociception = 1;
           this.stats.stings++;
+          W.depositPheromone(hd[0], hd[2], 1, 1.15);
           this.wAv[g.k] += 0.3 * (1 - this.wAv[g.k]);
           this.ev('sting', `thorn plant ${g.k} stung (aversive value now ${this.wAv[g.k].toFixed(2)})`);
         } else this.wAv[g.k] *= 0.95;
@@ -1201,7 +1392,12 @@ export class Creature {
   minute() {
     for (let k = 0; k < SITES; k++) this.recent[k] *= 0.996;
     this.tick++;
-    this.hour = (8 + (this.tick * 24) / this.dayLen) % 24;
+    if (this.clockMode === 'wall' && typeof Date !== 'undefined') {
+      const now = new Date();
+      this.hour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+    } else {
+      this.hour = (8 + (this.tick * 24) / this.dayLen) % 24;
+    }
     const M = this.metab, br = this.brain;
     this.rpe *= 0.3;
 
@@ -1289,11 +1485,12 @@ export class Creature {
 
   flawTick() {
     const F = this.flaws, br = this.brain, t = this.tick;
+    const expS = br.explicitS ?? br.S;
     if (F.scramble.on && t % Math.max(1, Math.round(F.scramble.period)) === 0) this.rewire();
     if (F.leaky.on) {
       const L = F.leaky.rate;
       for (let k = 0; k < SITES; k++) this.wSite[k] += L * (0.25 - this.wSite[k]);
-      for (let s = 0; s < br.S; s++) if (br.plastic[s]) br.w[s] += L * 0.05 * (br.w0[s] - br.w[s]);
+      for (let s = 0; s < expS; s++) if (br.plastic[s]) br.w[s] += L * 0.05 * (br.w0[s] - br.w[s]);
       for (let i = 0; i < this.Wc.length; i++) this.Wc[i] += L * 0.05 * (this.Wc0[i] - this.Wc[i]);
       for (let i = 0; i < this.Wmot.length; i++) this.Wmot[i] += L * 0.05 * (this.Wmot0[i] - this.Wmot[i]);
     }
@@ -1302,8 +1499,10 @@ export class Creature {
       this.wSite[k] = clamp(this.wSite[k] + F.misfire.sd * gauss(this.gr));
       for (let j = 0; j < F.misfire.jolts; j++) {
         br.jolt[Math.floor(this.gr() * br.N)] += 4;
-        const s = Math.floor(this.gr() * br.S);
-        br.w[s] += F.misfire.sd * gauss(this.gr) * (Math.abs(br.w[s]) + 0.1);
+        if (expS > 0) {
+          const s = Math.floor(this.gr() * expS);
+          br.w[s] += F.misfire.sd * gauss(this.gr) * (Math.abs(br.w[s]) + 0.1);
+        }
       }
       this.stats.misfires++;
       this.ev('misfire', `misfire: ${F.misfire.jolts} neurons jolted, synapses + site ${k} value perturbed`);
@@ -1315,7 +1514,7 @@ export class Creature {
     if (!E.length) return;
     for (let j = 0; j < 4; j++) {
       const e = E[Math.floor(this.r() * E.length)];
-      this.wm.learn(e.zPrev || e.z, e.y, 0.02, null, false);
+      this.wm.learn(e.zPrev || e.z, e.y, 0.02, null, false, e.vis || null, e.vis || null);
       for (const i of e.ctx) this.brain.jolt[R0.CTX + i] += 1.5;
       for (let i = 0; i < 4; i++) this.brain.jolt[R0.HIP + Math.floor(this.r() * RN.HIP)] += 1.2;
       this.stats.replays++;
@@ -1342,7 +1541,7 @@ export class Creature {
     }
     const ssm = this.ssm.clone();
     const log = [];
-    const act40 = this.dreamAct40, y5 = this.dreamY5;
+    const act40 = this.dreamAct40, plan32 = this.dreamPlan32, y5 = this.dreamY5, y20 = this.dreamY20;
     for (let m = 0; m < 8; m++) {
       ssm.re.set(e.ssm[0]);
       ssm.im.set(e.ssm[1]);
@@ -1351,18 +1550,22 @@ export class Creature {
       for (let s = 0; s < 5; s++) {
         for (let q = 0; q < 8; q++) act40[s * 8 + q] = q === m ? 0.9 : 0.15;
       }
+      for (let c = 0; c < 4; c++) {
+        for (let q = 0; q < 8; q++) plan32[c * 8 + q] = q === m ? 0.9 : 0.15;
+      }
       this.wm.predict5(e.z, act40, y5);
+      this.wm.predict20(e.z, plan32, y20, null, e.vis || null);
       let prog = 0;
       for (let s = 0; s < 8; s++) {
         for (let q = 0; q < 8; q++) z[64 + q] = q === m ? 0.9 : 0.15;
-        this.wm.predict(z, y, rollCtx, true);
+        this.wm.predict(z, y, rollCtx, true, e.vis || null);
         prog += y[12];
         u.set(y);
         for (let q = 0; q < 8; q++) u[NY + q] = z[64 + q];
         ssm.step(u, false);
         ssm.features(z);
       }
-      const val = 0.72 * (prog / 8) + 0.28 * y5[12];
+      const val = 0.58 * (prog / 8) + 0.24 * y5[12] + 0.18 * y20[12];
       this.Vimg[m] += 0.2 * (val - this.Vimg[m]);
       log.push(val);
     }
@@ -1375,7 +1578,8 @@ export class Creature {
     const B = this.body;
     B.poke(i, dir[0] * 0.25, dir[1] * 0.25, dir[2] * 0.25);
     this.nociception = 1;
+    this.world.depositPheromone(B.x[i], B.z[i], 1, 1.35);
     this.sleep.forceWake = 20;
-    this.ev('poke', 'poked: nociceptors -> LC burst, cortisol');
+    this.ev('poke', 'poked: nociceptors + Schreckstoff alarm plume -> LC burst, cortisol');
   }
 }

@@ -20,7 +20,13 @@ export function evalGenome(genome, seeds = [1, 2], secs = 10, opts = {}) {
     for (const [name, mot] of trials) {
       const c = new Creature(seed);
       if (!ROUGH) { c.world.rocks = []; c.world.springs = []; }
+      c.noSkin = true;
+      c.lesion.fluid = true;
       c.lesion.learnMotor = true;
+      c.lesion.vision = true;
+      c.lesion.wm = true;
+      c.lesion.hopfield = true;
+      c.lesion.metacog = true;
       c.forceMot = mot;
       let prev = null, un = 0, up = 0, c0 = null, fwd = 0, side = 0, pc = null;
       const N = secs * 60;
@@ -69,7 +75,13 @@ export function evalGenome(genome, seeds = [1, 2], secs = 10, opts = {}) {
     {
       const c = new Creature(seed);
       if (!ROUGH) { c.world.rocks = []; c.world.springs = []; }
+      c.noSkin = true;
+      c.lesion.fluid = true;
       c.lesion.learnMotor = true;
+      c.lesion.vision = true;
+      c.lesion.wm = true;
+      c.lesion.hopfield = true;
+      c.lesion.metacog = true;
       for (let f = 0; f < 90; f++) c.step();
       const B = c.body, com = B.com();
       const f = B.F[3].f, n = Math.hypot(f[0], f[2]) || 1, ax = [f[0] / n, 0, f[2] / n];
@@ -93,7 +105,12 @@ export function evalGenome(genome, seeds = [1, 2], secs = 10, opts = {}) {
     // Closed-loop autonomous goal-homing trial (scores STEER_GENES + rough-terrain posture)
     if (STEER) {
       const c = new Creature(seed);
+      c.noSkin = true;
+      c.lesion.fluid = true;
       c.lesion.learnMotor = true;
+      c.lesion.wm = true;
+      c.lesion.hopfield = true;
+      c.lesion.metacog = true;
       for (let f = 0; f < 30; f++) c.step();
       const hd = c.body.head();
       const cand = c.world.plants

@@ -1,27 +1,37 @@
-// 2D Binocular Retinotopic Visual Pathway (Retina -> LGN -> V1 Gabor Simple/Complex Columns -> V4 Ventral & MT Dorsal) + EKF-SLAM.
-// Upgrades the 1D 32-ommatidium ring into a full image-forming retinotopic hierarchy:
-//  1) Dual 24x12 2D binocular photoreceptor sheets (left & right stalked eyes = 576 RGB + inverse-depth receptors, 260x110 deg FOV)
-//     forming true 2D (azimuth x elevation) retinal images of sky, terrain horizon contours, 3D rocks, pools, snacks, and the 4
-//     distinct 3D plant crown shapes (sphere, cube, cone, thorny octahedron) with per-pixel depth buffering and 3D ray occlusion.
-//  2) Thalamic LGN layer (24x12): magnocellular Difference-of-Gaussians (DoG) on-center/off-surround contrast and parvocellular
-//     R-G and B-Y double-opponent chromatic maps.
-//  3) Primary Visual Cortex V1 (12x6x4 hypercolumns): 5x5 quadrature (cos/sin) 2D Gabor filter bank at 0, 45, 90, 135 deg driving
-//     phase-sensitive V1 Simple cells, phase-invariant Adelson-Bergen V1 Complex energy cells, and binocular disparity cells.
-//  4) Ventral V4 form+color descriptor (foveal orientation + chromatic opponent vector) & Dorsal MT 2D spatio-temporal optic flow
-//     (vx, vy, radial expansion divergence) + Hippocampal EKF-SLAM landmark localization and loop closure.
+// High-Acuity Log-Polar Foveated Binocular Visual Hierarchy (Dual 64x32 Retinas = 4,096 Ganglion Channels -> LGN ->
+// V1 Gabor -> V2 Curvature/Junctions -> V4 Scale-Tolerant Max-Pooling -> IT View-Invariant Object Cortex + MT Flow + EKF-SLAM).
+//
+// Pass 17 upgrades:
+//  1) 7.1x higher photoreceptor count: Dual 64x32 Left/Right sheets (2,048 per eye = 4,096 RGB + inverse-depth channels)
+//     with primate/raptor log-polar foveal magnification (~3.8x finer angular resolution in the central +-18 deg fovea).
+//  2) 4-stage deep HMAX/ventral cortical hierarchy:
+//       - LGN (64x32): magnocellular DoG center-surround + parvocellular R-G and B-Y double-opponent maps.
+//       - V1  (32x16x4 = 2,048 units): 5x5 zero-DC quadrature Gabor Simple & Complex cells + binocular stereo disparity.
+//       - V2  (16x8x4 = 512 units): cross-orientation corner/junction, acute vertex, and end-stopped curvature detectors.
+//       - V4  (8x4x8 = 256 units): spatial & scale-tolerant C2 max-pooling over V2 shape + double-opponent chromatic bands,
+//         plus an 8x4x3 = 96-D foveal RGB patch (`fovealPatch`) for multi-second visual world-model prediction.
+//       - IT  (24 Inferotemporal object-category neurons): translation-, scale- & 3D-view-invariant object prototypes
+//         (16 4x4 plant species + water, snacks, rocks, conspecifics, eggs, mites, predators) refined online via
+//         Foldiak / Wallis-Rolls slow temporal-trace Hebbian learning!
 import { clamp, gauss, mulberry } from './util.js';
 import { NS, CH } from './body.js';
 
 export const NBINS = 32;
-export const W_RET = 24;
-export const H_RET = 12;
-export const W_V1 = 12;
-export const H_V1 = 6;
+export const W_RET = 64;
+export const H_RET = 32;
+export const W_V1 = 32;
+export const H_V1 = 16;
+export const W_V2 = 16;
+export const H_V2 = 8;
+export const W_V4 = 8;
+export const H_V4 = 4;
 export const N_ORI = 4; // 0, 45, 90, 135 deg
-export const FOV = (260 * Math.PI) / 180;      // horizontal binocular field (-130..+130 deg)
-export const VFOV = (110 * Math.PI) / 180;     // vertical elevation field (-55..+55 deg)
-export const STEREO_RANGE = 9.0;               // high-acuity binocular tracking range
-export const HORIZON_RANGE = 26;               // coarse tall-landmark horizon visibility when unoccluded
+export const N_IT = 24; // 0..15 plant species (4 hues x 4 crowns), 16 pool, 17..18 snacks, 19 rock, 20 conspecific, 21 egg, 22 mite, 23 predator
+export const N_VIS_PATCH = W_V4 * H_V4 * 3; // 96-D downsampled foveal RGB patch for visual world model
+export const FOV = (260 * Math.PI) / 180;
+export const VFOV = (110 * Math.PI) / 180;
+export const STEREO_RANGE = 9.0;
+export const HORIZON_RANGE = 26;
 
 const HUE_RGB = [
   [0.22, 1.0, 0.62],
@@ -30,7 +40,26 @@ const HUE_RGB = [
   [1.0, 0.69, 0.18],
 ];
 
-// Precompute 4-orientation 5x5 quadrature (even cos / odd sin) zero-DC 2D Gabor kernels once at module load
+// Log-polar foveated angle <-> retinal pixel mapping:
+// Maps normalized angle a in [-0.5, +0.5] through sinh/asinh compression so central fovea has ~3.6x higher sampling density!
+const FOV_K = 2.6;
+const ASINH_HALF = Math.asinh(0.5 * FOV_K * 2); // asinh(2.6)
+function angleToFoveaNorm(aNorm) {
+  // aNorm in [-0.5, +0.5] -> pixel norm in [0, 1]
+  return 0.5 + 0.5 * (Math.asinh(clamp(aNorm, -0.6, 0.6) * 2 * FOV_K) / ASINH_HALF);
+}
+const RET_AZ_NORM = new Float32Array(W_RET);
+const RET_EL_NORM = new Float32Array(H_RET);
+for (let px = 0; px < W_RET; px++) {
+  const u = ((px + 0.5) / W_RET - 0.5) * 2; // [-1, 1]
+  RET_AZ_NORM[px] = 0.5 * (Math.sinh(u * ASINH_HALF) / FOV_K);
+}
+for (let py = 0; py < H_RET; py++) {
+  const v = (0.5 - (py + 0.5) / H_RET) * 2; // [+1 top .. -1 bottom]
+  RET_EL_NORM[py] = 0.5 * (Math.sinh(v * ASINH_HALF) / FOV_K);
+}
+
+// Precompute 4-orientation 5x5 quadrature zero-DC 2D Gabor kernels
 const GABOR_COS = new Float32Array(N_ORI * 25);
 const GABOR_SIN = new Float32Array(N_ORI * 25);
 {
@@ -54,7 +83,7 @@ const GABOR_SIN = new Float32Array(N_ORI * 25);
     }
     const meanC = sumC / 25;
     for (let i = 0; i < 25; i++) {
-      GABOR_COS[off + i] -= meanC; // strict zero-DC so uniform sky/ground elicits zero V1 edge response
+      GABOR_COS[off + i] -= meanC;
       normC += GABOR_COS[off + i] ** 2;
       normS += GABOR_SIN[off + i] ** 2;
     }
@@ -72,41 +101,62 @@ export class Retina {
     this.nSites = nSites;
     this.nPools = nPools;
 
-    // 2D Binocular Retinotopic Photoreceptor Sheets (24 x 12 per eye = 576 total receptors)
+    // 1) Dual 64x32 Log-Polar Foveated Photoreceptor/Ganglion Sheets (2,048 L + 2,048 R = 4,096 receptors)
     const NPX = W_RET * H_RET;
+    this.nReceptors = NPX * 2;
     this.retL = new Float32Array(NPX * 3);
     this.retR = new Float32Array(NPX * 3);
-    this.invDL = new Float32Array(NPX); // z-buffer inverse depth 1/d for Left eye
-    this.invDR = new Float32Array(NPX); // z-buffer inverse depth 1/d for Right eye
+    this.invDL = new Float32Array(NPX);
+    this.invDR = new Float32Array(NPX);
 
-    // Thalamic LGN Center-Surround (DoG) & Parvocellular Color-Opponent Maps (24 x 12 cyclopean/fused)
+    // 2) Thalamic LGN (64x32)
     this.lumCur = new Float32Array(NPX);
     this.lum2DPrev = new Float32Array(NPX);
-    this.lgnMag = new Float32Array(NPX); // Magnocellular on-center / off-surround DoG
-    this.lgnRG = new Float32Array(NPX);  // Parvocellular R - G opponent
-    this.lgnBY = new Float32Array(NPX);  // Parvocellular B - (R+G)/2 opponent
+    this.lgnMag = new Float32Array(NPX);
+    this.lgnRG = new Float32Array(NPX);
+    this.lgnBY = new Float32Array(NPX);
 
-    // Primary Visual Cortex V1 (12 x 6 x 4 orientation hypercolumns)
+    // 3) V1 (32x16x4 = 2,048 orientation hypercolumns)
     const NV1 = W_V1 * H_V1;
-    this.v1Simple = new Float32Array(NV1 * N_ORI);  // Phase-sensitive even Gabor simple cells
-    this.v1Complex = new Float32Array(NV1 * N_ORI); // Phase-invariant quadrature Gabor energy complex cells
-    this.v1Disparity = new Float32Array(NV1);       // Binocular stereo disparity map across 12x6 field
+    this.v1Simple = new Float32Array(NV1 * N_ORI);
+    this.v1Complex = new Float32Array(NV1 * N_ORI);
+    this.v1Disparity = new Float32Array(NV1);
 
-    // Ventral V4 shape/color representation & Dorsal MT 2D optic flow
-    this.v4Orient = new Float32Array(N_ORI);        // Global pooled orientation spectrum [0, 45, 90, 135 deg]
-    this.v4Fovea = new Float32Array(8);             // Foveal 4-orientation + 4-color form vector
-    this.mtFlowX = new Float32Array(NV1);           // Horizontal optic flow vx
-    this.mtFlowY = new Float32Array(NV1);           // Vertical optic flow vy
-    this.mtDiv = 0;                                 // Dorsal radial expansion divergence (2D looming)
+    // 4) V2 (16x8x4 = 512 contour/junction cells: [box-ortho, cone-acute, diamond-star, smooth-curved])
+    const NV2 = W_V2 * H_V2;
+    this.v2Cells = new Float32Array(NV2 * 4);
+
+    // 5) V4 (8x4x8 = 256 scale/translation-tolerant max-pooled part descriptors) + 96-D Foveal RGB Patch
+    const NV4 = W_V4 * H_V4;
+    this.v4Map = new Float32Array(NV4 * 8);
+    this.v4Orient = new Float32Array(N_ORI);
+    this.v4Fovea = new Float32Array(8);
+    this.fovealPatch = new Float32Array(N_VIS_PATCH); // 8x4x3 RGB pixel tensor for world model
+
+    // 6) Inferotemporal (IT) Cortex: 24 view- & scale-invariant object category neurons over 16-D pooled V4 descriptor
+    this.itFeat = new Float32Array(16); // [4 V1 ori, 4 V2 junction/curve, 4 hue-opponent, 4 spatial-aspect]
+    this.itAct = new Float32Array(N_IT);
+    this.itTrace = new Float32Array(N_IT);
+    this.Wit = new Float32Array(N_IT * 16);
+    this._initITPrototypes();
+    this.itTopCat = -1;
+    this.itInvariance = 0.82; // rolling cosine stability across distance/angle changes on fixated object
+    this._prevItVec = new Float32Array(N_IT);
+    this._prevTopId = -1;
+
+    // Dorsal MT 2D optic flow (on 32x16 V1 grid)
+    this.mtFlowX = new Float32Array(NV1);
+    this.mtFlowY = new Float32Array(NV1);
+    this.mtDiv = 0;
     this.v1EnergyMean = 0;
 
-    // Backward-compatible 32-bin azimuthal summary for downstream motor/HUD consumers
+    // 32-bin azimuthal summary
     this.rgb = new Float32Array(NBINS * 3);
     this.loom = new Float32Array(NBINS);
     this.lumPrev = new Float32Array(NBINS);
     this.flow = new Float32Array(NBINS);
 
-    // Learned hippocampal landmark map (sites 0..15, pools 16..18) with EKF-SLAM variances
+    // Hippocampal EKF-SLAM landmark map
     const tot = nSites + nPools;
     this.memX = new Float64Array(tot);
     this.memZ = new Float64Array(tot);
@@ -128,9 +178,32 @@ export class Retina {
     this.opticFlowMean = 0;
     this.seenCount = 0;
     this.loopClosures = 0;
+    this.socialSeen = 0;
+    this.predatorLoom = 0;
   }
 
-  /** Check whether a 3D ray from eye E to target T is blocked by any rock sphere or a terrain ridge */
+  _initITPrototypes() {
+    // Seed IT prototypes with coarse developmental colour+junction selectivity, refined online via Foldiak trace rule
+    for (let k = 0; k < N_IT; k++) {
+      const off = k * 16;
+      if (k < 16) {
+        const hue = k & 3, shp = k >> 2;
+        this.Wit[off + (shp === 1 ? 0 : shp === 2 ? 1 : 2)] = 0.45;
+        this.Wit[off + 4 + shp] = 0.68;       // V2 shape-junction channel
+        this.Wit[off + 8 + hue] = 0.72;       // V4 colour-band channel
+      } else {
+        this.Wit[off + (k % 4)] = 0.45;
+        this.Wit[off + 4 + ((k + 1) % 4)] = 0.55;
+        this.Wit[off + 8 + ((k - 16) % 4)] = 0.65;
+        this.Wit[off + 12 + ((k - 16) >> 1)] = 0.45;
+      }
+      let n2 = 0;
+      for (let j = 0; j < 16; j++) n2 += this.Wit[off + j] ** 2;
+      const inv = 1 / (Math.sqrt(n2) || 1);
+      for (let j = 0; j < 16; j++) this.Wit[off + j] *= inv;
+    }
+  }
+
   occluded(world, ex, ey, ez, tx, ty, tz, ignoreRock = -1) {
     const dx = tx - ex, dy = ty - ey, dz = tz - ez;
     const len2 = dx * dx + dy * dy + dz * dz;
@@ -156,40 +229,44 @@ export class Retina {
     return false;
   }
 
-  /** Rasterize a 3D object silhouette onto a single 24x12 2D eye sheet with z-buffer occlusion */
+  /** Rasterize a 3D silhouette onto a 64x32 log-polar foveated eye sheet with z-buffer occlusion */
   paintEyeShape(ret, invD, az, el, angRad, shape, rCol, gCol, bCol, idval) {
-    const uC = ((az + FOV * 0.5) / FOV) * W_RET;
-    const vC = ((0.5 * VFOV - el) / VFOV) * H_RET; // v=0 top (+el), v=H_RET-1 bottom (-el)
-    if (uC < -3 || uC >= W_RET + 3 || vC < -3 || vC >= H_RET + 3) return;
-    const rx = Math.max(0.55, (angRad / FOV) * W_RET);
-    const ry = Math.max(0.55, (angRad / VFOV) * H_RET);
+    const aN = az / FOV, eN = el / VFOV;
+    if (Math.abs(aN) > 0.56 || Math.abs(eN) > 0.56) return;
+    const uC = angleToFoveaNorm(aN) * W_RET;
+    const vC = (1 - angleToFoveaNorm(eN)) * H_RET;
+    // Local cortical magnification factor d(pixel)/d(angle) at eccentricity (aN, eN)
+    const magU = (FOV_K / (ASINH_HALF * Math.sqrt(1 + (2 * FOV_K * aN) ** 2))) * W_RET;
+    const magV = (FOV_K / (ASINH_HALF * Math.sqrt(1 + (2 * FOV_K * eN) ** 2))) * H_RET;
+    const rx = clamp((angRad / FOV) * magU, 0.75, W_RET * 0.42);
+    const ry = clamp((angRad / VFOV) * magV, 0.75, H_RET * 0.45);
     const x0 = Math.max(0, Math.floor(uC - rx - 0.6)), x1 = Math.min(W_RET - 1, Math.ceil(uC + rx + 0.6));
     const y0 = Math.max(0, Math.floor(vC - ry - 0.6)), y1 = Math.min(H_RET - 1, Math.ceil(vC + ry + 0.6));
 
     for (let py = y0; py <= y1; py++) {
-      const ny = (py + 0.5 - vC) / ry; // [-1..+1], negative = upper half
+      const ny = (py + 0.5 - vC) / ry;
       for (let px = x0; px <= x1; px++) {
         const nx = (px + 0.5 - uC) / rx;
         let inside = false;
         let shade = 1.0;
         if (shape === 0) {
-          // Sphere: smooth circular disc with 3D Lambertian normal shading
           const r2 = nx * nx + ny * ny;
           if (r2 <= 1.05) { inside = true; shade = 0.65 + 0.35 * Math.sqrt(Math.max(0, 1 - 0.85 * r2)) - 0.15 * ny; }
         } else if (shape === 1) {
-          // Box / Cube: crisp horizontal & vertical edges (excites 0 & 90 deg V1 Gabor columns!)
-          if (Math.abs(nx) <= 0.95 && Math.abs(ny) <= 0.95) { inside = true; shade = nx < 0 ? 1.05 : 0.78; }
+          if (Math.abs(nx) <= 0.95 && Math.abs(ny) <= 0.95) { inside = true; shade = nx < 0 ? 1.06 : 0.76; }
         } else if (shape === 2) {
-          // Cone: upward-pointing triangular silhouette (excites 45 & 135 deg V1 Gabor columns!)
           const halfW = clamp(0.52 * (ny + 1.0), 0.08, 1.05);
-          if (ny >= -1.0 && ny <= 1.0 && Math.abs(nx) <= halfW) { inside = true; shade = 0.9 - 0.18 * Math.abs(nx); }
+          if (ny >= -1.0 && ny <= 1.0 && Math.abs(nx) <= halfW) { inside = true; shade = 0.92 - 0.20 * Math.abs(nx); }
         } else if (shape === 3) {
-          // Thorny Octahedron: diamond + diagonal spine cross (strong high-spatial-frequency diagonal energy!)
           const l1 = Math.abs(nx) + Math.abs(ny);
-          const spike = Math.abs(Math.abs(nx) - Math.abs(ny)) < 0.24 && Math.max(Math.abs(nx), Math.abs(ny)) <= 1.25;
-          if (l1 <= 1.12 || spike) { inside = true; shade = spike && l1 > 0.9 ? 1.25 : 0.88; }
+          const spike = Math.abs(Math.abs(nx) - Math.abs(ny)) < 0.22 && Math.max(Math.abs(nx), Math.abs(ny)) <= 1.25;
+          if (l1 <= 1.12 || spike) { inside = true; shade = spike && l1 > 0.88 ? 1.28 : 0.88; }
+        } else if (shape === 5) {
+          // Articulated conspecific / organism silhouette (elongated horizontal body + dorsal crest)
+          const bodyEq = (nx * 0.72) ** 2 + (ny * 1.35) ** 2;
+          const crest = Math.abs(nx) < 0.7 && ny < -0.25 && ny > -0.85 && Math.sin(nx * 9) > 0;
+          if (bodyEq <= 1.0 || crest) { inside = true; shade = crest ? 1.22 : 0.85 - 0.2 * ny; }
         } else {
-          // Flat horizontal pool ellipse
           if (nx * nx + ny * ny * 2.4 <= 1.05) { inside = true; shade = 0.9 + 0.1 * Math.cos(nx * 3); }
         }
         if (!inside) continue;
@@ -205,19 +282,20 @@ export class Retina {
     }
   }
 
-  /** Run LGN center-surround + V1 2D Gabor filter bank + V4 form + MT 2D optic flow on the binocular retinal images */
+  /** Run LGN -> V1 Gabor -> V2 Curvature/Junctions -> V4 Max-Pooling -> IT View-Invariant Cortex + MT Flow */
   processVisualCortex(lesionVision) {
     const NPX = W_RET * H_RET;
     if (lesionVision) {
       this.lgnMag.fill(0); this.lgnRG.fill(0); this.lgnBY.fill(0);
       this.v1Simple.fill(0); this.v1Complex.fill(0); this.v1Disparity.fill(0);
-      this.v4Orient.fill(0); this.v4Fovea.fill(0);
+      this.v2Cells.fill(0); this.v4Map.fill(0); this.v4Orient.fill(0); this.v4Fovea.fill(0);
+      this.itAct.fill(0); this.fovealPatch.fill(0);
       this.mtFlowX.fill(0); this.mtFlowY.fill(0);
       this.mtDiv = 0; this.v1EnergyMean = 0;
       return;
     }
 
-    // 1) Binocular cyclopean fusion & Parvocellular chromatic opponency (R-G, B-Y)
+    // 1) Binocular cyclopean fusion + Parvocellular colour opponency + 8x4x3 Foveal RGB Patch
     const lum = this.lumCur, rL = this.retL, rR = this.retR;
     for (let i = 0; i < NPX; i++) {
       const p3 = i * 3;
@@ -227,6 +305,28 @@ export class Retina {
       lum[i] = 0.30 * R + 0.55 * G + 0.15 * B;
       this.lgnRG[i] = R - G;
       this.lgnBY[i] = B - 0.5 * (R + G);
+    }
+
+    // Extract central 32x16 foveal region pooled into 8x4x3 (96-D) pixel tensor for WorldModel visual prediction
+    for (let py = 0; py < H_V4; py++) {
+      const yBase = 8 + py * 4;
+      for (let px = 0; px < W_V4; px++) {
+        const xBase = 16 + px * 4;
+        let sr = 0, sg = 0, sb = 0;
+        for (let dy = 0; dy < 4; dy++) {
+          const row = (yBase + dy) * W_RET + xBase;
+          for (let dx = 0; dx < 4; dx++) {
+            const p3 = (row + dx) * 3;
+            sr += 0.5 * (rL[p3] + rR[p3]);
+            sg += 0.5 * (rL[p3 + 1] + rR[p3 + 1]);
+            sb += 0.5 * (rL[p3 + 2] + rR[p3 + 2]);
+          }
+        }
+        const o3 = (py * W_V4 + px) * 3;
+        this.fovealPatch[o3] = sr * (1 / 16);
+        this.fovealPatch[o3 + 1] = sg * (1 / 16);
+        this.fovealPatch[o3 + 2] = sb * (1 / 16);
+      }
     }
 
     // 2) Thalamic LGN Magnocellular Difference-of-Gaussians (3x3 center-surround)
@@ -243,8 +343,7 @@ export class Retina {
       }
     }
 
-    // 3) Cortical V1 5x5 Quadrature Gabor Orientation Columns (stride 2 -> 12x6 hypercolumns x 4 orientations)
-    //    + Binocular stereo disparity + Dorsal MT 2D Lucas-Kanade / Reichardt optic flow
+    // 3) V1 (32x16x4 = 2,048 units): 5x5 Quadrature Gabor Simple/Complex + Binocular Disparity + MT 2D Optic Flow
     this.v4Orient.fill(0);
     let totE = 0, divSum = 0;
     for (let vy = 0; vy < H_V1; vy++) {
@@ -274,11 +373,9 @@ export class Retina {
           totE += energy;
         }
 
-        // Binocular disparity cell: local Left vs Right inverse-depth / horizontal shift contrast
         const pC = cy * W_RET + cx;
         this.v1Disparity[vIdx] = 0.5 * (this.invDL[pC] + this.invDR[pC]);
 
-        // MT 2D spatio-temporal gradient optic flow: Ix*vx + Iy*vy + It = 0 (regularized per hypercolumn)
         const xm = Math.max(0, cx - 1), xp = Math.min(W_RET - 1, cx + 1);
         const ym = Math.max(0, cy - 1), yp = Math.min(H_RET - 1, cy + 1);
         const ix = 0.5 * (lum[cy * W_RET + xp] - lum[cy * W_RET + xm]);
@@ -289,8 +386,7 @@ export class Retina {
         this.mtFlowX[vIdx] = 0.75 * this.mtFlowX[vIdx] + 0.25 * fx;
         this.mtFlowY[vIdx] = 0.75 * this.mtFlowY[vIdx] + 0.25 * fy;
 
-        // Radial expansion divergence from foveal center (5.5, 2.5) -> true 2D dorsal looming signal
-        const rx = (vx - 5.5) / 5.5, ry = (vy - 2.5) / 2.5;
+        const rx = (vx - 15.5) / 15.5, ry = (vy - 7.5) / 7.5;
         divSum += this.mtFlowX[vIdx] * rx + this.mtFlowY[vIdx] * ry;
       }
     }
@@ -300,28 +396,147 @@ export class Retina {
     this.v1EnergyMean = totE * invNV1 * 0.25;
     this.mtDiv = clamp(divSum * invNV1 * 2.5, -1, 1);
 
-    // 4) Ventral V4 Foveal Shape + Color Descriptor (central 4x4 V1 hypercolumns: vx in 4..7, vy in 1..4)
+    // 4) V2 (16x8x4 = 512 units): Contour Curvature, Orthogonal Box Corners, Acute Cone Vertices & Diagonal Spines
+    for (let y2 = 0; y2 < H_V2; y2++) {
+      for (let x2 = 0; x2 < W_V2; x2++) {
+        let e0 = 0, e45 = 0, e90 = 0, e135 = 0;
+        for (let dy = 0; dy < 2; dy++) {
+          for (let dx = 0; dx < 2; dx++) {
+            const off = ((y2 * 2 + dy) * W_V1 + (x2 * 2 + dx)) * N_ORI;
+            e0 = Math.max(e0, this.v1Complex[off]);
+            e45 = Math.max(e45, this.v1Complex[off + 1]);
+            e90 = Math.max(e90, this.v1Complex[off + 2]);
+            e135 = Math.max(e135, this.v1Complex[off + 3]);
+          }
+        }
+        const sumE = e0 + e45 + e90 + e135 + 1e-5;
+        const o2 = (y2 * W_V2 + x2) * 4;
+        // Channel 0: Smooth isotropic circular curvature (spheres/pools)
+        const minAll = Math.min(e0, e45, e90, e135);
+        this.v2Cells[o2] = 2.2 * minAll;
+        // Channel 1: Orthogonal 0x90 box corners with diagonal suppression
+        this.v2Cells[o2 + 1] = Math.max(0, Math.sqrt(e0 * e90) - 0.45 * (e45 + e135));
+        // Channel 2: Acute 45+135+0 triangular cone apex
+        this.v2Cells[o2 + 2] = Math.max(0, 0.7 * (e45 + e135) - 0.5 * e90);
+        // Channel 3: High-kurtosis diagonal star/thorn junction
+        this.v2Cells[o2 + 3] = Math.sqrt(e45 * e135) * (1 + (e45 + e135) / sumE);
+      }
+    }
+
+    // 5) V4 (8x4x8 = 256 units): HMAX C2 Scale- & Position-Tolerant Max-Pooling + Opponent Hue Bands
     this.v4Fovea.fill(0);
+    const maxV2 = new Float32Array(4);
+    const maxHue = new Float32Array(4);
     let nFov = 0;
-    for (let vy = 1; vy <= 4; vy++) {
-      for (let vx = 4; vx <= 7; vx++) {
-        const vIdx = vy * W_V1 + vx;
-        for (let o = 0; o < N_ORI; o++) this.v4Fovea[o] += this.v1Complex[vIdx * N_ORI + o];
-        const pC = (vy * 2 + 1) * W_RET + (vx * 2 + 1);
-        this.v4Fovea[4] += Math.max(0, this.lgnRG[pC]);
-        this.v4Fovea[5] += Math.max(0, -this.lgnRG[pC]);
-        this.v4Fovea[6] += Math.max(0, this.lgnBY[pC]);
-        this.v4Fovea[7] += lum[pC];
-        nFov++;
+    for (let y4 = 0; y4 < H_V4; y4++) {
+      for (let x4 = 0; x4 < W_V4; x4++) {
+        const o4 = (y4 * W_V4 + x4) * 8;
+        let c0 = 0, c1 = 0, c2 = 0, c3 = 0;
+        for (let dy = 0; dy < 2; dy++) {
+          for (let dx = 0; dx < 2; dx++) {
+            const o2 = ((y4 * 2 + dy) * W_V2 + (x4 * 2 + dx)) * 4;
+            if (this.v2Cells[o2] > c0) c0 = this.v2Cells[o2];
+            if (this.v2Cells[o2 + 1] > c1) c1 = this.v2Cells[o2 + 1];
+            if (this.v2Cells[o2 + 2] > c2) c2 = this.v2Cells[o2 + 2];
+            if (this.v2Cells[o2 + 3] > c3) c3 = this.v2Cells[o2 + 3];
+          }
+        }
+        // Sample retinal colour opponency in this zone -> 4 opponent hue channels (mint-green, magenta, cyan, amber)
+        const rPy = (y4 * 8 + 4) * W_RET + (x4 * 8 + 4);
+        const p3 = rPy * 3;
+        const R = 0.5 * (rL[p3] + rR[p3]), G = 0.5 * (rL[p3 + 1] + rR[p3 + 1]), B = 0.5 * (rL[p3 + 2] + rR[p3 + 2]);
+        const hMint = Math.max(0, G - 0.65 * R - 0.25 * B);
+        const hMag = Math.max(0, 0.55 * (R + B) - G);
+        const hCyan = Math.max(0, 0.55 * (G + B) - R);
+        const hAmb = Math.max(0, 0.6 * R + 0.4 * G - B);
+
+        this.v4Map[o4] = c0; this.v4Map[o4 + 1] = c1; this.v4Map[o4 + 2] = c2; this.v4Map[o4 + 3] = c3;
+        this.v4Map[o4 + 4] = hMint; this.v4Map[o4 + 5] = hMag; this.v4Map[o4 + 6] = hCyan; this.v4Map[o4 + 7] = hAmb;
+
+        if (x4 >= 2 && x4 <= 5 && y4 >= 1 && y4 <= 2) {
+          if (c0 > maxV2[0]) maxV2[0] = c0;
+          if (c1 > maxV2[1]) maxV2[1] = c1;
+          if (c2 > maxV2[2]) maxV2[2] = c2;
+          if (c3 > maxV2[3]) maxV2[3] = c3;
+          if (hMint > maxHue[0]) maxHue[0] = hMint;
+          if (hMag > maxHue[1]) maxHue[1] = hMag;
+          if (hCyan > maxHue[2]) maxHue[2] = hCyan;
+          if (hAmb > maxHue[3]) maxHue[3] = hAmb;
+          for (let o = 0; o < 4; o++) this.v4Fovea[o] += this.v4Map[o4 + o];
+          this.v4Fovea[4] += Math.max(0, this.lgnRG[rPy]);
+          this.v4Fovea[5] += Math.max(0, -this.lgnRG[rPy]);
+          this.v4Fovea[6] += Math.max(0, this.lgnBY[rPy]);
+          this.v4Fovea[7] += lum[rPy];
+          nFov++;
+        }
       }
     }
     for (let k = 0; k < 8; k++) this.v4Fovea[k] /= Math.max(1, nFov);
+
+    // 6) Inferotemporal (IT) View- & Scale-Invariant Object Category Cortex + Online Foldiak Slow-Trace Learning
+    //    Normalize each modality band independently so object distance/contrast scaling cancels out!
+    const f = this.itFeat;
+    const nOri = Math.hypot(this.v4Orient[0], this.v4Orient[1], this.v4Orient[2], this.v4Orient[3]) + 1e-5;
+    const nV2 = Math.hypot(maxV2[0], maxV2[1], maxV2[2], maxV2[3]) + 1e-5;
+    const nHue = Math.hypot(maxHue[0], maxHue[1], maxHue[2], maxHue[3]) + 1e-5;
+    for (let i = 0; i < 4; i++) {
+      f[i] = (this.v4Orient[i] / nOri) * 0.5;
+      f[4 + i] = (maxV2[i] / nV2) * 0.72;
+      f[8 + i] = (maxHue[i] / nHue) * 0.72;
+      f[12 + i] = 0;
+    }
+    let fn2 = 0;
+    for (let j = 0; j < 16; j++) fn2 += f[j] * f[j];
+    if (fn2 > 0.02) {
+      const invF = 1 / Math.sqrt(fn2);
+      for (let j = 0; j < 16; j++) f[j] *= invF;
+      let bestVal = -1, bestK = 0;
+      for (let k = 0; k < N_IT; k++) {
+        let dp = 0;
+        const off = k * 16;
+        for (let j = 0; j < 16; j++) dp += this.Wit[off + j] * f[j];
+        const act = Math.max(0, dp);
+        this.itAct[k] = act;
+        if (act > bestVal) { bestVal = act; bestK = k; }
+      }
+      // Measure translation/scale invariance as cosine stability of IT population vector while approaching an object
+      let dotPrev = 0, nCur = 0, nPrv = 0;
+      for (let k = 0; k < N_IT; k++) {
+        dotPrev += this.itAct[k] * this._prevItVec[k];
+        nCur += this.itAct[k] ** 2;
+        nPrv += this._prevItVec[k] ** 2;
+      }
+      if (nCur > 1e-4 && nPrv > 1e-4 && this._prevTopId === bestK) {
+        const cosStab = dotPrev / Math.sqrt(nCur * nPrv);
+        this.itInvariance = 0.96 * this.itInvariance + 0.04 * cosStab;
+      }
+      this._prevItVec.set(this.itAct);
+      this._prevTopId = bestK;
+      this.itTopCat = bestK;
+
+      // Foldiak / Wallis-Rolls temporal trace Hebbian update on winning IT prototype (binds changing distance/angle views!)
+      for (let k = 0; k < N_IT; k++) this.itTrace[k] = 0.88 * this.itTrace[k] + 0.12 * (k === bestK ? 1 : 0);
+      const etaIT = 0.004 * this.itTrace[bestK];
+      if (etaIT > 0.0005) {
+        const off = bestK * 16;
+        let w2 = 0;
+        for (let j = 0; j < 16; j++) {
+          this.Wit[off + j] += etaIT * (f[j] - bestVal * this.Wit[off + j]);
+          w2 += this.Wit[off + j] ** 2;
+        }
+        const invW = 1 / (Math.sqrt(w2) || 1);
+        for (let j = 0; j < 16; j++) this.Wit[off + j] *= invW;
+      }
+    } else {
+      this.itAct.fill(0);
+    }
+
     this.lum2DPrev.set(lum);
   }
 
   /**
-   * Project the 3D world onto the dual 24x12 binocular retinotopic sheets, run LGN -> V1 Gabor -> V4/MT processing,
-   * estimate stereo + elevation depth, and update the hippocampal EKF-SLAM landmark map & loop closure.
+   * Project the 3D world (including A-Life conspecifics, eggs, bio-mites & predators) onto dual 64x32 log-polar
+   * foveated sheets, run LGN -> V1 -> V2 -> V4 -> IT + MT, and update EKF-SLAM landmark localization.
    */
   step(body, world, nav, lesionNav = false, lesionVision = false, goalBear = 0, goalDist = 1e9) {
     const X = body.x, Y = body.y, Z = body.z;
@@ -343,21 +558,35 @@ export class Retina {
     this.rgb.fill(0);
     this.loom.fill(0);
     this.vis.fill(0);
-    this.invDL.fill(0);
-    this.invDR.fill(0);
+    this.socialSeen = 0;
+    this.predatorLoom = 0;
+    const doSheet = !lesionVision && ((this._sheetTick = (this._sheetTick || 0) + 1) % 3 === 1);
+    if (doSheet) {
+      this.invDL.fill(0);
+      this.invDR.fill(0);
+    } else if (lesionVision) {
+      this.invDL.fill(0);
+      this.invDR.fill(0);
+    }
 
-    // 0) Render 2D sky + terrain horizon silhouette onto both 24x12 photoreceptor sheets
-    if (!lesionVision) {
+    // 0) Fast interpolated 16-ray horizon contour onto both 64x32 log-polar foveated sheets (20 Hz biological cortical sweep)
+    if (doSheet) {
+      const N_HOR = 16;
+      const hTabL = new Float32Array(N_HOR + 1);
+      const hTabR = new Float32Array(N_HOR + 1);
+      for (let i = 0; i <= N_HOR; i++) {
+        const aN = i / N_HOR - 0.5;
+        const rL = eyeAzL + aN * FOV, rR = eyeAzR + aN * FOV;
+        hTabL[i] = Math.atan2(world.height(X[eL] + 7 * Math.cos(rL), Z[eL] + 7 * Math.sin(rL)) - Y[eL], 7) - gazePitchL;
+        hTabR[i] = Math.atan2(world.height(X[eR] + 7 * Math.cos(rR), Z[eR] + 7 * Math.sin(rR)) - Y[eR], 7) - gazePitchR;
+      }
       for (let px = 0; px < W_RET; px++) {
-        const uNorm = (px + 0.5) / W_RET - 0.5;
-        const rayAzL = eyeAzL + uNorm * FOV, rayAzR = eyeAzR + uNorm * FOV;
-        // Sample terrain ridge elevation at 7 u ahead along each column's ray to form a true 2D horizon contour
-        const hL = world.height(X[eL] + 7 * Math.cos(rayAzL), Z[eL] + 7 * Math.sin(rayAzL));
-        const hR = world.height(X[eR] + 7 * Math.cos(rayAzR), Z[eR] + 7 * Math.sin(rayAzR));
-        const horElL = Math.atan2(hL - Y[eL], 7) - gazePitchL;
-        const horElR = Math.atan2(hR - Y[eR], 7) - gazePitchR;
+        const s = (RET_AZ_NORM[px] + 0.5) * N_HOR;
+        const si = clamp(Math.floor(s), 0, N_HOR - 1), sf = clamp(s - si, 0, 1);
+        const horElL = hTabL[si] * (1 - sf) + hTabL[si + 1] * sf;
+        const horElR = hTabR[si] * (1 - sf) + hTabR[si + 1] * sf;
         for (let py = 0; py < H_RET; py++) {
-          const el = (0.5 - (py + 0.5) / H_RET) * VFOV;
+          const el = RET_EL_NORM[py] * VFOV;
           const idx = py * W_RET + px, p3 = idx * 3;
           if (el > horElL) {
             this.retL[p3] = 0.08; this.retL[p3 + 1] = 0.11; this.retL[p3 + 2] = 0.22;
@@ -373,7 +602,7 @@ export class Retina {
           }
         }
       }
-    } else {
+    } else if (lesionVision) {
       this.retL.fill(0);
       this.retR.fill(0);
     }
@@ -404,9 +633,8 @@ export class Retina {
       return u >= 0 && u < 1 ? Math.min(NBINS - 1, Math.floor(u * NBINS)) : -1;
     };
 
-    // Helper: project a 3D world object onto both Left & Right 24x12 2D retinas from their true 3D eye coordinates
     const projectBinocular2D = (tx, ty, tz, radWorld, shape, rC, gC, bC) => {
-      if (lesionVision) return;
+      if (!doSheet) return;
       const dLx = tx - X[eL], dLy = ty - Y[eL], dLz = tz - Z[eL];
       const distL = Math.hypot(dLx, dLz);
       if (distL > 0.12) {
@@ -423,7 +651,7 @@ export class Retina {
       }
     };
 
-    // 1) Rocks -> 2D binocular retinal spheres + looming / obstacle map (horizon-stabilised + goal-tangent bypass)
+    // 1) Rocks -> 2D foveated retinas + obstacle avoidance cone
     let oAhead = 0, oL = 0, oR = 0;
     for (let i = 0; i < world.rocks.length; i++) {
       const R = world.rocks[i];
@@ -456,7 +684,6 @@ export class Retina {
     this.obstL = oL;
     this.obstR = oR;
 
-    // Helper: binocular + angular-size depth measurement + 2D retinal projection + EKF-SLAM update
     const measureLandmark = (id, tx, ty, tz, heightCue, rgb, maxR, shape = 0, radWorld = 0.42) => {
       const dx = tx - ex, dz = tz - ez;
       const trueD = Math.hypot(dx, dz);
@@ -532,12 +759,11 @@ export class Retina {
       }
     };
 
-    // 2) Project the 16 plants with their 3D stem + distinct geometric crown shape (P.s = 0..3)
+    // 2) Project the 16 plants
     for (let k = 0; k < world.plants.length; k++) {
       const P = world.plants[k];
       const col = HUE_RGB[P.c];
       const br = 0.35 + 0.65 * P.fruit;
-      // Paint vertical green stem on 2D retinas when within 12 u (drives 90-deg vertical V1 orientation columns)
       if (!lesionVision && Math.hypot(P.x - ex, P.z - ez) < 12) {
         projectBinocular2D(P.x, P.y + 0.6, P.z, 0.16, 1, 0.12, 0.34, 0.22);
       }
@@ -550,14 +776,14 @@ export class Retina {
       );
     }
 
-    // 3) Project the 3 water pools (shimmering horizontal ellipse, shape = 4)
+    // 3) Project the 3 water pools
     for (let p = 0; p < world.pools.length; p++) {
       const Wp = world.pools[p];
       const wy = world.height(Wp.x, Wp.z) + 0.15;
       measureLandmark(this.nSites + p, Wp.x, wy, Wp.z, Wp.r, [0.2, 0.85, 1.0], HORIZON_RANGE - 2, 4, Wp.r * 0.65);
     }
 
-    // 4) Project dropped snacks onto both 2D retinas and azimuthal summary
+    // 4) Project dropped snacks
     for (const s of world.snacks) {
       const dx = s.x - ex, dz = s.z - ez, d = Math.hypot(dx, dz);
       if (d > 16) continue;
@@ -574,10 +800,41 @@ export class Retina {
       }
     }
 
-    // 5) Run LGN -> V1 Gabor Simple/Complex Columns -> V4 form -> MT 2D optic flow
-    this.processVisualCortex(lesionVision);
+    // 5) Project A-Life Ecosystem entities (conspecifics, eggs, bio-mites, predators) onto retinas!
+    const eco = world.eco;
+    if (eco && !lesionVision) {
+      for (const peer of eco.peers) {
+        if (!peer.alive) continue;
+        const d = Math.hypot(peer.x - ex, peer.z - ez);
+        if (d < 18) {
+          this.socialSeen++;
+          projectBinocular2D(peer.x, peer.y + 0.28 * peer.scale, peer.z, 0.55 * peer.scale, 5, peer.colR, peer.colG, peer.colB);
+        }
+      }
+      for (const egg of eco.eggs) {
+        if (Math.hypot(egg.x - ex, egg.z - ez) < 12) {
+          projectBinocular2D(egg.x, egg.y + 0.18, egg.z, 0.22, 0, 1.0, 0.88, 0.45);
+        }
+      }
+      for (let m = 0; m < eco.mites.length; m += 2) {
+        const mt = eco.mites[m];
+        if (Math.hypot(mt.x - ex, mt.z - ez) < 9) {
+          projectBinocular2D(mt.x, mt.y, mt.z, 0.10, 3, 0.45, 1.0, 0.82);
+        }
+      }
+      for (const pred of eco.predators) {
+        const d = Math.hypot(pred.x - ex, pred.z - ez);
+        if (d < 22) {
+          projectBinocular2D(pred.x, pred.y, pred.z, 1.15, 5, 1.15, 0.15, 0.28);
+          this.predatorLoom = Math.max(this.predatorLoom, clamp(1 - d / 14));
+        }
+      }
+    }
 
-    // 6) Azimuthal optic-flow summary combined with dorsal MT flow magnitude
+    // 6) Run LGN -> V1 -> V2 -> V4 -> IT + MT hierarchy (on 20 Hz cortical refresh or lesion clear)
+    if (doSheet || lesionVision) this.processVisualCortex(lesionVision);
+
+    // 7) Azimuthal optic-flow summary
     let flowSum = 0;
     for (let b = 0; b < NBINS; b++) {
       const lum = 0.33 * (this.rgb[3 * b] + this.rgb[3 * b + 1] + this.rgb[3 * b + 2]) + 0.5 * this.loom[b];
@@ -589,7 +846,6 @@ export class Retina {
     this.opticFlowMean = flowSum / NBINS;
   }
 
-  /** Known or hypothesised world coordinates of site k (or exploratory prior if not yet sighted) */
   sitePos(k, world) {
     if (globalThis.TW?.exactMap) {
       const P = world.plants[k];

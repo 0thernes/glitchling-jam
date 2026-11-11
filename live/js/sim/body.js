@@ -1,13 +1,16 @@
-// Soft body: coupled 3D Volumetric Neo-Hookean Finite-Element (FEM) continuum tetrahedra + active Hill/XPBD contractile muscle
-// fibers + Verlet dynamics.
-//  - 78 mirror-symmetric 3D volumetric finite elements (72 trunk prism tetrahedra + 6 limb-belly tetrahedra) carry precomputed
-//    reference inverse shape matrices Dm^-1 = [X1-X0, X2-X0, X3-X0]^-1 and rest volumes V0 > 0.
-//  - Each substep evaluates exact 3x3 deformation gradients F = Ds * Dm^-1, Jacobian determinants J = det(F), Cauchy-Green trace
-//    I1 = tr(F^T F), Neo-Hookean strain-energy density Psi = (mu/2)(I1 - 3 - 2 ln J) + (lambda/2)(J - 1)^2, and XPBD hydrostatic
-//    incompressibility + deviatoric shear projections (producing physical Poisson lateral muscle bulging & preventing element
-//    inversion, while outputting segmental intramuscular tissue pressure segPressure[s] to the Navier-Stokes venous pump).
-//  - Active muscle channels u in [-1, 1] (agonist minus antagonist sLTC motor-neuron activation) drive contractile fiber rest
-//    lengths against gravity, directional ventral scute friction, neural foot/hand grip, terrain, rocks and spring pads.
+// Soft body (Pass 17): 336-Element Anisotropic Fiber-Reinforced (I4) 3D Volumetric Neo-Hookean Finite-Element (FEM) Continuum +
+// Evo-Devo Heritable 3D Morphology + Two-Way Biot Poroelastic Fluid-Structure Interaction (FSI) + Active Contractile Muscles.
+//
+// Architecture:
+//  1) 85-particle anatomical body (51 primary spine/ring/limb/stalk nodes at indices 0..50 for 100% compatibility + 28 octagonal
+//     dermal/epimysial vertices + 6 internal mid-bay axial centroids), parameterized by heritable Evo-Devo morphological genes
+//     (`bodyLen`, `bodyTaper`, `bodyGirth`, `foreLimb`, `hindLimb`, `stalkHeight`, `crestFin`, `tailFluke`, `scuteAniso`, `fiberStiff`).
+//  2) 336 positively-oriented 3D volumetric tetrahedral continuum elements (288 octagonal trunk myofibril elements + 36 proximal-distal
+//     limb muscle-belly elements + 12 cranial/stalk elements) with precomputed reference shape inverses Dm^-1, rest volumes V0 > 0,
+//     and rest myofibril unit vectors a0.
+//  3) Evaluates exact 3x3 deformation gradients F = Ds * Dm^-1, volumetric Jacobians J = det(F), isotropic Cauchy-Green trace I1,
+//     and Holzapfel-Gasser-Ogden transversely isotropic muscle-fiber invariant I4 = ||F * a0||^2, with XPBD hydrostatic + deviatoric +
+//     anisotropic fiber projections and two-way FSI coupling to 3D Biot capillary turgor forces (`fsiFx`, `fsiFy`, `fsiFz`).
 import * as T from '../tsotchke/taylor.js';
 import { clamp } from './util.js';
 
@@ -50,7 +53,6 @@ function invert3x3(d1x, d1y, d1z, d2x, d2y, d2z, d3x, d3y, d3z) {
   const c20 = d1y * d2z - d1z * d2y, c21 = d1z * d2x - d1x * d2z, c22 = d1x * d2y - d1y * d2x;
   const det = d1x * c00 + d1y * c01 + d1z * c02;
   const invDet = Math.abs(det) > 1e-12 ? 1 / det : 0;
-  // Row-major Dm^-1 where row 0 = c0 * invDet, row 1 = c1 * invDet, row 2 = c2 * invDet
   return {
     det,
     inv: new Float64Array([
@@ -62,23 +64,52 @@ function invert3x3(d1x, d1y, d1z, d2x, d2y, d2z, d3x, d3y, d3z) {
 }
 
 export class Body {
-  constructor(world, x0 = 0, z0 = 0, heading = 0) {
+  constructor(world, x0 = 0, z0 = 0, heading = 0, morph = null) {
     this.world = world;
+    const M = morph || {};
+    const mLen = clamp(M.bodyLen ?? 1.0, 0.80, 1.25);
+    const mTaper = clamp(M.bodyTaper ?? 0.0, -0.28, 0.28);
+    const mGirth = clamp(M.bodyGirth ?? 1.0, 0.82, 1.22);
+    const mFore = clamp(M.foreLimb ?? 1.0, 0.78, 1.30);
+    const mHind = clamp(M.hindLimb ?? 1.0, 0.78, 1.30);
+    const mStalk = clamp(M.stalkHeight ?? 1.0, 0.72, 1.40);
+    this.morph = {
+      bodyLen: mLen,
+      bodyTaper: mTaper,
+      bodyGirth: mGirth,
+      foreLimb: mFore,
+      hindLimb: mHind,
+      stalkHeight: mStalk,
+      crestFin: clamp(M.crestFin ?? 0.65, 0.1, 1.6),
+      tailFluke: clamp(M.tailFluke ?? 0.60, 0.1, 1.6),
+      scuteAniso: clamp(M.scuteAniso ?? 1.0, 0.65, 1.35),
+      fiberStiff: clamp(M.fiberStiff ?? 1.0, 0.65, 1.45),
+      pigmentHue: clamp(M.pigmentHue ?? 0.52, 0, 1),
+    };
+
+    const segStep = SEG * mLen;
+    this.segRad = Float64Array.from({ length: NS }, (_, i) => {
+      const u = i / (NS - 1) - 0.5; // -0.5 tail .. +0.5 head
+      return RAD[i] * mGirth * clamp(1 + mTaper * u, 0.72, 1.32);
+    });
+
     const P = [];
     const add = (x, y, z, m, r, kind) => { P.push({ x, y, z, m, r, kind }); return P.length - 1; };
     const ch = Math.cos(heading), sh = Math.sin(heading);
     const base = world.height(x0, z0) + 0.6;
     const W = (fx, fy, fz) => [x0 + fx * ch - fz * sh, base + fy, z0 + fx * sh + fz * ch];
 
+    // 1) Primary 51 anatomical particles (indices 0..50 preserved verbatim)
     this.c = [];
     this.ring = []; // ring j: 0 top, 1 left(-z), 2 bottom, 3 right(+z)
     const off = [[0, 1], [-1, 0], [0, -1], [1, 0]];
     for (let i = 0; i < NS; i++) {
-      const fx = (i - (NS - 1) / 2) * SEG;
-      this.c.push(add(...W(fx, 0, 0), 1, RAD[i] * 0.8, 'core'));
+      const fx = (i - (NS - 1) / 2) * segStep;
+      const ri = this.segRad[i];
+      this.c.push(add(...W(fx, 0, 0), 1, ri * 0.8, 'core'));
       const rr = [];
       for (let j = 0; j < 4; j++) {
-        rr.push(add(...W(fx, off[j][1] * RAD[i], off[j][0] * RAD[i]), j === 2 ? 2.4 : j === 0 ? 0.2 : 0.6, 0.09, 'skin'));
+        rr.push(add(...W(fx, off[j][1] * ri, off[j][0] * ri), j === 2 ? 2.4 : j === 0 ? 0.2 : 0.6, 0.09, 'skin'));
       }
       this.ring.push(rr);
     }
@@ -112,13 +143,18 @@ export class Body {
     this.limbs = [];
     const limb = (s, side, kind, idx) => {
       const sz = side === 1 ? -1 : 1;
-      const fx = (s - (NS - 1) / 2) * SEG;
+      const fx = (s - (NS - 1) / 2) * segStep;
       const isArm = kind === 'arm';
-      const L1 = isArm ? 0.38 : 0.34;
+      const lMult = isArm ? mFore : mHind;
+      const L1 = (isArm ? 0.38 : 0.34) * lMult;
+      const rs = this.segRad[s];
       tagLimb = this.limbs.length;
       const hip = this.ring[s][side];
-      const knee = add(...W(fx + (isArm ? 0.1 : 0), isArm ? 0.05 : -0.05, sz * (RAD[s] + L1)), 0.35, 0.07, 'knee');
-      const foot = add(...W(fx + (isArm ? 0.25 : 0), isArm ? -0.15 : -0.4, sz * (RAD[s] + L1 + 0.1)), 0.3, 0.08, isArm ? 'hand' : 'foot');
+      const knee = add(...W(fx + (isArm ? 0.1 : 0) * mLen, isArm ? 0.05 : -0.05, sz * (rs + L1)), 0.35, 0.07, 'knee');
+      const foot = add(
+        ...W(fx + (isArm ? 0.25 : 0) * mLen, (isArm ? -0.15 : -0.4) * lMult, sz * (rs + L1 + 0.1 * lMult)),
+        0.3, 0.08, isArm ? 'hand' : 'foot'
+      );
       con(hip, knee, 1); con(knee, this.c[s], 0.9); con(knee, foot, 1); con(foot, this.c[s], 0.15);
       const sw = isArm ? CH.arm + idx * 3 : CH.leg + idx * 2;
       con(knee, this.ring[s + 1][side], 0.8, sw, -0.45);
@@ -134,10 +170,11 @@ export class Body {
 
     this.stalks = [];
     for (let s = 0; s < 2; s++) {
-      const sz = s ? 1 : -1, fx = ((NS - 1) / 2) * SEG;
+      const sz = s ? 1 : -1, fx = ((NS - 1) / 2) * segStep;
+      const rh = this.segRad[NS - 1];
       const top = this.ring[NS - 1][0];
-      const m1 = add(...W(fx + 0.05, RAD[NS - 1] + 0.3, sz * 0.14), 0.12, 0.05, 'stalk');
-      const eye = add(...W(fx + 0.15, RAD[NS - 1] + 0.55, sz * 0.24), 0.1, 0.09, 'eye');
+      const m1 = add(...W(fx + 0.05 * mStalk, rh + 0.3 * mStalk, sz * 0.14 * mStalk), 0.12, 0.05, 'stalk');
+      const eye = add(...W(fx + 0.15 * mStalk, rh + 0.55 * mStalk, sz * 0.24 * mStalk), 0.1, 0.09, 'eye');
       con(top, m1, 1); con(m1, eye, 1); con(eye, top, 0.3);
       con(m1, this.ring[NS - 1][1], 0.6, CH.stalk + s * 2, sz * 0.4);
       con(m1, this.ring[NS - 1][3], 0.6, CH.stalk + s * 2, -sz * 0.4);
@@ -146,11 +183,52 @@ export class Body {
       this.stalks.push({ base: top, mid: m1, eye });
     }
 
+    // 2) High-resolution octagonal epimysial/dermal vertices (28) + internal mid-bay core centroids (6) -> 85 nodes total
+    this.ringDiag = [];
+    const s45 = Math.SQRT1_2;
+    const diagOff = [[-s45, s45], [-s45, -s45], [s45, -s45], [s45, s45]]; // top-L, bot-L, bot-R, top-R
+    for (let i = 0; i < NS; i++) {
+      const fx = (i - (NS - 1) / 2) * segStep;
+      const ri = this.segRad[i], R = this.ring[i], c = this.c[i], mr = CH.radial + i;
+      const dd = [];
+      tagSeg = i;
+      for (let d = 0; d < 4; d++) {
+        const pIdx = add(...W(fx, diagOff[d][1] * ri, diagOff[d][0] * ri), 0.04, 0.06, 'epimysium');
+        dd.push(pIdx);
+        con(c, pIdx, 0.55, mr, 0.45);
+        con(R[d], pIdx, 0.65, mr, 0.45);
+        con(R[(d + 1) & 3], pIdx, 0.65, mr, 0.45);
+      }
+      tagSeg = -1;
+      this.ringDiag.push(dd);
+    }
+    for (let i = 0; i < NS - 1; i++) {
+      const D0 = this.ringDiag[i], D1 = this.ringDiag[i + 1];
+      for (let d = 0; d < 4; d++) {
+        // Couple diagonal epimysial myofibrils to flanking longitudinal channels
+        con(D0[d], D1[d], 0.45, CH.long + i * 4 + d, -0.22);
+      }
+    }
+
+    this.midCore = [];
+    for (let s = 0; s < NS - 1; s++) {
+      const fx = (s + 0.5 - (NS - 1) / 2) * segStep;
+      const mc = add(...W(fx, 0, 0), 0.05, 0.05, 'midcore');
+      this.midCore.push(mc);
+      con(this.c[s], mc, 0.65);
+      con(this.c[s + 1], mc, 0.65);
+      for (let j = 0; j < 4; j++) {
+        con(this.ring[s][j], mc, 0.35);
+        con(this.ring[s + 1][j], mc, 0.35);
+      }
+    }
+
     const n = P.length;
     this.n = n;
     this.x = new Float64Array(n); this.y = new Float64Array(n); this.z = new Float64Array(n);
     this.ox = new Float64Array(n); this.oy = new Float64Array(n); this.oz = new Float64Array(n);
     this.im = new Float64Array(n); this.r = new Float64Array(n);
+    this.fsiFx = new Float64Array(n); this.fsiFy = new Float64Array(n); this.fsiFz = new Float64Array(n);
     this.kind = P.map((p) => p.kind);
     this.contact = new Uint8Array(n);
     this.gripP = new Float64Array(n);
@@ -163,48 +241,93 @@ export class Body {
       this.r[i] = p.r;
     });
 
-    // ---------------------------------------------------------------- 3D Volumetric Tetrahedral Continuum FEM Mesh
-    // Mirror-symmetric decomposition of each inter-segment wedge prism (A = core, B = dorsal/ventral midline, C = left/right lateral)
-    // into 3 non-overlapping positively-oriented tetrahedra (72 trunk tets + 6 limb-belly tets = 78 continuum elements).
+    // ---------------------------------------------------------------- 336-Element Anisotropic Fiber-Reinforced 3D Continuum FEM Mesh
+    //  - 288 Trunk elements: 6 bays x 8 octagonal sectors x 6 star-split non-overlapping tetrahedra around midCore[s]
+    //  -  36 Limb muscle-belly elements: 6 limbs x 6 sagittal-anchored proximal/distal tetrahedra
+    //  -  12 Cranial/eye-stalk elements: 2 stalks x 6 orbital-cranial tetrahedra
+    //  Total = 336 positively-oriented 3D volumetric finite elements (4.3x finer than Pass 16's 78 elements!).
     this.tets = [];
-    const addTet = (p0, p1, p2, p3, seg, limbIdx = -1) => {
+    const addTet = (p0, p1, p2, p3, seg, limbIdx = -1, ax0 = ch, ay0 = 0, az0 = sh) => {
       let i0 = p0, i1 = p1, i2 = p2, i3 = p3;
       let d1x = P[i1].x - P[i0].x, d1y = P[i1].y - P[i0].y, d1z = P[i1].z - P[i0].z;
       let d2x = P[i2].x - P[i0].x, d2y = P[i2].y - P[i0].y, d2z = P[i2].z - P[i0].z;
       let d3x = P[i3].x - P[i0].x, d3y = P[i3].y - P[i0].y, d3z = P[i3].z - P[i0].z;
       let m = invert3x3(d1x, d1y, d1z, d2x, d2y, d2z, d3x, d3y, d3z);
       if (m.det < 0) {
-        // Swap i2 <-> i3 so rest volume V0 > 0 without altering the 4-vertex geometric simplex!
         const tmp = i2; i2 = i3; i3 = tmp;
         d2x = P[i2].x - P[i0].x; d2y = P[i2].y - P[i0].y; d2z = P[i2].z - P[i0].z;
         d3x = P[i3].x - P[i0].x; d3y = P[i3].y - P[i0].y; d3z = P[i3].z - P[i0].z;
         m = invert3x3(d1x, d1y, d1z, d2x, d2y, d2z, d3x, d3y, d3z);
       }
       const vol0 = m.det / 6;
-      if (vol0 > 1e-6) this.tets.push({ p0: i0, p1: i1, p2: i2, p3: i3, vol0, B: m.inv, seg, limb: limbIdx });
+      const fn = Math.hypot(ax0, ay0, az0) || 1;
+      if (vol0 > 1e-6) {
+        this.tets.push({
+          p0: i0, p1: i1, p2: i2, p3: i3, vol0, B: m.inv, seg, limb: limbIdx,
+          f0x: ax0 / fn, f0y: ay0 / fn, f0z: az0 / fn,
+        });
+      }
+    };
+
+    const octRing = (s) => {
+      const R = this.ring[s], D = this.ringDiag[s];
+      return [R[0], D[0], R[1], D[1], R[2], D[2], R[3], D[3]];
     };
     for (let s = 0; s < NS - 1; s++) {
-      const A0 = this.c[s], A1 = this.c[s + 1];
-      const R0 = this.ring[s], R1 = this.ring[s + 1];
-      // 4 exact sagittal-mirror quadrant prisms: (midline dorsal/ventral, lateral left/right)
-      for (const [mid, lat] of [[0, 1], [0, 3], [2, 1], [2, 3]]) {
-        const B0 = R0[mid], B1 = R1[mid], C0 = R0[lat], C1 = R1[lat];
-        addTet(A0, B0, C0, A1, s);
-        addTet(B0, C0, A1, B1, s);
-        addTet(C0, A1, B1, C1, s + 1);
+      const C0 = this.c[s], C1 = this.c[s + 1], MC = this.midCore[s];
+      const O0 = octRing(s), O1 = octRing(s + 1);
+      const ax = P[C1].x - P[C0].x, ay = P[C1].y - P[C0].y, az = P[C1].z - P[C0].z;
+      for (let k = 0; k < 8; k++) {
+        const kn = (k + 1) & 7;
+        const u0 = O0[k], v0 = O0[kn], u1 = O1[k], v1 = O1[kn];
+        addTet(MC, C0, u0, v0, s, -1, ax, ay, az);
+        addTet(MC, C1, u1, v1, s + 1, -1, ax, ay, az);
+        addTet(MC, C0, v0, u1, s, -1, ax, ay, az);
+        addTet(MC, C1, u0, v1, s + 1, -1, ax, ay, az);
+        addTet(MC, u0, v0, u1, s, -1, ax, ay, az);
+        addTet(MC, v0, u1, v1, s + 1, -1, ax, ay, az);
       }
     }
-    this.limbs.forEach((L, k) => addTet(this.ring[L.s - 1][L.side], this.ring[L.s + 1][L.side], this.ring[L.s][0], L.knee, L.s, k));
+
+    // 36 sagittal-anchored limb muscle-belly tetrahedra (6 per limb: non-coplanar, wide base, zero inversions)
+    this.limbs.forEach((L, k) => {
+      const cs = this.c[L.s], top = this.ring[L.s][0], bot = this.ring[L.s][2];
+      const ant = this.ring[L.s + 1][L.side], post = this.ring[L.s - 1][L.side];
+      const lx = P[L.knee].x - P[cs].x, ly = P[L.knee].y - P[cs].y, lz = P[L.knee].z - P[cs].z;
+      const sx = P[L.foot].x - P[L.knee].x, sy = P[L.foot].y - P[L.knee].y, sz2 = P[L.foot].z - P[L.knee].z;
+      addTet(cs, top, ant, L.knee, L.s, k, lx, ly, lz);
+      addTet(cs, top, post, L.knee, L.s, k, lx, ly, lz);
+      addTet(cs, bot, ant, L.knee, L.s, k, lx, ly, lz);
+      addTet(cs, bot, post, L.knee, L.s, k, lx, ly, lz);
+      addTet(ant, post, top, L.knee, L.s, k, lx, ly, lz);
+      addTet(cs, ant, L.knee, L.foot, L.s, k, sx, sy, sz2);
+    });
+
+    // 12 cranial / orbital eye-stalk continuum tetrahedra (6 per stalk)
+    this.stalks.forEach((S, idx) => {
+      const side = idx ? 3 : 1;
+      const c6 = this.c[NS - 1], c5 = this.c[NS - 2], rTop = this.ring[NS - 1][0], rLat = this.ring[NS - 1][side];
+      const sx = P[S.eye].x - P[c6].x, sy = P[S.eye].y - P[c6].y, sz2 = P[S.eye].z - P[c6].z;
+      addTet(c6, rTop, rLat, S.mid, NS - 1, -1, sx, sy, sz2);
+      addTet(c5, c6, rTop, S.mid, NS - 1, -1, sx, sy, sz2);
+      addTet(c5, c6, rLat, S.mid, NS - 1, -1, sx, sy, sz2);
+      addTet(c6, rTop, S.mid, S.eye, NS - 1, -1, sx, sy, sz2);
+      addTet(c6, rLat, S.mid, S.eye, NS - 1, -1, sx, sy, sz2);
+      addTet(c5, c6, S.mid, S.eye, NS - 1, -1, sx, sy, sz2);
+    });
+
     this.tetOrd = Uint16Array.from(this.tets.keys());
 
-    // Continuum FEM telemetry & biomechanical coupling buffers
+    // Continuum FEM telemetry & biomechanical FSI coupling buffers
     this.lesionFEM = false;
-    this.femStrainEnergy = 0; // total Neo-Hookean elastic energy (Joules-scaled)
+    this.femStrainEnergy = 0; // total Holzapfel-Gasser-Ogden + Neo-Hookean elastic energy
     this.meanTetJ = 1;        // mean volumetric Jacobian J = V / V0 (~1.0 = incompressible tissue)
-    this.minTetJ = 1;         // minimum Jacobian across all 78 elements (> 0 = zero element inversions)
+    this.minTetJ = 1;         // minimum Jacobian across all 336 elements (> 0 = zero element inversions)
+    this.meanTetI4 = 1;       // mean anisotropic myofibril stretch invariant I4 = ||F * a0||^2
+    this.fsiForceMag = 0;     // RMS two-way Biot capillary FSI turgor force on FEM vertices
     this.segJ = new Float64Array(NS).fill(1);
-    this.segPressure = new Float64Array(NS); // hydrostatic tissue compression -> drives Navier-Stokes venous pump
-    this.segO2 = null;        // optional pointer from Hemodynamics for extreme hypoxic fatigue coupling
+    this.segPressure = new Float64Array(NS);
+    this.segO2 = null;
 
     this.cons = cons;
     this.u = new Float64Array(CH.N);
@@ -276,19 +399,20 @@ export class Body {
   poke(i, fx, fy, fz) { this.x[i] += fx; this.y[i] += fy; this.z[i] += fz; }
 
   /**
-   * Solve 3D Neo-Hookean XPBD continuum tetrahedra:
-   *  - Evaluates exact 3x3 deformation gradient F = Ds * Dm^-1 and volumetric Jacobian J = det(F) / volGrowth.
-   *  - Applies analytical hydrostatic volume-preservation projection C_vol = J - 1 (producing Poisson lateral bulging under axial
-   *    contraction and strictly preventing element inversion J <= 0) + Neo-Hookean deviatoric shear stabilization.
+   * Solve 336-element Anisotropic Fiber-Reinforced (I4) 3D Neo-Hookean XPBD continuum tetrahedra:
+   *  - Hydrostatic volume preservation C_vol = J - 1 (Poisson lateral bulging & strict inversion barrier J > 0)
+   *  - Deviatoric shear stabilization C_dev = sqrt(I1) - sqrt(3)
+   *  - Transversely isotropic Holzapfel-Gasser-Ogden myofibril stretch resistance C_fib = sqrt(I4) - 1 along a0!
    */
   solveContinuumFEM(dt, fw) {
     const tets = this.tets, nT = tets.length;
     if (!nT) return;
     const X = this.x, Y = this.y, Z = this.z, IM = this.im, sc = this.scale;
     const sc3 = sc * sc * sc;
-    // XPBD compliances tuned so continuum Poisson incompressibility & inversion recovery act cleanly without over-damping gait
-    const alphaVol = 0.035 / (dt * dt);
-    const alphaDev = 0.45 / (dt * dt);
+    // Compliances scaled by 336/78 element subdivision so macroscopic Lame modulus matches calibrated soft-tissue stiffness
+    const alphaVol = 0.14 / (dt * dt);
+    const alphaDev = 1.85 / (dt * dt);
+    const alphaFib = (2.4 / (this.morph?.fiberStiff ?? 1.0)) / (dt * dt);
     const ord = this.tetOrd;
 
     for (let qq = 0; qq < nT; qq++) {
@@ -302,19 +426,16 @@ export class Body {
 
       const gSeg = Tt.seg >= 0 ? this.girth[Tt.seg] : 1;
       const gLimb = Tt.limb >= 0 ? this.limbLen[Tt.limb] : 1;
-      // Target rest volume scales with tissue growth: radial girth^2 * axial scale^3 * limbLen
       const vRest = Tt.vol0 * sc3 * gSeg * gSeg * gLimb;
       const inv6V = 1 / (6 * vRest);
 
-      // Analytical cofactor gradients grad_p1(J), grad_p2(J), grad_p3(J), grad_p0(J)
       const g1x = (d2y * d3z - d2z * d3y) * inv6V, g1y = (d2z * d3x - d2x * d3z) * inv6V, g1z = (d2x * d3y - d2y * d3x) * inv6V;
       const g2x = (d3y * d1z - d3z * d1y) * inv6V, g2y = (d3z * d1x - d3x * d1z) * inv6V, g2z = (d3x * d1y - d3y * d1x) * inv6V;
       const g3x = (d1y * d2z - d1z * d2y) * inv6V, g3y = (d1z * d2x - d1x * d2z) * inv6V, g3z = (d1x * d2y - d1y * d2x) * inv6V;
       const g0x = -(g1x + g2x + g3x), g0y = -(g1y + g2y + g3y), g0z = -(g1z + g2z + g3z);
 
-      const J = d1x * g1x + d1y * g1y + d1z * g1z; // exact V / vRest
-      // Stronger compliance if an element approaches inversion (J < 0.35)
-      const effAlphaVol = J < 0.35 ? alphaVol * 0.08 : alphaVol;
+      const J = d1x * g1x + d1y * g1y + d1z * g1z;
+      const effAlphaVol = J < 0.38 ? alphaVol * 0.04 : alphaVol;
       const Cvol = J - 1.0;
       const denomVol =
         w0 * (g0x * g0x + g0y * g0y + g0z * g0z) +
@@ -324,14 +445,13 @@ export class Body {
         effAlphaVol / vRest;
 
       if (denomVol > 1e-12) {
-        const lam = clamp(-Cvol / denomVol, -0.08, 0.08);
+        const lam = clamp(-Cvol / denomVol, -0.06, 0.06);
         X[p0] += w0 * lam * g0x; Y[p0] += w0 * lam * g0y; Z[p0] += w0 * lam * g0z;
         X[p1] += w1 * lam * g1x; Y[p1] += w1 * lam * g1y; Z[p1] += w1 * lam * g1z;
         X[p2] += w2 * lam * g2x; Y[p2] += w2 * lam * g2y; Z[p2] += w2 * lam * g2z;
         X[p3] += w3 * lam * g3x; Y[p3] += w3 * lam * g3y; Z[p3] += w3 * lam * g3z;
       }
 
-      // Neo-Hookean deviatoric shear projection from 3x3 deformation gradient F = Ds * B / linScale
       d1x = X[p1] - X[p0]; d1y = Y[p1] - Y[p0]; d1z = Z[p1] - Z[p0];
       d2x = X[p2] - X[p0]; d2y = Y[p2] - Y[p0]; d2z = Z[p2] - Z[p0];
       d3x = X[p3] - X[p0]; d3y = Y[p3] - Y[p0]; d3z = Z[p3] - Z[p0];
@@ -339,10 +459,11 @@ export class Body {
       const F00 = (d1x * B[0] + d2x * B[3] + d3x * B[6]) * invLin, F01 = (d1x * B[1] + d2x * B[4] + d3x * B[7]) * invLin, F02 = (d1x * B[2] + d2x * B[5] + d3x * B[8]) * invLin;
       const F10 = (d1y * B[0] + d2y * B[3] + d3y * B[6]) * invLin, F11 = (d1y * B[1] + d2y * B[4] + d3y * B[7]) * invLin, F12 = (d1y * B[2] + d2y * B[5] + d3y * B[8]) * invLin;
       const F20 = (d1z * B[0] + d2z * B[3] + d3z * B[6]) * invLin, F21 = (d1z * B[1] + d2z * B[4] + d3z * B[7]) * invLin, F22 = (d1z * B[2] + d2z * B[5] + d3z * B[8]) * invLin;
+
       const I1 = F00 * F00 + F01 * F01 + F02 * F02 + F10 * F10 + F11 * F11 + F12 * F12 + F20 * F20 + F21 * F21 + F22 * F22;
       const rS = Math.sqrt(I1) || 1;
-      const Cdev = rS - 1.7320508075688772; // sqrt(3)
-      if (Math.abs(Cdev) > 0.02) {
+      const Cdev = rS - 1.7320508075688772;
+      if (Math.abs(Cdev) > 0.025) {
         const sInv = invLin / rS;
         const s1x = (F00 * B[0] + F01 * B[1] + F02 * B[2]) * sInv, s1y = (F10 * B[0] + F11 * B[1] + F12 * B[2]) * sInv, s1z = (F20 * B[0] + F21 * B[1] + F22 * B[2]) * sInv;
         const s2x = (F00 * B[3] + F01 * B[4] + F02 * B[5]) * sInv, s2y = (F10 * B[3] + F11 * B[4] + F12 * B[5]) * sInv, s2z = (F20 * B[3] + F21 * B[4] + F22 * B[5]) * sInv;
@@ -354,24 +475,44 @@ export class Body {
           w2 * (s2x * s2x + s2y * s2y + s2z * s2z) +
           w3 * (s3x * s3x + s3y * s3y + s3z * s3z) +
           alphaDev / vRest;
-        const ld = clamp(-Cdev / denD, -0.03, 0.03);
+        const ld = clamp(-Cdev / denD, -0.022, 0.022);
         X[p0] += w0 * ld * s0x; Y[p0] += w0 * ld * s0y; Z[p0] += w0 * ld * s0z;
         X[p1] += w1 * ld * s1x; Y[p1] += w1 * ld * s1y; Z[p1] += w1 * ld * s1z;
         X[p2] += w2 * ld * s2x; Y[p2] += w2 * ld * s2y; Z[p2] += w2 * ld * s2z;
         X[p3] += w3 * ld * s3x; Y[p3] += w3 * ld * s3y; Z[p3] += w3 * ld * s3z;
       }
+
+      // Anisotropic myofibril / collagen passive tension invariant I4 = ||F * a0||^2 (resists excessive tensile overstretch I4 > 1.06)
+      const ax = Tt.f0x, ay = Tt.f0y, az = Tt.f0z;
+      const fax = F00 * ax + F01 * ay + F02 * az;
+      const fay = F10 * ax + F11 * ay + F12 * az;
+      const faz = F20 * ax + F21 * ay + F22 * az;
+      const stretchF = Math.hypot(fax, fay, faz);
+      if (stretchF > 1.08) {
+        const Cfib = stretchF - 1.08;
+        const q1 = (B[0] * ax + B[1] * ay + B[2] * az) * invLin / stretchF;
+        const q2 = (B[3] * ax + B[4] * ay + B[5] * az) * invLin / stretchF;
+        const q3 = (B[6] * ax + B[7] * ay + B[8] * az) * invLin / stretchF;
+        const q0 = -(q1 + q2 + q3);
+        const denF = (w0 * q0 * q0 + w1 * q1 * q1 + w2 * q2 * q2 + w3 * q3 * q3) * (fax * fax + fay * fay + faz * faz) + alphaFib / vRest;
+        const lf = clamp(-Cfib / (denF + 1e-12), -0.018, 0.018);
+        X[p0] += w0 * lf * q0 * fax; Y[p0] += w0 * lf * q0 * fay; Z[p0] += w0 * lf * q0 * faz;
+        X[p1] += w1 * lf * q1 * fax; Y[p1] += w1 * lf * q1 * fay; Z[p1] += w1 * lf * q1 * faz;
+        X[p2] += w2 * lf * q2 * fax; Y[p2] += w2 * lf * q2 * fay; Z[p2] += w2 * lf * q2 * faz;
+        X[p3] += w3 * lf * q3 * fax; Y[p3] += w3 * lf * q3 * fay; Z[p3] += w3 * lf * q3 * faz;
+      }
     }
   }
 
-  /** Compute post-step 3D Neo-Hookean strain energy, Jacobian incompressibility, and segmental intramuscular pressures */
+  /** Compute post-step 3D Holzapfel-Gasser-Ogden + Neo-Hookean strain energy, Jacobian J, fiber I4 & intramuscular pressures */
   measureContinuumFEM() {
     const tets = this.tets, nT = tets.length;
     if (!nT) return;
     const X = this.x, Y = this.y, Z = this.z, sc = this.scale, sc3 = sc * sc * sc;
     const segCnt = new Float64Array(NS);
     this.segJ.fill(0);
-    let eTot = 0, jSum = 0, jMin = 1e9;
-    const muNH = 12.0, lamNH = 48.0; // Neo-Hookean Lame constants (Poisson ratio nu = lam/(2*(lam+mu)) = 0.40)
+    let eTot = 0, jSum = 0, jMin = 1e9, i4Sum = 0;
+    const muNH = 12.0, lamNH = 48.0, kFib = 18.0 * (this.morph?.fiberStiff ?? 1.0);
 
     for (let k = 0; k < nT; k++) {
       const Tt = tets[k];
@@ -394,19 +535,25 @@ export class Body {
       const F10 = (d1y * B[0] + d2y * B[3] + d3y * B[6]) * invLin, F11 = (d1y * B[1] + d2y * B[4] + d3y * B[7]) * invLin, F12 = (d1y * B[2] + d2y * B[5] + d3y * B[8]) * invLin;
       const F20 = (d1z * B[0] + d2z * B[3] + d3z * B[6]) * invLin, F21 = (d1z * B[1] + d2z * B[4] + d3z * B[7]) * invLin, F22 = (d1z * B[2] + d2z * B[5] + d3z * B[8]) * invLin;
       const I1 = F00 * F00 + F01 * F01 + F02 * F02 + F10 * F10 + F11 * F11 + F12 * F12 + F20 * F20 + F21 * F21 + F22 * F22;
-      const psi = 0.5 * muNH * Math.max(0, I1 - 3 - 2 * Math.log(Jpos)) + 0.5 * lamNH * (Jpos - 1) * (Jpos - 1);
+      const fax = F00 * Tt.f0x + F01 * Tt.f0y + F02 * Tt.f0z;
+      const fay = F10 * Tt.f0x + F11 * Tt.f0y + F12 * Tt.f0z;
+      const faz = F20 * Tt.f0x + F21 * Tt.f0y + F22 * Tt.f0z;
+      const I4 = fax * fax + fay * fay + faz * faz;
+      const fibTerm = I4 > 1 ? 0.5 * kFib * (I4 - 1) * (I4 - 1) : 0;
+      const psi = 0.5 * muNH * Math.max(0, I1 - 3 - 2 * Math.log(Jpos)) + 0.5 * lamNH * (Jpos - 1) * (Jpos - 1) + fibTerm;
       eTot += vRest * psi;
       jSum += J;
+      i4Sum += I4;
       if (J < jMin) jMin = J;
       if (Tt.seg >= 0) { this.segJ[Tt.seg] += J; segCnt[Tt.seg]++; }
     }
     this.femStrainEnergy = eTot;
     this.meanTetJ = jSum / nT;
     this.minTetJ = jMin;
+    this.meanTetI4 = i4Sum / nT;
     for (let s = 0; s < NS; s++) {
       if (segCnt[s] > 0) this.segJ[s] /= segCnt[s];
       else this.segJ[s] = 1;
-      // Positive intramuscular pressure when segment tissue is compressed or radially contracted (skeletal-muscle venous pump)
       const radAct = Math.max(0, this.u[CH.radial + s] || 0);
       this.segPressure[s] = clamp(Math.max(0, 1 - this.segJ[s]) * 3.5 + 0.45 * radAct, 0, 2.0);
     }
@@ -417,20 +564,22 @@ export class Body {
     const g = W.g, gx = W.gx * g, gz = W.gz * g, gy = -g * Math.sqrt(Math.max(0, 1 - W.gx * W.gx - W.gz * W.gz));
     const F = this.frames();
     const wx = W.wind.x, wz = W.wind.z, damp = 0.995;
+    const fFx = this.fsiFx, fFy = this.fsiFy, fFz = this.fsiFz, IM = this.im;
 
     for (let i = 0; i < n; i++) {
       const vx = (X[i] - OX[i]) * damp, vy = (Y[i] - OY[i]) * damp, vz = (Z[i] - OZ[i]) * damp;
       OX[i] = X[i]; OY[i] = Y[i]; OZ[i] = Z[i];
       const drag = this.kind[i] === 'stalk' || this.kind[i] === 'eye' ? 0.6 : 0.15;
-      X[i] += vx + (gx + drag * (wx - vx / dt)) * dt * dt;
-      Y[i] += vy + gy * dt * dt;
-      Z[i] += vz + (gz + drag * (wz - vz / dt)) * dt * dt;
+      // Include two-way Biot poroelastic capillary FSI acceleration IM[i] * fsiF[i]
+      const imFsi = Math.min(1.6, IM[i]);
+      X[i] += vx + (gx + drag * (wx - vx / dt) + imFsi * fFx[i]) * dt * dt;
+      Y[i] += vy + (gy + imFsi * fFy[i]) * dt * dt;
+      Z[i] += vz + (gz + drag * (wz - vz / dt) + imFsi * fFz[i]) * dt * dt;
     }
 
     const u = this.u;
     let e = 0;
     for (let k = 0; k < CH.N; k++) {
-      // Optional local capillary O2 modulation when hemodynamics is severely hypoxic (< 0.55)
       let o2Gain = 1;
       if (this.segO2 && k < CH.stalk) {
         const s = k < CH.radial ? Math.floor(k / 4) : k < CH.leg ? k - CH.radial : 2;
@@ -469,18 +618,16 @@ export class Body {
         if (C.m >= 0) rest *= Math.max(0.35, 1 + C.g * u[C.m]);
         const dx = X[b] - X[a], dy = Y[b] - Y[a], dz = Z[b] - Z[a];
         const d = Math.hypot(dx, dy, dz) || 1e-9;
-        const w = this.im[a] + this.im[b];
+        const w = IM[a] + IM[b];
         const corr = (C.k * (d - rest)) / (d * w);
-        X[a] += dx * corr * this.im[a]; Y[a] += dy * corr * this.im[a]; Z[a] += dz * corr * this.im[a];
-        X[b] -= dx * corr * this.im[b]; Y[b] -= dy * corr * this.im[b]; Z[b] -= dz * corr * this.im[b];
+        X[a] += dx * corr * IM[a]; Y[a] += dy * corr * IM[a]; Z[a] += dz * corr * IM[a];
+        X[b] -= dx * corr * IM[b]; Y[b] -= dy * corr * IM[b]; Z[b] -= dz * corr * IM[b];
       }
-      // Project 3D volumetric Neo-Hookean continuum tetrahedra on odd & final sweeps
-      if (!this.lesionFEM && (it & 1)) this.solveContinuumFEM(dt, fw);
+      if (!this.lesionFEM && (it === iters - 1 || it === 1)) this.solveContinuumFEM(dt, fw);
       this.collide(it === iters - 1, dt, F);
     }
     this.measureContinuumFEM();
 
-    // Stretch receptors: mean length/rest of each muscle's constraints (muscle spindles)
     this.stretch.fill(0);
     const cnt = new Float64Array(CH.N);
     for (const C of cons) {
@@ -496,8 +643,11 @@ export class Body {
   collide(friction, dt, F) {
     const W = this.world, X = this.x, Y = this.y, Z = this.z, OX = this.ox, OY = this.oy, OZ = this.oz;
     const u = this.u;
+    const scuteAniso = this.morph?.scuteAniso ?? 1.0;
     this.grabbing = 0;
     for (let i = 0; i < this.n; i++) {
+      // Internal mid-bay core centroids live strictly inside the trunk lumen
+      if (this.kind[i] === 'midcore') { this.contact[i] = 0; continue; }
       const r = this.r[i];
       let hit = 0, nx = 0, ny = 1, nz = 0;
       const h = W.height(X[i], Z[i]);
@@ -551,7 +701,7 @@ export class Body {
         const seg = this.segOf(i);
         const f = F[seg].f;
         const along = dx * f[0] + dy * f[1] + dz * f[2];
-        const mAlong = along > 0 ? 0.05 : 0.86;
+        const mAlong = along > 0 ? clamp(0.05 / scuteAniso, 0.02, 0.12) : clamp(0.86 * scuteAniso, 0.60, 0.96);
         const mLat = Math.max(0.28, (this.mLat ?? 0.65) * (1 - (this.scaleLift ?? 0) * Math.max(0, u[CH.radial + seg])));
         const ax = along * f[0], ay = along * f[1], az = along * f[2];
         if (this.coulomb) {
@@ -573,7 +723,12 @@ export class Body {
   segOf(i) {
     if (this._seg) return this._seg[i];
     this._seg = new Int8Array(this.n);
-    for (let s = 0; s < NS; s++) { this._seg[this.c[s]] = s; for (const j of this.ring[s]) this._seg[j] = s; }
+    for (let s = 0; s < NS; s++) {
+      this._seg[this.c[s]] = s;
+      for (const j of this.ring[s]) this._seg[j] = s;
+      for (const j of this.ringDiag[s]) this._seg[j] = s;
+    }
+    for (let s = 0; s < NS - 1; s++) this._seg[this.midCore[s]] = s;
     for (const L of this.limbs) { this._seg[L.knee] = L.s; this._seg[L.foot] = L.s; }
     for (const S of this.stalks) { this._seg[S.mid] = NS - 1; this._seg[S.eye] = NS - 1; }
     return this._seg[i];

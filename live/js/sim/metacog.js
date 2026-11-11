@@ -9,7 +9,7 @@
 import * as T from '../tsotchke/taylor.js';
 import { clamp, mulberry } from './util.js';
 import { weightSpaceDecomp, phasorQGT } from '../tsotchke/qgtl.js';
-import { spectralConsolidate, vidalMPS, mpsContract } from '../tsotchke/moonlab.js';
+import { spectralConsolidate, vidalMPS, mpsContract, meraRenormalize } from '../tsotchke/moonlab.js';
 
 export const K_CHART = 8;
 
@@ -165,20 +165,21 @@ export class Metacognition {
     const sDec = weightSpaceDecomp(cr.Wmot, cr.Wmot0, cr.motBias);
     const bDec = weightSpaceDecomp(cr.brain.w, cr.brain.w0, cr.brain.vBias, cr.brain.plastic);
     const qgt = phasorQGT(cr.hdcFood.ax, cr.hdcFood.az, cr.hdcFood.re, cr.hdcFood.im);
-    const mps = vidalMPS(cr.z, 6, 8);
+    const mps = vidalMPS(cr.z, 6, 16);
+    const mera = meraRenormalize(cr.z, 6);
 
     if (doSleepConsolidate && !cr.lesion.metacog) {
       // Moonlab Jacobi SVD denoises rank-1 motor perturbation jitter in Wm (122 x 8) while keeping top-5 learned synergies
       const sv = spectralConsolidate(cr.Wm, cr.Wm0, cr.Wm.length >> 3, 8, 5, 0.35);
       this.ws.svdRank = sv.effRank;
-      // Vidal canonical MPS (bond chi = 6) compresses & denoises the 64-D SSM baseline mean zMean during NREM sleep
-      const zMps = vidalMPS(cr.zMean, 6, 6);
+      // Vidal canonical MPS (bond chi = 12) compresses & denoises the 64-D SSM baseline mean zMean during NREM sleep
+      const zMps = vidalMPS(cr.zMean, 6, 12);
       const zRec = mpsContract(zMps);
       for (let i = 0; i < 64; i++) cr.zMean[i] = 0.7 * cr.zMean[i] + 0.3 * zRec[i];
     }
 
     let wmNorm = 0;
-    for (const arr of [cr.wm.Wout, cr.wm.Wskip, cr.wm.Wvel, cr.wm.Wout5]) {
+    for (const arr of [cr.wm.Wout, cr.wm.Wskip, cr.wm.Wvel, cr.wm.Wout5, cr.wm.Wout20]) {
       if (arr) for (let i = 0; i < arr.length; i++) wmNorm += arr[i] * arr[i];
     }
 
@@ -193,6 +194,9 @@ export class Metacognition {
     this.ws.mpsEntropy = mps.meanS;
     this.ws.mpsBond = mps.maxBond;
     this.ws.mpsFidelity = mps.keptFidelity;
+    this.ws.meraIrEntropy = mera.irEntropy;
+    this.ws.meraScaleRatio = mera.scaleRatio;
+    this.ws.meraScales = mera.scales;
     this.ws.ewcPenalty = cr.ewcEnergy || 0;
   }
 

@@ -25,9 +25,15 @@ export const STEER = {
   kObstTurn: 1.2079, kObstSlow: -0.1069,
 };
 
-export const STARTER = { ...MOTOR, ...STEER };
+export const MORPH = {
+  bodyLen: 1.0, bodyTaper: 0.0, bodyGirth: 1.0, foreLimb: 1.0, hindLimb: 1.0, stalkHeight: 1.0,
+  crestFin: 0.65, tailFluke: 0.60, scuteAniso: 1.0, fiberStiff: 1.0, pigmentHue: 0.52, thermOpt: 0.50,
+  neuroHipAlloc: 1.0, neuroCtxPlastic: 1.0,
+};
+
+export const STARTER = { ...MOTOR, ...STEER, ...MORPH };
 export const STARTER_INFO = {
-  source: 'two-stage multi-body CMA-ES (58 motor/synergy + 20 steering genes, 6 rough-ground training bodies 1,2,3,9,10,11)',
+  source: 'two-stage multi-body CMA-ES + 92-gene Evo-Devo morpho-neural specification (58 motor + 20 steering + 14 morphology/neuro genes)',
   trainSeeds: [1, 2, 3, 9, 10, 11],
   motorGens: 16,
   steerGens: 12,

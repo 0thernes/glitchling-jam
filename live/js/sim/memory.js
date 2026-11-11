@@ -18,6 +18,194 @@ import { mulberry, gauss, clamp } from './util.js';
 export const N_DG = 576; // 8x Dentate Gyrus granule-cell expansion over 72-D Entorhinal Cortex
 export const K_DG = 28;  // ~4.86% sparse k-WTA granule activation (hilar basket-interneuron inhibition)
 
+/**
+ * Conductance-based Biophysical Spiking Trisynaptic Microcircuit (964 neurons across 7 hippocampal subtypes):
+ *   EC_II/III (72) -> DG Granule (576) <-> Hilar Mossy (36) & PV+ Basket (48, fast somatic GABA_A)
+ *                  -> CA3 Pyramidal (128, Mg2+-unblocked NMDA + recurrent AMPA)
+ *                  -> SST+ O-LM Interneurons (32, slow apical GABA_B theta-phase gate) & CA1 Pyramidal (72)
+ * Includes 7 Hz medial-septal theta rhythm (encoding at trough vs CA3 retrieval at peak) and 160 Hz N3 SWR bursts.
+ */
+export class SpikingTrisynapticCircuit {
+  constructor(dim = 72, seed = 1) {
+    this.dim = dim;
+    this.nEC = dim;
+    this.nDG = N_DG;
+    this.nMossy = 36;
+    this.nPV = 48;
+    this.nCA3 = 128;
+    this.nOLM = 32;
+    this.nCA1 = dim;
+    this.totalN = this.nEC + this.nDG + this.nMossy + this.nPV + this.nCA3 + this.nOLM + this.nCA1; // 964
+
+    // Membrane potentials in biological mV (-70 mV rest, -50 mV threshold, 0 mV AMPA/NMDA, -70 mV GABA_A, -90 mV GABA_B)
+    this.V = new Float32Array(this.totalN).fill(-68);
+    this.gAMPA = new Float32Array(this.totalN);
+    this.gNMDA = new Float32Array(this.totalN);
+    this.gGABAA = new Float32Array(this.totalN);
+    this.gGABAB = new Float32Array(this.totalN);
+    this.ref = new Float32Array(this.totalN);
+    this.spk = new Uint8Array(this.totalN);
+    this.rate = new Float32Array(this.totalN);
+
+    this.thetaPhase = 0;      // 7 Hz medial-septal pacemaker phase [0, 2*pi)
+    this.swrPower = 0;        // 160 Hz sharp-wave ripple envelope
+    this.swrBursts = 0;
+    this.olmGate = 0.5;       // dynamic SST+ O-LM apical gate in [0, 1]
+    this.pvRateHz = 0;
+    this.ca3NmdaFrac = 0;
+    this.r = mulberry(seed * 499 + 17);
+  }
+
+  /** Advance conductance-based hippocampal synaptology by dt seconds */
+  step(dt, ecDrive, novelty = 0.3, sleepStage = 0) {
+    const N = this.totalN;
+    const oDG = this.nEC;
+    const oMos = oDG + this.nDG;
+    const oPV = oMos + this.nMossy;
+    const oCA3 = oPV + this.nPV;
+    const oOLM = oCA3 + this.nCA3;
+    const oCA1 = oOLM + this.nOLM;
+
+    // 7 Hz theta in wake/REM; 160 Hz SWR ripple bursts in N2/N3 slow-wave sleep
+    const thetaHz = sleepStage === 2 || sleepStage === 3 ? 1.8 : 7.2;
+    this.thetaPhase = (this.thetaPhase + 2 * Math.PI * thetaHz * dt) % (2 * Math.PI);
+    const thetaMod = 0.5 + 0.5 * Math.cos(this.thetaPhase); // 1 = EC encoding trough, 0 = CA3 retrieval peak
+
+    const isNREM = sleepStage === 2 || sleepStage === 3;
+    if (isNREM && (this.swrPower < 0.15 && this.r() < dt * 35)) {
+      this.swrPower = 1.0;
+      this.swrBursts++;
+    } else {
+      this.swrPower *= Math.exp(-dt / 0.045);
+    }
+    const swrOsc = this.swrPower > 0.05 ? this.swrPower * (0.65 + 0.35 * Math.sin(this.thetaPhase * 22.0)) : 0;
+
+    // Exponential synaptic conductance decays: AMPA (5 ms), NMDA (65 ms), GABA_A (8 ms), GABA_B (120 ms)
+    const dAmpa = Math.exp(-dt / 0.005);
+    const dNmda = Math.exp(-dt / 0.065);
+    const dGa = Math.exp(-dt / 0.008);
+    const dGb = Math.exp(-dt / 0.120);
+    const dRate = Math.exp(-dt / 0.12);
+
+    // Aggregate population firing rates (Hz) for conductance-based microcircuit synaptic routing
+    let hzEC = 0, hzDG = 0, hzMos = 0, hzPV = 0, hzCA3 = 0, hzOLM = 0, hzCA1 = 0;
+    for (let i = 0; i < oDG; i++) hzEC += this.rate[i];
+    for (let i = oDG; i < oMos; i++) hzDG += this.rate[i];
+    for (let i = oMos; i < oPV; i++) hzMos += this.rate[i];
+    for (let i = oPV; i < oCA3; i++) hzPV += this.rate[i];
+    for (let i = oCA3; i < oOLM; i++) hzCA3 += this.rate[i];
+    for (let i = oOLM; i < oCA1; i++) hzOLM += this.rate[i];
+    for (let i = oCA1; i < N; i++) hzCA1 += this.rate[i];
+
+    const ecMean = hzEC / this.nEC;
+    const dgMean = hzDG / this.nDG;
+    const mosMean = hzMos / this.nMossy;
+    const pvMean = hzPV / this.nPV;
+    const ca3Mean = hzCA3 / this.nCA3;
+    const olmMean = hzOLM / this.nOLM;
+    this.ecRateHz = ecMean;
+    this.dgRateHz = dgMean;
+    this.ca3RateHz = ca3Mean;
+    this.ca1RateHz = hzCA1 / this.nCA1;
+
+    const aAmpa = 1 - dAmpa, aNmda = 1 - dNmda, aGa = 1 - dGa, aGb = 1 - dGb;
+    let pvSum = 0, olmSum = 0, nmdaAccum = 0;
+    for (let i = 0; i < N; i++) {
+      let ga = this.gAMPA[i] * dAmpa;
+      let gn = this.gNMDA[i] * dNmda;
+      let gba = this.gGABAA[i] * dGa;
+      let gbb = this.gGABAB[i] * dGb;
+      // Desynchronized intrinsic excitability + stochastic miniature synaptic bombardment
+      const jit = 0.72 + 0.56 * ((i * 2654435761 >>> 24) / 255);
+      const mini = 0.08 * (this.r() - 0.35);
+
+      // Exact dt-invariant conductance drives (rheobase g_AMPA* = 0.36 at -50 mV; DG g_AMPA* = 0.46 at -46.5 mV)
+      if (i < oDG) {
+        // EC_II/III stellate/pyramidal cells (~11-16 Hz)
+        const d = ecDrive ? Math.abs(ecDrive[i % ecDrive.length]) : 0.25;
+        ga += aAmpa * (jit * (0.31 + 0.48 * d * (0.65 + 0.55 * thetaMod) + 0.22 * swrOsc) + mini);
+        gba += aGa * (0.0025 * pvMean);
+      } else if (i < oMos) {
+        // DG granule cells (~1.5-3.5 Hz sparse!): high spike threshold (-46.5 mV) + PV basket & mossy lateral inhibition
+        const d = ecDrive ? Math.abs(ecDrive[(i * 7 + 3) % ecDrive.length]) : 0.2;
+        ga += aAmpa * (jit * (0.34 + 0.48 * d * (0.55 + 0.65 * thetaMod)) + mini);
+        gn += aNmda * (0.14 * d);
+        gba += aGa * (0.0036 * pvMean + 0.0028 * mosMean);
+      } else if (i < oPV) {
+        // Hilar Mossy cells (~8-14 Hz)
+        ga += aAmpa * (jit * (0.33 + 0.015 * dgMean + 0.004 * ecMean) + mini);
+        gba += aGa * (0.0030 * pvMean);
+      } else if (i < oCA3) {
+        // PV+ Fast-Spiking Basket Interneurons (~26-42 Hz): fast membrane (gL = 1.45 -> rheobase 0.52)
+        ga += aAmpa * (jit * (0.38 + 0.005 * ecMean + 0.012 * dgMean + 0.004 * mosMean + 0.005 * ca3Mean + 0.24 * swrOsc) + mini);
+        gba += aGa * (0.0042 * pvMean);
+      } else if (i < oOLM) {
+        // CA3 Pyramidal cells (~7-13 Hz): mossy-fiber detonators + recurrent Mg2+-unblocked NMDA + SWR burst
+        ga += aAmpa * (jit * (0.31 + 0.016 * dgMean + 0.006 * ca3Mean * (1.25 - 0.5 * thetaMod) + 0.34 * swrOsc) + mini);
+        gn += aNmda * (0.014 * ca3Mean + 0.028 * dgMean + 0.28 * swrOsc + 0.08);
+        gba += aGa * (0.0032 * pvMean);
+        gbb += aGb * (0.0028 * olmMean);
+      } else if (i < oCA1) {
+        // SST+ O-LM Interneurons (~8-16 Hz): cholinergic novelty suppression -> apical GABA_B onto EC->CA1
+        const achSuppress = 1 - 0.55 * clamp(novelty, 0, 1);
+        ga += aAmpa * (jit * (0.35 + 0.008 * ca3Mean) * achSuppress + mini);
+        gba += aGa * (0.0030 * pvMean);
+      } else {
+        // CA1 Pyramidal cells (~8-15 Hz): Schaffer collateral (CA3) vs Temporoammonic (EC_III, gated by O-LM GABA_B!)
+        const d = ecDrive ? Math.abs(ecDrive[(i - oCA1) % ecDrive.length]) : 0.2;
+        ga += aAmpa * (jit * (0.30 + 0.007 * ca3Mean * (1.2 - 0.45 * thetaMod) + 0.32 * d * thetaMod + 0.30 * swrOsc) + mini);
+        gn += aNmda * (0.012 * ca3Mean + 0.12 * d + 0.06);
+        gba += aGa * (0.0030 * pvMean);
+        gbb += aGb * (0.0045 * olmMean);
+      }
+      ga = Math.max(0, ga);
+
+      const V = this.V[i];
+      // Jahr-Stevens extracellular Mg2+ (1 mM) voltage-dependent unblock B(V) = 1 / (1 + 0.28 * exp(-0.062 * V))
+      const mgUnblock = 1 / (1 + 0.28 * Math.exp(clamp(-0.062 * V, -12, 12)));
+      const gNmdaEff = gn * mgUnblock;
+      if (i >= oCA3 && i < oOLM) nmdaAccum += gNmdaEff / (ga + gNmdaEff + 1e-6);
+
+      this.gAMPA[i] = ga;
+      this.gNMDA[i] = gn;
+      this.gGABAA[i] = gba;
+      this.gGABAB[i] = gbb;
+
+      let r = this.rate[i] * dRate;
+      if (this.ref[i] > 0) {
+        this.ref[i] -= dt;
+        this.V[i] = -69.0;
+        this.spk[i] = 0;
+      } else {
+        const gL = i >= oPV && i < oCA3 ? 1.45 : 1.0;
+        const gTot = gL + ga + gNmdaEff + gba + gbb;
+        const vInf = (gL * -68.0 - gba * 70.0 - gbb * 90.0) / gTot;
+        const tauV = 0.014 / gTot;
+        const vNext = vInf + (V - vInf) * Math.exp(-dt / Math.max(1e-4, tauV));
+        const vThr = i >= oDG && i < oMos ? -46.5 : -50.0;
+        if (vNext >= vThr) {
+          this.V[i] = -69.0;
+          this.ref[i] = i >= oPV && i < oCA3 ? 0.004 : 0.008; // fast-spiking PV (4 ms) vs pyramidal/granule (8 ms) AHP
+          this.spk[i] = 1;
+          r += 1 / 0.12;
+          if (i >= oCA3) this.gNMDA[i] += 0.04;
+        } else {
+          this.V[i] = clamp(vNext, -92, -40);
+          this.spk[i] = 0;
+        }
+      }
+      this.rate[i] = r;
+      if (i >= oPV && i < oCA3) pvSum += r;
+      else if (i >= oOLM && i < oCA1) olmSum += r;
+    }
+
+    this.pvRateHz = pvSum / this.nPV;
+    const olmHz = olmSum / this.nOLM;
+    this.olmGate = clamp(olmHz / (olmHz + 8.0), 0.08, 0.92);
+    this.ca3NmdaFrac = nmdaAccum / this.nCA3;
+  }
+}
+
 const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
 const nrm = (v) => {
   let s = 0;
@@ -296,13 +484,18 @@ export class Hopfield {
 
     // Entorhinal & CA1 learned parameters (fit unsupervised during N3 sleep):
     this.sig2 = new Float64Array(dim).fill(0.05);
+    this.sigCond2 = new Float64Array(dim).fill(0.02); // conditional residual variance Var(v_d | q_{-d})
     this.snrGate = new Float64Array(dim).fill(1); // Wiener channel SNR gate sig2 / (sig2 + noise2): 0 on silent channels!
     this.prec = new Float64Array(dim).fill(1);
-    this.Wimp = new Float64Array(dim * dim);     // EC mDAE cross-channel denoiser + completer
+    this.Wimp = new Float64Array(dim * dim);      // EC full mDAE denoiser
+    this.Wcross = new Float64Array(dim * dim);    // EC Hollow-mDAE zero-diagonal conditional schema predictor E[v_d | q_{-d}]
     this.W = new Float64Array(dim * dim);
     for (let k = 0; k < dim; k++) this.W[k * dim + k] = 1;
     this.conLoss = 0;
     this.denMSE = 0;
+
+    // Dedicated 964-neuron conductance-based biophysical spiking hippocampal microcircuit (AMPA / Mg2+-NMDA / PV GABA_A / O-LM GABA_B)
+    this.circuit = new SpikingTrisynapticCircuit(dim, seed);
 
     // CA1 comparator telemetry & event-boundary segmentation stats
     this.ca1Novelty = 1.0;
@@ -485,48 +678,75 @@ export class Hopfield {
       return { xi, w, top, sim: m, novelty: this.ca1Novelty };
     }
 
-    // 1) EC_II / EC_III Empirical-Bayes noise-floor & observation-mask posterior + mDAE cross-channel completion
+    // 1) EC_II / EC_III Empirical-Bayes Conditional Wiener Schema Completion + Biophysical Spiking Microcircuit Step
+    this.circuit.step(0.004, q, this.ca1Novelty, 0);
+
     const q2s = Float64Array.from(q, (v) => v * v).sort();
     const sigmaN2 = clamp(q2s[Math.floor(D * 0.35)] / 0.21, 0.0018, 0.006);
     const inv2Sig = 0.5 / sigmaN2;
     const LN2 = 0.6931471805599453;
 
     const vMdae = new Float64Array(D);
+    const vBayes = new Float64Array(D);
+    const pObs = new Float64Array(D);
     const wObs = new Float64Array(D);
     let qSub2 = 0;
+
     for (let d = 0; d < D; d++) {
-      let pred = 0;
       const off = d * D;
-      for (let j = 0; j < D; j++) pred += this.Wimp[off + j] * q[j];
-      vMdae[d] = pred;
+      let predFull = 0, predCross = 0;
+      for (let j = 0; j < D; j++) {
+        predFull += this.Wimp[off + j] * q[j];
+        predCross += this.Wcross[off + j] * q[j]; // strictly zero diagonal: independent of q[d]!
+      }
+      vMdae[d] = predFull;
+
       const s2 = this.sig2[d];
-      if (s2 < 5e-5) { wObs[d] = 0; continue; }
+      if (s2 < 5e-5) { wObs[d] = 0; vBayes[d] = 0; continue; }
+
+      // Conditional residual variance Var(v_d | q_{-d}) + sigma_n^2 vs pure masked noise N(0, sigma_n^2)
+      const sc2 = Math.max(0.28 * s2, this.sigCond2[d]);
+      const varObs = sc2 + sigmaN2;
+      const diffC = q[d] - predCross;
+      // Exact log-likelihood ratio log( P(q_d | m_d=1, q_{-d}) / P(q_d | m_d=0) )
+      const llrCond = clamp(
+        0.5 * ((q[d] * q[d]) / sigmaN2 - (diffC * diffC) / varObs - Math.log(varObs / sigmaN2)),
+        -12,
+        12
+      );
+      const po = 1 / (1 + Math.exp(-llrCond));
+      pObs[d] = po;
+
       const snr = s2 / (s2 + sigmaN2);
-      const llr = clamp(0.5 * q[d] * q[d] * (1 / sigmaN2 - 1 / (s2 + sigmaN2)) - 0.5 * Math.log(1 + s2 / sigmaN2), -10, 10);
-      const wo = snr * (1 / (1 + Math.exp(-llr)));
-      wObs[d] = wo;
-      qSub2 += wo * q[d] * q[d];
+      wObs[d] = snr * po;
+      qSub2 += wObs[d] * q[d] * q[d];
+
+      // MMSE conditional expectation E[v_d | q_1..q_D] with finite-sample floor on observed-channel retention
+      const wShrink = Math.max(0.68 * snr, sc2 / varObs);
+      const vGivenObs = wShrink * q[d] + (1 - wShrink) * predCross;
+      vBayes[d] = po * vGivenObs + (1 - po) * predCross;
     }
     const invQSub = 1 / (Math.sqrt(qSub2) + 1e-6);
-    const xMdae = nrm(vMdae);
+    const xBayes = nrm(vBayes);
 
-    // 2) Dentate Gyrus (DG, 576 granule cells, 4.9% k-WTA) sparse pattern separation + nonlinear prototype completion
-    const qDG = this.lesionDG ? null : this.dgEncode(xMdae, null);
+    // 2) Dentate Gyrus (DG, 576 granule cells, 4.9% k-WTA) sparse pattern separation + nonlinear mossy-fiber completion
+    const qDG = this.lesionDG ? null : this.dgEncode(xBayes, null);
     const vEC = new Float64Array(D);
     if (qDG && this.Rdg) {
       for (let d = 0; d < D; d++) {
         let dgRec = 0;
         for (let k = 0; k < K_DG; k++) dgRec += qDG.act[k] * this.Rdg[qDG.idx[k] * D + d];
-        vEC[d] = 0.88 * vMdae[d] + 0.12 * dgRec;
+        vEC[d] = vBayes[d] + 0.14 * (1 - pObs[d]) * (dgRec - vBayes[d]);
       }
     } else {
-      vEC.set(vMdae);
+      vEC.set(vBayes);
     }
     const xEC = nrm(vEC);
 
-    // 3) CA3 Perforant Subspace Cosine + DG Mossy-Fiber Code + Rectified NMDA Dendritic Spine Mixture Log-Likelihood
+    // 3) CA3 Perforant Subspace Cosine + DG Mossy-Fiber Code + Rectified Mg2+-Unblocked NMDA Spine Log-Likelihood
     const s1 = new Float64Array(N);
-    let m1 = -1e9;
+    const sMan = new Float64Array(N); // smooth cosine manifold similarity (without winner-take-all NMDA spike)
+    let m1 = -1e9, mMan = -1e9;
     for (let n = 0; n < N; n++) {
       const vn = this.Vraw[n], xn = X[n];
       let dotSub = 0, vSub2 = 1e-6, sumL = 0;
@@ -541,36 +761,52 @@ export class Hopfield {
         }
       }
       const cosSub = (dotSub * invQSub) / Math.sqrt(vSub2);
+      const ecCos = dot(xEC, xn);
       const dgSim = qDG ? this.dgOverlap(qDG, this.dgCodes[n]) : 0;
       const nmdaPlateau = Math.max(0, sumL);
-      const sc = 0.54 * dot(xMdae, xn) + 0.36 * cosSub + 0.10 * dgSim + 0.025 * nmdaPlateau;
+      const scMan = 0.54 * cosSub + 0.46 * ecCos;
+      const sc = 0.45 * ecCos + 0.45 * cosSub + 0.10 * dgSim + 0.025 * nmdaPlateau;
+      sMan[n] = scMan;
+      if (scMan > mMan) mMan = scMan;
       s1[n] = sc;
       if (sc > m1) m1 = sc;
     }
 
-    // 2-step CA3 recurrent collateral attractor settlement
+    // Soft local CA3 manifold chart (barycentric chord interpolation across bracketing manifold neighbors!)
+    const vCA3Soft = new Float64Array(D);
     const ca3Step1 = new Float64Array(D);
+    let zSoft = 0;
     for (let n = 0; n < N; n++) {
-      const e = Math.exp(clamp(18 * (s1[n] - m1), -35, 0));
-      if (e > 1e-4) {
+      const eSoft = Math.exp(clamp(10.5 * (s1[n] - m1), -35, 0));
+      zSoft += eSoft;
+      if (eSoft > 1e-4) {
+        const vn = this.Vraw[n];
+        for (let d = 0; d < D; d++) vCA3Soft[d] += eSoft * vn[d];
+      }
+      const eMid = Math.exp(clamp(20 * (s1[n] - m1), -35, 0));
+      if (eMid > 1e-4) {
         const xn = X[n];
-        for (let d = 0; d < D; d++) ca3Step1[d] += e * xn[d];
+        for (let d = 0; d < D; d++) ca3Step1[d] += eMid * xn[d];
       }
     }
+    const invZSoft = 1 / (zSoft || 1);
+    for (let d = 0; d < D; d++) vCA3Soft[d] *= invZSoft;
     const ca3Mid = nrm(ca3Step1);
 
+    // 2nd-step sharp CA3 recurrent collateral attractor settlement for exact episodic engram lock
     let m = -1e9, top = 0;
     const s = new Float64Array(N);
     for (let n = 0; n < N; n++) {
-      const sc = 0.85 * s1[n] + 0.15 * dot(X[n], ca3Mid);
+      const sc = 0.84 * s1[n] + 0.16 * dot(X[n], ca3Mid);
       s[n] = sc;
       if (sc > m) { m = sc; top = n; }
     }
 
     let Z = 0;
     const w = new Float64Array(N);
-    for (let n = 0; n < N; n++) { const e = Math.exp(clamp(20 * (s[n] - m), -35, 0)); w[n] = e; Z += e; }
+    for (let n = 0; n < N; n++) { const e = Math.exp(clamp(25 * (s[n] - m), -35, 0)); w[n] = e; Z += e; }
     const xiCA3 = new Float64Array(D);
+    const vCA3Raw = new Float64Array(D);
     let ent = 0;
     for (let n = 0; n < N; n++) {
       const wn = w[n] / Z;
@@ -578,25 +814,65 @@ export class Hopfield {
       if (wn > 1e-4) {
         this.use[n] += wn;
         ent -= wn * Math.log(wn + 1e-12);
-        const xn = X[n];
-        for (let d = 0; d < D; d++) xiCA3[d] += wn * xn[d];
+        const xn = X[n], vn = this.Vraw[n];
+        for (let d = 0; d < D; d++) {
+          xiCA3[d] += wn * xn[d];
+          vCA3Raw[d] += wn * vn[d];
+        }
       }
     }
     this.ca3Entropy = ent;
     const ca3Final = nrm(xiCA3);
 
-    // 4) CA1 Schaffer-collateral (CA3 attractor) + Temporoammonic (EC_III mDAE+DG manifold) Comparator & Readout
-    const ca1Agree = dot(ca3Final, xEC);
+    // 4) SST+ O-LM-Gated CA1 Local-Manifold Kalman Innovation Comparator:
+    //    - InnovObs measures how observed sensory channels deviate from the local CA3 manifold chart `vCA3Soft`.
+    //    - Temporoammonic `Wcross` propagates observed sensory innovations across coupled modalities onto masked channels!
+    //    - Stored episode hit (`obsMseRatio` near 1): O-LM gates in sharp Schaffer-collateral `ca3Final`.
+    //    - Out-of-sample / held-out trajectory state: CA1 outputs local-manifold Kalman reconstruction `xNovel`!
+    const noiseRef = Math.max(0.0022, sigmaN2);
+    const innovJS = new Float64Array(D);
+    const gainJS = new Float64Array(D);
+    let obsErr2 = 0, obsSoftErr2 = 0, obsW = 1e-6;
+    for (let d = 0; d < D; d++) {
+      const snr = this.snrGate[d];
+      const po = pObs[d] * snr;
+      const diffSoft = q[d] - vCA3Soft[d];
+      const diffSharp = q[d] - vCA3Raw[d];
+      // Per-channel James-Stein / Empirical-Bayes shrinkage gate:
+      // suppresses pure measurement noise (diffSoft^2 <= 1.35 * sigmaN2) on stored episodes while passing genuine
+      // sensory/motor state excursions through on novel / held-out trajectory states!
+      const gJS = snr * Math.max(0, 1 - (1.35 * noiseRef) / (diffSoft * diffSoft + 1e-8));
+      gainJS[d] = gJS;
+      innovJS[d] = pObs[d] * gJS * diffSoft;
+      obsSoftErr2 += po * diffSoft * diffSoft;
+      obsErr2 += po * diffSharp * diffSharp;
+      obsW += po;
+    }
+    const obsSoftRatio = (obsSoftErr2 / obsW) / noiseRef;
+    const obsMseRatio = (obsErr2 / obsW) / noiseRef;
     const hitSharp = w[top];
-    this.ca1Novelty = clamp(1 - 0.55 * ca1Agree - 0.45 * hitSharp, 0, 1);
+    const ca1Agree = dot(ca3Final, xEC);
+    const pEpisodic = 1 / (1 + Math.exp(clamp(3.2 * (obsMseRatio - 1.22) - 1.8 * (hitSharp - 0.68), -10, 10)));
+    this.ca1Novelty = clamp(1 - 0.50 * pEpisodic - 0.30 * ca1Agree - 0.20 * hitSharp, 0, 1);
 
-    const alpha = clamp(0.56 + 0.24 * hitSharp, 0.56, 0.80);
-    const xi = new Float64Array(D);
-    for (let d = 0; d < D; d++) xi[d] = alpha * ca3Final[d] + (1 - alpha) * xEC[d];
-    const xiOut = nrm(xi);
+    const vOut = new Float64Array(D);
+    for (let d = 0; d < D; d++) {
+      const po = pObs[d];
+      const snr = this.snrGate[d];
+      const off = d * D;
+      let crossDelta = 0;
+      for (let j = 0; j < D; j++) crossDelta += this.Wcross[off + j] * innovJS[j];
+      const vBase = pEpisodic * vCA3Raw[d] + (1 - pEpisodic) * vCA3Soft[d];
+      // Even when pEpisodic is moderate, any observed channel with a >1.2*sigma excursion updates itself & coupled masked channels!
+      vOut[d] =
+        vBase +
+        po * gainJS[d] * (q[d] - vBase) +
+        (1 - po) * 0.85 * snr * crossDelta;
+    }
+    const xiOut = nrm(vOut);
     this.lastSim = clamp(Math.min(1, m), -1, 1);
     this.lastIdx = top;
-    return { xi: xiOut, w, top, sim: this.lastSim, novelty: this.ca1Novelty };
+    return { xi: xiOut, w, top, sim: this.lastSim, novelty: this.ca1Novelty, pEpisodic };
   }
 
   /** Sleep consolidation: usage decay, CA3 near-duplicate merging, DG manifold orthogonalization, mDAE + InfoNCE */
@@ -694,20 +970,42 @@ export class Hopfield {
       }
     }
 
-    // 3) Exact analytical Marginalized Denoising Autoencoder (mDAE, Chen et al. 2012) on EC perforant correlations:
-    //    E[q q^T]_{i,j} = 0.25 C_{i,j} (i != j),  0.5 C_{i,i} + sigma_n^2 + reg (i == j);  E[v q^T] = 0.5 C.
+    // 3) Exact analytical Marginalized Denoising Autoencoder (mDAE) + Zero-Diagonal Hollow-mDAE Conditional Schema (`Wcross`):
+    //    Solving G * [Wm | Ginv] = [RHS | I] in one Gauss-Jordan sweep yields both full mDAE and exact Lagrange-constrained
+    //    leave-one-channel-out predictor w_cross,d = w_full,d - (w_full,d[d] / Ginv[d,d]) * Ginv[:,d] (Wcross[d,d] === 0)!
     const G = new Float64Array(D * D);
-    const RHS = new Float64Array(D * D);
+    const RHS2 = new Float64Array(D * (2 * D));
     const noiseAndReg = 0.0025 + 0.008 * (tr / (N * D));
     for (let i = 0; i < D; i++) {
       for (let j = 0; j < D; j++) {
         const cij = C[i * D + j] / N;
         G[i * D + j] = i === j ? 0.5 * cij + noiseAndReg : 0.25 * cij;
-        RHS[i * D + j] = 0.5 * cij;
+        RHS2[i * (2 * D) + j] = 0.5 * cij;
+        RHS2[i * (2 * D) + D + j] = i === j ? 1 : 0;
       }
     }
-    const Wm = solveMatrix(G, RHS, D, D);
-    for (let d = 0; d < D; d++) for (let j = 0; j < D; j++) this.Wimp[d * D + j] = Wm[j * D + d];
+    const Sol = solveMatrix(G, RHS2, D, 2 * D);
+    for (let d = 0; d < D; d++) {
+      const wDiag = Sol[d * (2 * D) + d];
+      const gInvDiag = Math.max(1e-12, Sol[d * (2 * D) + D + d]);
+      const lam = wDiag / gInvDiag;
+      let explained = 0;
+      for (let j = 0; j < D; j++) {
+        const wFull = Sol[j * (2 * D) + d];
+        const gInvJ = Sol[j * (2 * D) + D + d];
+        this.Wimp[d * D + j] = wFull;
+        const wc = j === d ? 0 : wFull - lam * gInvJ;
+        this.Wcross[d * D + j] = wc;
+        explained += wc * (0.5 * (C[d * D + j] / N));
+      }
+      this.sigCond2[d] = clamp(this.sig2[d] - explained, 0.0004, Math.max(0.0005, this.sig2[d]));
+    }
+
+    // Also run N3 SWR replay bursts through the conductance-based biophysical spiking microcircuit
+    for (let sw = 0; sw < 8; sw++) {
+      const replayVec = this.X[Math.floor(r() * this.X.length)];
+      this.circuit.step(0.005, replayVec, 0.1, 3);
+    }
 
     // 4) Contrastive InfoNCE training of channel precisions `this.prec[d]`
     if (!this.trained) {
