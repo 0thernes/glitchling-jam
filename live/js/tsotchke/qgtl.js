@@ -135,22 +135,28 @@ export function naturalGradient(g, rhs, P, ridge = 1e-2) {
  */
 export function weightSpaceDecomp(W, W0, bias = null, mask = null) {
   const n = W.length;
-  let n0 = 0, ndw = 0, nw = 0, dot = 0, b2 = 0, fSum = 0;
-  for (let i = 0; i < n; i++) {
+  const st = n > 250000 ? 8 : 1;
+  let n0 = 0, ndw = 0, nw = 0, dot = 0, b2 = 0, fSum = 0, sa = 0, sb = 0;
+  for (let i = 0; i < n; i += st) {
     if (mask && !mask[i]) continue;
     const w = W[i], w0 = W0[i], dw = w - w0;
     n0 += w0 * w0;
     ndw += dw * dw;
     nw += w * w;
     dot += w * w0;
-    fSum += Math.sqrt(Math.abs(w * w0));
+    const aw = Math.abs(w), aw0 = Math.abs(w0);
+    sa += aw;
+    sb += aw0;
+    fSum += Math.sqrt(aw * aw0);
   }
-  if (bias) for (let i = 0; i < bias.length; i++) b2 += bias[i] * bias[i];
+  n0 *= st; ndw *= st; nw *= st; dot *= st; sa *= st; sb *= st; fSum *= st;
+  const bSt = bias && bias.length > 16384 ? 4 : 1;
+  if (bias) {
+    for (let i = 0; i < bias.length; i += bSt) b2 += bias[i] * bias[i];
+    b2 *= bSt;
+  }
   const innateNorm = Math.sqrt(n0), learnedNorm = Math.sqrt(ndw), totalNorm = Math.sqrt(nw);
   const cosInnate = (totalNorm > 1e-9 && innateNorm > 1e-9) ? dot / (totalNorm * innateNorm) : 1;
-  // Energy-normalized Bhattacharyya fidelity between |W| and |W0|
-  let sa = 0, sb = 0;
-  for (let i = 0; i < n; i++) { if (mask && !mask[i]) continue; sa += Math.abs(W[i]); sb += Math.abs(W0[i]); }
   const qgtFid = (sa > 1e-9 && sb > 1e-9) ? Math.min(1, (fSum * fSum) / (sa * sb)) : 1;
   return {
     innateNorm,

@@ -33,11 +33,11 @@
     <canvas id="raster" width="360" height="213"></canvas>
     <div id="regions" class="legend"></div>
     <div class="grid2"><div><b>Neuromodulators</b><div id="nm"></div></div><div><b>MOT (8)</b><div id="mot"></div></div></div>
-    <div class="row"><b>Binocular retina</b> <small>32 ommatidia (260° FOV), looming &amp; SLAM landmarks</small></div><canvas id="retina" width="360" height="36"></canvas>
+    <div class="row"><b>2D Binocular retina &amp; V1</b> <small>24×12 L/R sheets · 12×6 Gabor columns · SLAM</small></div><canvas id="retina" width="360" height="58"></canvas>
     <div class="row"><b>Striatal race (21)</b> <small>16 sites · 3 pools · snack · explore (D1 up / D2 down)</small></div><canvas id="race" width="360" height="70"></canvas>
     <div class="row"><b>LTC pattern generator</b> <small>24 liquid neurons</small></div><canvas id="cpg" width="360" height="60"></canvas>
     <div class="row"><b>Selective SSM (RTRL)</b> <small>32 modes |h|, Δ (online diagonal RTRL)</small></div><canvas id="ssm" width="360" height="40"></canvas>
-    <div class="row"><b>Deep residual world model</b> <small>surprise, MSE &amp; σ² (2-layer SiLU MLP)</small></div><canvas id="wm" width="360" height="50"></canvas>
+    <div class="row"><b>Transformer-XL world model</b> <small>Causal RoPE-SwiGLU · 1-step, 5-step MSE &amp; σ²</small></div><canvas id="wm" width="360" height="50"></canvas>
     <div class="row"><b>Thought curvature &amp; metacog</b> <small>Eshkol Taylor-jet Frenet κ(t), τ(t) &amp; calibration</small></div><canvas id="metacog" width="360" height="44"></canvas>
     <div id="mindstats" class="stats"></div>
   </section>
@@ -55,9 +55,12 @@
     <label>Gravity tilt Z <input type="range" id="gz" min="-0.5" max="0.5" step="0.01" value="0"></label>
     <label>Gravity strength <input type="range" id="gs" min="2" max="20" step="0.5" value="9.8"></label>
     <label>Sim speed <select id="speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></label>
+    <label>Biological clock <select id="clock-mode"><option value="circadian" selected>240× demo (6-min day)</option><option value="ultradian">60× ultradian (24-min day)</option><option value="realtime">1× biological real-time (24-hr day)</option></select></label>
     <label>Quality <select id="quality"><option value="auto" selected>auto (adaptive)</option><option value="0">low</option><option value="1">medium</option><option value="2">high</option><option value="3">ultra (shadows)</option></select></label>
-    <label>Brain scale <select id="brain-scale"><option value="S">S (436 neurons)</option><option value="M" selected>M (3,268 · default)</option><option value="L">L (11,972 neurons)</option><option value="XL">XL (25,924 neurons)</option></select></label>
-    <label>Brain backend <select id="brain-backend"><option value="cpu" selected>Main thread (Typed CSR)</option><option value="worker">Web Worker (off-thread)</option><option value="webgpu">WebGPU compute shader</option></select> <small id="backend-status"></small></label>
+    <label>Brain scale <select id="brain-scale"><option value="S">S (436 neurons)</option><option value="M" selected>M (3,268 · default)</option><option value="L">L (11,972 · 532k syn)</option><option value="XL">XL (25,924 · 1.18M syn)</option><option value="XXL">XXL (104,904 · 4.76M syn)</option></select></label>
+    <label>Brain backend <select id="brain-backend"><option value="auto" selected>Auto (CPU S/M · Worker L–XXL)</option><option value="cpu">Main thread (Typed CSR)</option><option value="worker">Web Worker (off-thread)</option><option value="webgpu">WebGPU compute shader</option></select> <small id="backend-status"></small></label>
+    <label>World model <select id="wm-scale"><option value="std" selected>Standard (110k params)</option><option value="large">Large (546k params)</option><option value="xl">XL (1.17M params)</option></select></label>
+    <div class="btns"><button id="qrng-fetch" title="Fetch live photonic/vacuum-fluctuation quantum random bits over HTTPS (LFDR / ANU / NIST) with NIST SP 800-90B health tests">Fetch live photonic QRNG</button> <small id="qrng-status"></small></div>
     <div class="btns"><button id="rain">Rain</button><button id="gust">Gust</button><button id="sleepy">Make sleepy</button><button id="wake">Wake</button><button id="follow">Camera: follow</button><button id="reset">New seed</button></div>
     <label>Seed <input type="number" id="seed" min="1" max="999999" value="1"></label>
   </section>
@@ -66,8 +69,8 @@
     <div id="lesions" class="lesions"></div>
     <div id="lesionlog" class="stats"></div>
     <h3>Lineage (78-gene developmental connectome)</h3>
-    <p class="small">All innate motor, whole-body synergy, gaze, roll-damping and sense→MOT steering pathways grow from a 78-gene developmental genome. "Evolve" runs a variance-reduced Mirrored Separable CMA-ES in background Web Workers: 8 antithetic mutants per generation are scored on a paired 2-body rough-ground + steering Common-Random-Number cohort, with elitist mean verification so lineage fitness improves monotonically on the validation cohort. "Adopt" grows a new creature from the evolved genome; "Previous genome" steps back one adoption.</p>
-    <div class="btns"><button id="evo-run">Evolve 6 generations</button><button id="evo-adopt" disabled>Adopt lineage</button><button id="evo-undo" disabled>Previous genome</button><button id="evo-reset">Starter genome</button></div>
+    <p class="small">All innate motor, whole-body synergy, gaze, roll-damping and sense→MOT steering pathways grow from a 78-gene developmental genome. "Refine starter" runs a 6-generation variance-reduced Mirrored Separable CMA-ES around the current genome; "De-novo from random" initializes purely from uniform random <code>[0.05, 0.95]^78</code> weights (zero starter priors), screens a 12-member Stratified Latin-Hypercube primordial cohort, and evolves locomotion + closed-loop steering over 10 generations in background Web Workers. "Adopt" grows a new creature from the evolved genome; "Previous genome" steps back one adoption.</p>
+    <div class="btns"><button id="evo-run">Refine starter (6 gens)</button><button id="evo-denovo">De-novo from random (10 gens)</button><button id="evo-adopt" disabled>Adopt lineage</button><button id="evo-undo" disabled>Previous genome</button><button id="evo-reset">Starter genome</button></div>
     <div id="evo-log" class="stats"></div>
   </section>
   <section data-pane="about" hidden>

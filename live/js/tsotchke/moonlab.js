@@ -1,23 +1,20 @@
-// Moonlab Tensor-Network & One-Sided Jacobi SVD — JavaScript port of the tensor truncation core from
+// Moonlab Tensor-Network, Vidal Canonical MPS & One-Sided Jacobi SVD — upgraded in pass 16 from
 // tsotchke/moonlab (src/algorithms/tensor_network/tensor.c, MIT, © Tsotchke).
-// Deterministic Hestenes one-sided Jacobi SVD (no RNG, exact orthogonal Givens sweeps), bond-dimension chi truncation,
-// von Neumann entanglement entropy S_vN = -sum p_i log(p_i) (p_i = sigma_i^2 / sum sigma_j^2), Roy-Vetterli effective rank,
-// and sequential Matrix Product State (MPS) bond compression.
+// Provides:
+//  1) Deterministic Hestenes one-sided Jacobi SVD (exact orthogonal Givens sweeps, zero RNG).
+//  2) Spectral entanglement consolidation `spectralConsolidate` for motor/world-model synaptic matrices.
+//  3) Full Vidal Canonical Matrix Product State (`vidalMPS`, explicit site tensors Gamma^[s] and Schmidt singular-value
+//     vectors Lambda^[s] up to bond dimension chi = 8) + exact statevector contraction `mpsContract` + bond-chi denoising!
 
-/**
- * Deterministic thin SVD of an m x n row-major matrix A (Float64Array of length m*n).
- * Returns { U (m x r), S (r), V (n x r), r = min(m, n) } with S sorted descending.
- */
 export function jacobiSVD(data, rows, cols, maxSweeps = 35) {
   if (rows < cols) {
-    // Transpose to tall (cols x rows), decompose A^T = U_t S V_t^T => A = V_t S U_t^T
     const AT = new Float64Array(cols * rows);
     for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) AT[j * rows + i] = data[i * cols + j];
     const { U: Ut, S, V: Vt, r } = jacobiSVD(AT, cols, rows, maxSweeps);
     return { U: Vt, S, V: Ut, r };
   }
   const m = rows, n = cols;
-  const W = Float64Array.from(data); // working copy (m x n), columns orthogonalised into U * S
+  const W = Float64Array.from(data);
   const V = new Float64Array(n * n);
   for (let i = 0; i < n; i++) V[i * n + i] = 1;
 
@@ -65,7 +62,6 @@ export function jacobiSVD(data, rows, cols, maxSweeps = 35) {
     const j = ord[k], sv = rawS[j];
     S[k] = sv;
     if (sv > 1e-14) {
-      // Fixed deterministic sign convention: first non-negligible entry of U[:, k] >= 0
       let sgn = 1;
       for (let i = 0; i < m; i++) { const v = W[i * n + j] / sv; if (Math.abs(v) > 1e-9) { sgn = v < 0 ? -1 : 1; break; } }
       for (let i = 0; i < m; i++) U[i * n + k] = (sgn * W[i * n + j]) / sv;
@@ -78,11 +74,6 @@ export function jacobiSVD(data, rows, cols, maxSweeps = 35) {
   return { U, S, V: Vs, r: n };
 }
 
-/**
- * Spectral entanglement entropy & bond-chi low-rank compression of a weight-delta matrix dW = W - W0.
- * Used in sleep consolidation to denoise noisy rank-1 motor/world-model perturbations while preserving
- * coherent high-singular-value learned synergies!
- */
 export function spectralConsolidate(W, W0, rows, cols, chi, blend = 0.5) {
   const N = rows * cols;
   const dW = new Float64Array(N);
@@ -99,7 +90,6 @@ export function spectralConsolidate(W, W0, rows, cols, chi, blend = 0.5) {
     if (p > 1e-15) H -= p * Math.log(p);
     if (k < kMax) kept2 += S[k] * S[k];
   }
-  // Reconstruct rank-chi denoised delta and blend into W
   let err2 = 0;
   for (let i = 0; i < rows; i++) {
     for (let j = 0; j < cols; j++) {
@@ -120,43 +110,125 @@ export function spectralConsolidate(W, W0, rows, cols, chi, blend = 0.5) {
 }
 
 /**
- * Sequential MPS (Tensor Train) bond-chi decomposition of a length-2^L state vector (e.g. 64-dim SSM feature state, L=6).
- * Returns bond entanglement entropies across all L-1 cuts and total compression fidelity.
+ * Construct an explicit Vidal Canonical Matrix Product State (Gamma^[0..L-1], Lambda^[0..L-2]) of a 2^L vector:
+ *   psi_{i_0 ... i_{L-1}} = norm * sum_{a_0..a_{L-2}} Gamma^[0]_{0, i_0, a_0} Lambda^[0]_{a_0} Gamma^[1]_{a_0, i_1, a_1} ... Gamma^[L-1]_{a_{L-2}, i_{L-1}, 0}
  */
-export function mpsEntanglement(vec, L = 6, chiMax = 4) {
+export function vidalMPS(vec, L = 6, chiMax = 8) {
   const N = 1 << L;
   let psi = new Float64Array(N);
   let n2 = 0;
   for (let i = 0; i < Math.min(N, vec.length); i++) { psi[i] = vec[i]; n2 += vec[i] * vec[i]; }
-  if (n2 < 1e-16) return { meanS: 0, maxS: 0, keptFidelity: 1 };
-  const inv = 1 / Math.sqrt(n2);
+  const norm = Math.sqrt(n2);
+  if (norm < 1e-15) {
+    return {
+      L, norm: 0, meanS: 0, maxS: 0, keptFidelity: 1, maxBond: 1,
+      gammas: Array.from({ length: L }, () => ({ data: new Float64Array(2), lDim: 1, rDim: 1 })),
+      lambdas: Array.from({ length: L - 1 }, () => Float64Array.of(1)),
+    };
+  }
+  const inv = 1 / norm;
   for (let i = 0; i < N; i++) psi[i] *= inv;
 
-  let leftBond = 1, rightDim = N, meanS = 0, maxS = 0, fid = 1;
+  const gammas = [];
+  const lambdas = [];
+  let prevLambda = Float64Array.of(1);
+  let leftBond = 1, rightDim = N, meanS = 0, maxS = 0, fid = 1, maxBond = 1;
+
   for (let site = 0; site < L - 1; site++) {
     const rows = leftBond * 2, cols = rightDim >> 1;
-    const { S, V, r } = jacobiSVD(psi, rows, cols, 20);
+    const { U, S, V, r } = jacobiSVD(psi, rows, cols, 22);
     let s2 = 0;
     for (let k = 0; k < r; k++) s2 += S[k] * S[k];
-    let H = 0, k2 = 0;
     const chi = Math.min(r, chiMax);
+    if (chi > maxBond) maxBond = chi;
+
+    let H = 0, k2 = 0;
+    const lam = new Float64Array(chi);
     for (let k = 0; k < r; k++) {
       const p = (S[k] * S[k]) / (s2 + 1e-18);
       if (p > 1e-15) H -= p * Math.log(p);
-      if (k < chi) k2 += S[k] * S[k];
+      if (k < chi) {
+        k2 += S[k] * S[k];
+        lam[k] = S[k];
+      }
     }
+    // Re-normalise truncated Schmidt values to preserve state norm
+    const keepNorm = Math.sqrt(k2) || 1;
+    for (let k = 0; k < chi; k++) lam[k] /= keepNorm;
+
+    // Vidal Gamma^[site]_{alpha_{s-1}, i_s, alpha_s} = U_{(alpha_{s-1}, i_s), alpha_s} / Lambda^[s-1]_{alpha_{s-1}}
+    const gam = new Float64Array(leftBond * 2 * chi);
+    for (let aL = 0; aL < leftBond; aL++) {
+      const invPrev = prevLambda[aL] > 1e-7 ? 1 / prevLambda[aL] : 0;
+      for (let phys = 0; phys < 2; phys++) {
+        const row = aL * 2 + phys;
+        for (let aR = 0; aR < chi; aR++) {
+          gam[(aL * 2 + phys) * chi + aR] = U[row * r + aR] * invPrev;
+        }
+      }
+    }
+    gammas.push({ data: gam, lDim: leftBond, rDim: chi });
+    lambdas.push(lam);
+
     meanS += H / (L - 1);
     if (H > maxS) maxS = H;
     fid *= k2 / (s2 + 1e-18);
-    // Remaining state for next site: diag(S[0..chi-1]) * V[:, 0..chi-1]^T  (shape chi x cols)
+
     const next = new Float64Array(chi * cols);
     for (let k = 0; k < chi; k++) {
-      const sk = S[k];
+      const sk = lam[k];
       for (let j = 0; j < cols; j++) next[k * cols + j] = sk * V[j * r + k];
     }
     psi = next;
+    prevLambda = lam;
     leftBond = chi;
     rightDim = cols;
   }
-  return { meanS, maxS, keptFidelity: Math.min(1, fid) };
+
+  // Final site L-1: psi has shape (leftBond x 2); divide out Lambda^[L-2] to get Gamma^[L-1]
+  const lastGam = new Float64Array(leftBond * 2);
+  for (let aL = 0; aL < leftBond; aL++) {
+    const invPrev = prevLambda[aL] > 1e-7 ? 1 / prevLambda[aL] : 0;
+    lastGam[aL * 2] = psi[aL * 2] * invPrev;
+    lastGam[aL * 2 + 1] = psi[aL * 2 + 1] * invPrev;
+  }
+  gammas.push({ data: lastGam, lDim: leftBond, rDim: 1 });
+
+  return { L, norm, meanS, maxS, keptFidelity: Math.min(1, fid), maxBond, gammas, lambdas };
+}
+
+/** Contract a Vidal Canonical MPS back into a full 2^L vector in R^{2^L} */
+export function mpsContract(mps) {
+  const { L, norm, gammas, lambdas } = mps;
+  if (norm === 0) return new Float64Array(1 << L);
+  // Left-to-right tensor contraction: cur has shape (physPrefix x rDim)
+  let cur = Float64Array.from(gammas[0].data); // 1 * 2 * r0 -> (2 x r0)
+  let pDim = 2, bond = gammas[0].rDim;
+  for (let s = 1; s < L; s++) {
+    const lam = lambdas[s - 1];
+    const { data: G, rDim } = gammas[s]; // (bond x 2 x rDim)
+    const next = new Float64Array(pDim * 2 * rDim);
+    for (let pref = 0; pref < pDim; pref++) {
+      for (let aL = 0; aL < bond; aL++) {
+        const w = cur[pref * bond + aL] * lam[aL];
+        if (Math.abs(w) < 1e-18) continue;
+        for (let phys = 0; phys < 2; phys++) {
+          const dstBase = (pref * 2 + phys) * rDim;
+          const gBase = (aL * 2 + phys) * rDim;
+          for (let aR = 0; aR < rDim; aR++) next[dstBase + aR] += w * G[gBase + aR];
+        }
+      }
+    }
+    cur = next;
+    pDim <<= 1;
+    bond = rDim;
+  }
+  for (let i = 0; i < cur.length; i++) cur[i] *= norm;
+  return cur;
+}
+
+/** Sequential Vidal MPS entanglement analysis (chiMax = 8 default in pass 16) */
+export function mpsEntanglement(vec, L = 6, chiMax = 8) {
+  const mps = vidalMPS(vec, L, chiMax);
+  return { meanS: mps.meanS, maxS: mps.maxS, keptFidelity: mps.keptFidelity, maxBond: mps.maxBond };
 }

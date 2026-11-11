@@ -37,7 +37,7 @@ python plot.py                # -> results/glitchling.png, results/cursed_portra
 
 | Path | What |
 |---|---|
-| `live/` | Glitchling v2 live 3D organism (3,268–25,924 spiking LIF neurons, LTC CPG, 51-particle soft body, binocular retina + EKF-SLAM, 78-gene CMA-ES genome, Web Worker / WebGPU brain, metacognition & Tsotchke stack; see [`live/README.md`](live/README.md)) |
+| `live/` | Glitchling v2 live 3D organism (`436`–`104,904` 3-compartment canonical laminar spiking neurons / up to `4.76M` synapses, LTC CPG, 78-tet 3D Neo-Hookean FEM body + 1D Navier-Stokes / 3D SPH hemodynamics, 2D retinotopic `LGN→V1 Gabor→V4/MT` + EKF-SLAM, trisynaptic `EC→DG→CA3→CA1` hippocampus, `112k`–`1.17M` Causal RoPE-SwiGLU Transformer-XL world model, 78-gene de-novo random & CMA-ES lineage, `1:1` real-time biological clock, auto Web Worker / WebGPU brain & 10-qubit open-quantum Tsotchke stack; see [`live/README.md`](live/README.md)) |
 | `play/` | Live playable 2D browser port (`sim.js` model, `app.js` UI, `style.css`) |
 | `site/` | One-day jam showcase page |
 | `brain-viz/` | Real activation playback viewer |

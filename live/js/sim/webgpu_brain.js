@@ -1,7 +1,7 @@
-// Optional WebGPU compute shader accelerator for large spiking sheets (L / XL).
+// Optional WebGPU compute shader accelerator for large spiking sheets (L / XL / XXL up to 105k neurons, 4.35M synapses).
 // Uses a lock-free incoming-CSR layout (post <- pre) on the GPU so each thread integrates one neuron and gathers incoming
-// spikes in parallel with zero atomic contention across 12k-26k neurons and 0.5M-1.1M synapses.
-import { R0, RN } from './brain.js';
+// spikes in parallel with zero atomic contention across 12k-105k neurons and 0.5M-4.35M synapses.
+import { R0, RN, regionOf } from './brain.js';
 
 const WGSL_BRAIN = /* wgsl */ `
 struct Params {
@@ -194,9 +194,9 @@ export class WebGPUBrainAccelerator {
   }
 
   async stepSubsteps(brain, substeps, dt, spkAccum) {
-    const dev = this.device, N = this.N, nm = brain.nm;
+    const dev = this.device, N = this.N, nm = brain.nm, rb = brain.regBias;
     const effExt = new Float32Array(N);
-    for (let i = 0; i < N; i++) effExt[i] = brain.ext[i] + brain.vBias[i];
+    for (let i = 0; i < N; i++) effExt[i] = brain.ext[i] + brain.vBias[i] + rb[regionOf(i)];
     dev.queue.writeBuffer(this.bExt, 0, effExt);
 
     const pBuf = new ArrayBuffer(64);

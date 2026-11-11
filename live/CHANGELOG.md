@@ -602,3 +602,71 @@ Measured (Node & headless Chromium, idle machine):
 - **Headless Chromium (`browser_check.mjs`, `lineage_check.mjs`):**
   - Zero console or page errors on phone (`390×844`: `45.2 fps`, `stepMs 2.82 ms`, motion intact `7.44` vs `mn` lesioned `0.97`), desktop (`1280×800` SwiftShader: `20.7 fps`, `stepMs 2.37 ms`, motion intact `8.02` vs `mn` lesioned `1.10`), and Web Worker mode (`?backend=worker` on M and L).
   - `lineage_check.mjs`: 6 generations (55 2-body CRN genome evaluations) completed with zero errors, non-decreasing CRN fitness (`6.44`, turn `1.94 rad/s`, fwd `0.59 u/s`, upright `0.95`), clean adoption and `Previous genome` undo stack restoration.
+
+## Pass 16 — 5-scale 3-compartment canonical laminar brain (`XXL` 105k / 4.76M syn, `S < M < L` foraging, `<15 ms` CPU `XL`), anatomical trisynaptic `EC → DG → CA3 → CA1` hippocampus, 2D retinotopic `LGN → V1 Gabor → V4/MT` visual hierarchy, `1.17M`-param Causal RoPE-SwiGLU Transformer-XL world model, in-browser de-novo random `[0.05, 0.95]^78` evolution, 78-tet 3D Neo-Hookean FEM + 1D Navier-Stokes / 3D SPH hemodynamics, `1:1` biological real-time clock, and 10-qubit open-quantum Lindblad / photonic QRNG + Vidal canonical MPS
+
+Addresses all eight remaining `SIMPLIFIED` items from pass 15 across neuroanatomy, scaling, vision, hippocampal circuitry, world-model capacity, de-novo evolutionary search, continuum tissue/fluid physics, circadian timekeeping and quantum/tensor-network execution.
+
+- **Five brain scales (`S`/`M`/`L`/`XL`/`XXL`), 3-compartment canonical `L4 / L2/3 / L5/6` laminar microcolumns, monotonic `S < M < L` foraging & `<15 ms` CPU `XL` (`js/sim/brain.js`, `js/sim/brain_worker.js`, `js/sim/webgpu_brain.js`, `js/sim/creature.js`, `js/app.js`):**
+  - Added `XXL` (`104,904` neurons / `4,756,245` synapses: `290×290` cortex, `16,384` hippocampal place cells, `4,096` thalamus) using dynamic `Uint32Array` CSR indices (`N > 65,535`) built in `~1.6–2.1 s`, and made `?backend=auto` the default so `S`/`M` step on CPU while `L`/`XL`/`XXL` delegate automatically to `WebWorker-CSR` (`?backend=webgpu` selects the lock-free incoming-CSR WGSL compute shader).
+  - Upgraded `M`–`XXL` cortex to canonical 3-layer microcolumns (`L4` 25% granular thalamorecipient + V1 input → `L2/3` 45% supragranular recurrent associative → `L5/6` 30% infragranular pyramidal output to `STR`, `MOT`, `INS` & `THAL`) with excitatory-only long-range projections and 3-compartment pyramidal dynamics (somatic `v` + PV basket shunt, basal dendritic `vBasal`, and L1 `apical` tuft with SST Martinotti distal inhibition + nonlinear Larkum BAC $\text{Ca}^{2+}$ plateau bursts).
+  - Added multi-scale septotemporal hippocampal place modules (dorsal fine / intermediate / ventral coarse) + topographic orbitofrontal value columns (`driveOFCColumns`) and impulse-invariant multi-rate sheet + eligibility-trace integration (`eligStride = 4` on `XL`, `8` on `XXL`), cutting single-thread `XL` step time from `35.7 ms` to **`14.85 ms`** (`>2.4×` faster) while reversing pass 15's `L` foraging drop (`36 → 52` feeds).
+- **Anatomical trisynaptic hippocampus (`EC_II/III → DG → CA3 → CA1`) & mismatch event segmentation (`js/sim/memory.js`, `js/sim/creature.js`):**
+  - Built an explicit `576`-granule-cell Dentate Gyrus (`8×` expansion over the 72-D entorhinal state, `k = 28` / `4.9%` `k-WTA` sparse competitive coding, competitive Hebbian `Wdg` + nonlinear mossy-fiber completion `Rdg`, lesionable via `dg`), feeding `1,024` `CA3` slots (observed-subspace precision cosine + mossy-fiber overlap + rectified NMDA dendritic spine mixture + 2-step recurrent completion) and a `CA1` comparator (`ca1Novelty`, `shouldStore`) that segments continuous waking streams into salient episodic boundaries instead of flooding `CA3` with redundant 1-s ticks.
+- **2D retinotopic image-forming binocular visual hierarchy (`js/sim/vision.js`, `js/app.js`, `index.html`):**
+  - Replaced the 1D 32-ommatidium ring with dual `24×12` binocular photoreceptor sheets (`576` RGB + inverse-depth `1/d` z-buffer receptors across `260°×110°` FOV on the stalked eyes, `0.37 ms/step`), rasterising sky, terrain horizon contours, rocks, pools, snacks and the 4 distinct 3D plant crown shapes.
+  - Added a `24×12` thalamic **LGN** Difference-of-Gaussians (`lgnMag`) + `R−G`/`B−Y` opponent stage, a `12×6×4` **V1** `5×5` zero-DC quadrature Gabor filter bank (`0°, 45°, 90°, 135°` Simple cells, Adelson-Bergen Complex energy cells and binocular stereo disparity map, driving `L4` visual cortex), ventral **V4** foveal form+colour (`v4Fovea`), dorsal **MT** 2D optic flow (`mtFlowX`, `mtFlowY`, `mtDiv`) and hippocampal **EKF-SLAM** loop closure.
+- **Causal Multi-Head RoPE SwiGLU Transformer-XL (`111.9k`–`1.17M` params) + multi-horizon RTRL-SSM world model (`js/sim/mind.js`, `js/sim/creature.js`):**
+  - Replaced the 2-layer MLP readout with a selectable (`?wm=std|large|xl`) **Causal Multi-Head Rotary Position Embedding (`RoPE`) Self-Attention + RMSNorm + SwiGLU Transformer-XL** over a causal KV history ring buffer (`std`: `111,867` params; `large`: `548,187` params; `xl`: **`1,172,715` / `1.17M` params**), predicting both heteroscedastic 1-step (`+0.1 s`) sensory transitions and action-conditioned 5-step (`+0.5 s`, 40-D motor plan + causal velocity skip) trajectories for REM dream rollouts.
+- **In-browser de-novo 10-generation evolution from pure uniform random `[0.05, 0.95]^78` weights (`js/lineage.js`, `js/app.js`, `index.html`):**
+  - Added `'denovo'` mode (`#evo-denovo`) alongside 6-generation starter refinement (`#evo-run`): initialises purely from uniform random `[0.05, 0.95]^78` weights with zero starter or hand-wired priors, screens a 12-member **Stratified Latin-Hypercube** primordial cohort on paired 2-body CRN trials, and runs Mirrored Separable CMA-ES with cumulative step-size adaptation in Web Workers.
+- **78-element 3D volumetric Neo-Hookean continuum FEM (`js/sim/body.js`) + 16-node/26-vessel 1D Navier-Stokes & 120-parcel 3D SPH hemodynamics (`js/sim/fluid.js`, `js/render.js`):**
+  - Decomposed the 3D soft body into `78` sagittal-mirror positive-Jacobian tetrahedra (`72` trunk + `6` limb muscle bellies) solved via stable Neo-Hookean XPBD-FEM hydrostatic ($C_{\text{vol}} = J - 1$) and deviatoric ($C_{\text{dev}} = \sqrt{I_1} - \sqrt{3}$, $\nu = 0.40$) constraints, computing elastic strain energy, volumetric Jacobians and intramuscular `segPressure` (lesionable via `fem`).
+  - Added `Hemodynamics` (`js/sim/fluid.js`, lesionable via `fluid`): a closed-loop 16-node / 26-vessel unsteady 1D axial Navier-Stokes vascular graph (dorsal aorta, bicuspid-valved vena cava, carotid cerebral loop, hepatic-portal bed) with Windkessel wall compliance, Frank-Starling ventricular elastance, carotid baroreceptor reflex, 3D orthostatic gravity head, FEM skeletal-muscle venous pump and `120` 3D SPH blood parcels transporting $\text{O}_2$ and glucose (driving the live 3D blood-vessel particles and heart organ mesh in `render.js`).
+- **Selectable `1:1` biological real-time circadian clock (`js/sim/creature.js`, `js/app.js`, `index.html`):**
+  - Added `CLOCK_MODES` (`?clock=realtime` for `1×` true 24-hour circadian day at `3,600` frames/sim-min, `?clock=ultradian` for `60×` / 24-min day, and default `?clock=circadian` for `240×` / 6-min demo day).
+- **Tsotchke 10-qubit open-quantum Lindblad/Kraus MCWF simulator + live HTTPS photonic QRNG + Vidal canonical MPS (`js/tsotchke/qrng.js`, `js/tsotchke/qgtl.js`, `js/tsotchke/moonlab.js`, `js/sim/metacog.js`):**
+  - Upgraded `TsotchkeQRNG` to a 10-qubit (`DIM = 1,024`) open-quantum statevector with Ising `ZZ` crosstalk and Dalibard-Castin-Mølmer `T1` amplitude-damping + `T2` dephasing quantum trajectories (`purity`, `quantumJumps`), plus opt-in `fetchHardwareEntropy()` (`#qrng-fetch`) querying live HTTPS optical/vacuum-fluctuation QRNG hardware (`LFDR`, `ANU`, `NIST`) verified by **NIST SP 800-90B** Repetition-Count & Adaptive-Proportion health tests.
+  - Added explicit **Vidal Canonical Matrix Product State** factorisation (`vidalMPS` / `mpsContract`, $\Gamma^{[s]}$ site tensors & $\Lambda^{[s]}$ Schmidt spectra up to bond $\chi = 8$, exact reconstruction RMSE `6.22e-16`) in `moonlab.js`.
+
+Measured (Node & headless Chromium, idle machine):
+
+- **Monotonic foraging across brain scales, navigation & thirst (`forage_bench.mjs`, `nav_probe.mjs`, `water_probe.mjs`):**
+
+  | benchmark | pass 15 (L) | **pass 16 (S)** | **pass 16 (M, default)** | **pass 16 (L)** | pass 16 (pathway lesioned) |
+  |---|---|---|---|---|---|
+  | `forage_bench` 240 s, seeds 1–8: **feeds / arrivals / give-ups** | 36 / 70 / 5 | **43 / 65 / 5** | **48 / 71 / 8** | **52 / 78 / 2** | monotonic **`S < M < L`** |
+  | `nav_probe` 60 s, seeds 1–8: near (4–8 u) | 8/8 (8.5 s) | — | **7/8 (10.5 s)** | — | `nav` off: 7/8 (20.4 s) |
+  | `nav_probe` 60 s, seeds 1–8: **far (14+ u)** | 6/8 (29.2 s) | — | **8/8 (34.2 s, 100%)** | — | `nav` off: **2/8 (37.3 s)** |
+  | `nav_probe` **mean uprightness (on its back)** | 0.84 (4%) | — | **0.90 (2%)** | — | `nav` off: 0.90 |
+  | `water_probe` 300 s, seeds 1–4: bodies that drank | — | — | **4/4** (`8.4–15.8` drunk) | — | `thirst` off: **0/4** |
+
+- **Five-scale spiking substrate & off-thread worker delegation (`test/brain_probe.mjs` & headless Chromium `?backend=auto`):**
+
+  | brain | neurons / synapses | single-thread CPU ms/step | `?backend=auto` browser main-thread `simMs` | CTX / HIP / THAL Hz | notes |
+  |---|---|---|---|---|---|
+  | **S** (120 s) | 436 / 2,312 | **2.00** | CPU (`~2.0`) | 8.0 / 8.3 / 8.1 | compact reference |
+  | **M** (300 s, default) | **3,268 / 132,781** | **4.57** | CPU (`3.35`) | 7.6 / 7.9 / 5.4 | `struct` lesioned 300 s: **9.7 / 9.7 / 8.1 Hz** (active, align `1.18→1.24`) |
+  | **L** (120 s) | **11,972 / 531,421** | **10.48** | WebWorker | 6.5 / 6.7 / 6.8 | 52 feeds in 240 s (`> M > S`) |
+  | **XL** (35 s) | **25,924 / 1,178,148** | **14.85** *(pass 15: 35.7)* | **5.73** (`WebWorker-CSR`) | 4.4 / 1.0 / 6.2 | `>2.4×` faster on CPU; `<6 ms` on UI thread |
+  | **XXL** (20 s) | **104,904 / 4,756,245** | **61.87** | **12.27** (`WebWorker-CSR`) | 29.5 / 20.7 / 11.5 | `Uint32Array` CSR built in `1.6–2.1 s` |
+
+- **Trisynaptic `EC → DG → CA3 → CA1` memory & FHRR-HDC (`test/memory2_probe.mjs`):**
+  - **HDC (`a`, seeds 1–8):** prior `0.35`: `0.894 → 0.957 → 0.964 (+0.007)`; prior `0.80`: `0.816 → 0.928 → 0.964 (+0.036)`.
+  - **Hopfield (`b 2`, 600-s waking run segmented by CA1 into 576 salient events, 50%-masked noisy cues, `early / late / held-out` cosine):**
+    - `pass-3 (256 raw)`: `0.71 / 0.79 / 0.65`
+    - `1024 + sleep merge, raw keys`: `0.79 / 0.81 / 0.67`
+    - **`1024 + sleep merge + trisynaptic learned keys`: `0.85 (+0.06) / 0.92 (+0.11) / 0.67`**.
+- **Transformer-XL world model, closed-loop `measure.mjs`, de-novo lineage, 3D FEM, hemodynamics & Tsotchke:**
+  - **WorldModel matched 4-seed sequential 1-step (`+0.1 s`) MSE:** `linearNLMS` `0.03233` → `transformerStd` (`111,867` params) `0.03014` → **`transformerXL` (`1,172,715` params) `0.02886` (`−10.7%`)**; 5-step (`+0.5 s`) MSE `0.03402 → 0.03401`.
+  - **Closed-loop `test/measure.mjs` (90 s, seeds 1–3, brain M):**
+    - `intact`: **`dist 64.04, fed 3.33 (+43% vs pass 15's 2.33), entropy 4.31, entropy2 5.91, states 48.0, upright 0.818, wmMSE 0.031 (−26% vs pass 15's 0.042)`**
+    - `mot` lesioned: `dist 44.18, fed 0.33, upright 0.822`
+    - `cpg` lesioned: `dist 27.77, fed 1.00, upright 0.880`
+    - `mn` lesioned: `dist 11.77, fed 0, entropy 0.482, states 1.67`
+  - **De-novo uniform random `[0.05, 0.95]^78` lineage evolution (10 gens, 95 2-body CRN trials):** pure random initial **`2.833` → Gen 1 LHS `4.585 (+1.752)` → Gen 2 `5.682 (+2.848)` → Gen 5–10 `6.112 (+3.278, >2.15×)`** (`fwd 0.389 u/s`, `turn 2.12 rad/s`, `upright 0.899`, `goal 0.263 u/s`).
+  - **Continuum 3D FEM & 1D Navier-Stokes / 3D SPH hemodynamics:** `symmetry_probe`: `0.00 / −0.03 / −0.03 rad/s`; `righting_probe`: **10/10 righted, median 2.5 s**; `scale_probe`: `turnL 2.29, turnR 1.73 rad/s, fwd 0.79 u/s`; active 240-step trunk/body `meanTetJ = 1.009`; `Hemodynamics`: `MAP 67.1–78.9 mmHg, CVP 7.7 mmHg, Re 128.4, headO2 0.977, meanO2 0.974`.
+  - **Tsotchke 10-qubit Lindblad QRNG & Vidal MPS:** 10-qubit (`DIM = 1,024`) normalised entropy `0.942`, trajectory purity `0.918`; Vidal canonical MPS (`χ = 8`) exact contraction RMSE `6.22e-16`.
+- **Headless Chromium (`browser_check.mjs`, `lineage_check.mjs`, `XXL`/`XL`/real-time/de-novo checks):**
+  - `browser_check.mjs`: zero console/page errors (`errors: []`) on phone (`35.6 fps`, `stepMs 6.28 ms`, motion intact `8.89` vs `mn` lesioned `0.27`) and desktop (`19.5 fps` SwiftShader, `stepMs 3.35 ms`, motion intact `8.72` vs `mn` lesioned `2.31`).
+  - `lineage_check.mjs`: 6-gen starter refinement (`55` CRN trials) reached **`6.74 (+0.44)`** (`turn 1.89 rad/s, fwd 0.71 u/s, up 0.94, goal 0.83`), adopted cleanly (`errors: []`); browser `#evo-denovo`, `?clock=realtime`, `?wm=xl` (`1,172,715` params) and `?brain=XXL&backend=auto` (`104,904` neurons, `simMs 12.27 ms`) all ran with `errors: []`.

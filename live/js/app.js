@@ -1,7 +1,7 @@
-import { Creature, DEFAULT_FLAWS, MOT_NAMES } from './sim/creature.js';
+import { Creature, DEFAULT_FLAWS, MOT_NAMES, CLOCK_MODES } from './sim/creature.js';
 import { REGIONS, R0, RN, NNEU, BRAIN_SCALE, NSTR_OPT } from './sim/brain.js';
 import { STAGES } from './sim/mind.js';
-import { NBINS } from './sim/vision.js';
+import { NBINS, W_RET, H_RET, W_V1, H_V1, N_ORI } from './sim/vision.js';
 import { REAL, SIMPLIFIED } from './honesty.js';
 
 const $ = (id) => document.getElementById(id);
@@ -9,6 +9,8 @@ const Q = new URLSearchParams(location.search);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let seed = +(Q.get('seed') || 1) || 1;
 $('seed').value = seed;
+let clockMode = CLOCK_MODES[Q.get('clock')] ? Q.get('clock') : 'circadian';
+let wmScale = ['std', 'large', 'xl'].includes(Q.get('wm')) ? Q.get('wm') : 'std';
 
 const flaws = JSON.parse(JSON.stringify(DEFAULT_FLAWS));
 for (const k of (Q.get('flaws') || '').split(',').filter(Boolean)) if (flaws[k]) flaws[k].on = true;
@@ -26,7 +28,7 @@ try {
   lineageStack = JSON.parse(localStorage.getItem(LIN_STACK_KEY) || '[]') || [];
 } catch (e) { /* storage blocked */ }
 
-let cr = new Creature(seed, { flaws });
+let cr = new Creature(seed, { flaws, clockMode, wmScale });
 let view = null;
 let View;
 try {
@@ -48,6 +50,8 @@ $('speed').value = String(speed);
 let paused = false, tool = 'orbit', qMode = Q.get('q') || 'auto';
 $('quality').value = qMode;
 if ($('brain-scale')) $('brain-scale').value = BRAIN_SCALE;
+if ($('clock-mode')) $('clock-mode').value = clockMode;
+if ($('wm-scale')) $('wm-scale').value = wmScale;
 
 const coarse = matchMedia('(pointer: coarse)').matches;
 const qMax = coarse ? 2 : 3;
@@ -57,22 +61,23 @@ if (view) {
 }
 
 // ---------------------------------------------------------------- optional Web Worker / WebGPU brain accelerators
-let backendMode = Q.get('backend') || 'cpu';
+let backendMode = Q.get('backend') || 'auto';
 let brainWorker = null, workerPending = false, lastWorkerT = 0, gpuBrain = null;
 if ($('brain-backend')) $('brain-backend').value = backendMode;
 
 async function setupBackend(mode) {
   backendMode = mode;
+  const effMode = mode === 'auto' ? (BRAIN_SCALE === 'S' || BRAIN_SCALE === 'M' ? 'cpu' : 'worker') : mode;
   if (brainWorker) { brainWorker.terminate(); brainWorker = null; workerPending = false; }
   if (gpuBrain) { gpuBrain.destroy(); gpuBrain = null; }
   cr.brain.backend = 'CPU-TypedCSR';
   cr.brain.delegated = false;
   const st = $('backend-status');
-  if (mode === 'cpu') {
-    if (st) st.textContent = 'active';
+  if (effMode === 'cpu') {
+    if (st) st.textContent = mode === 'auto' ? 'auto -> CPU' : 'active';
     return;
   }
-  if (mode === 'worker') {
+  if (effMode === 'worker') {
     try {
       const w = new Worker(new URL('./sim/brain_worker.js', import.meta.url), { type: 'module' });
       await new Promise((res, rej) => {
@@ -100,6 +105,7 @@ async function setupBackend(mode) {
           cr.brain.stdpEvents = d.stdpEvents;
           cr.brain.grown = d.grown;
           cr.brain.pruned = d.pruned;
+          cr.brain.plateauBursts = d.plateauBursts ?? cr.brain.plateauBursts;
           cr.brain.dwLast = d.dwLast;
         }
       };
@@ -108,7 +114,7 @@ async function setupBackend(mode) {
       brainWorker = w;
       cr.brain.delegated = true;
       cr.brain.backend = 'WebWorker-CSR';
-      if (st) st.textContent = 'Web Worker active';
+      if (st) st.textContent = mode === 'auto' ? 'auto -> Web Worker' : 'Web Worker active';
     } catch (err) {
       brainWorker = null;
       cr.brain.delegated = false;
@@ -117,7 +123,7 @@ async function setupBackend(mode) {
     }
     return;
   }
-  if (mode === 'webgpu') {
+  if (effMode === 'webgpu') {
     try {
       const { WebGPUBrain } = await import('./sim/webgpu_brain.js');
       gpuBrain = await WebGPUBrain.create(cr.brain);
@@ -226,7 +232,9 @@ function urlSync() {
   const u = new URL(location.href);
   u.searchParams.set('seed', seed);
   on.length ? u.searchParams.set('flaws', on.join(',')) : u.searchParams.delete('flaws');
-  backendMode !== 'cpu' ? u.searchParams.set('backend', backendMode) : u.searchParams.delete('backend');
+  backendMode !== 'auto' ? u.searchParams.set('backend', backendMode) : u.searchParams.delete('backend');
+  clockMode !== 'circadian' ? u.searchParams.set('clock', clockMode) : u.searchParams.delete('clock');
+  wmScale !== 'std' ? u.searchParams.set('wm', wmScale) : u.searchParams.delete('wm');
   history.replaceState(null, '', u);
 }
 
@@ -235,6 +243,33 @@ $('gx').oninput = () => (cr.world.gx = +$('gx').value);
 $('gz').oninput = () => (cr.world.gz = +$('gz').value);
 $('gs').oninput = () => (cr.world.g = +$('gs').value);
 $('speed').onchange = () => (speed = +$('speed').value);
+if ($('clock-mode')) {
+  $('clock-mode').onchange = () => {
+    clockMode = $('clock-mode').value;
+    cr.setClockMode(clockMode);
+    urlSync();
+  };
+}
+if ($('wm-scale')) {
+  $('wm-scale').onchange = () => {
+    wmScale = $('wm-scale').value;
+    restart();
+  };
+}
+if ($('qrng-fetch')) {
+  $('qrng-fetch').onclick = async () => {
+    const st = $('qrng-status');
+    $('qrng-fetch').disabled = true;
+    if (st) st.textContent = 'contacting photonic QRNG…';
+    const r = await cr.qrng.fetchHardwareEntropy();
+    $('qrng-fetch').disabled = false;
+    if (st) {
+      st.textContent = r.ok
+        ? `${r.source}: ${r.bits} bits (SP 800-90B pass)`
+        : `offline/CORS (${r.reason || 'local Lindblad MCWF active'})`;
+    }
+  };
+}
 $('quality').onchange = () => { qMode = $('quality').value; if (view && qMode !== 'auto') view.setQuality(+qMode); };
 $('rain').onclick = () => { cr.world.wind.rainT = cr.world.wind.rainT ? 0 : 1; };
 $('gust').onclick = () => { cr.world.wind.tx = (Math.random() - 0.5) * 10; cr.world.wind.tz = (Math.random() - 0.5) * 10; };
@@ -246,7 +281,7 @@ $('seed').onchange = () => { seed = +$('seed').value || 1; restart(); };
 
 function restart() {
   const f = cr.flaws;
-  cr = new Creature(seed, { flaws: f });
+  cr = new Creature(seed, { flaws: f, clockMode, wmScale });
   setupBackend(backendMode);
   if (view) {
     const c = $('gl');
@@ -264,15 +299,18 @@ const LES = [
   ['mot', 'MOT neurons silenced'],
   ['cpg', 'LTC pattern generator off'],
   ['mn', 'all motor neurons off (paralysis)'],
+  ['fem', '3D Neo-Hookean FEM continuum tissue off'],
+  ['fluid', '1D Navier-Stokes cardiac pump off'],
   ['learnMotor', 'motor learning off'],
   ['stdp', 'STDP / plasticity off'],
-  ['wm', 'world model off'],
+  ['wm', 'Transformer-XL world model off'],
   ['ssmLearn', 'online RTRL SSM learning off'],
   ['metacog', 'metacognition & thought curvature off'],
-  ['vision', 'binocular retina / occlusion off'],
+  ['vision', '2D binocular retina / V1 Gabor columns off'],
+  ['dg', 'Dentate Gyrus 5% k-WTA separation off'],
   ['homeo', 'intrinsic & Turrigiano homeostasis off'],
   ['struct', 'cortical structural rewiring off'],
-  ['qrng', 'Tsotchke 8-qubit QRNG off'],
+  ['qrng', 'Tsotchke 10-qubit Lindblad QRNG off'],
   ['astro', 'astrocyte modulation off'],
   ['veto', 'veto off'],
   ['efe', 'epistemic (EFE) term off'],
@@ -322,12 +360,13 @@ $('regions').innerHTML = REGIONS.map(([n], i) => `<span><i style="background:hsl
 
 // ---------------------------------------------------------------- panel drawing
 const raster = $('raster'), rctx = raster.getContext('2d');
-const rowY = (i) => Math.floor((i / NNEU) * raster.height);
-const regionColor = [];
-REGIONS.forEach(([n, c], ri) => { for (let k = 0; k < c; k++) regionColor[R0[n] + k] = `hsl(${(ri / REGIONS.length) * 360},90%,60%)`; });
+const rowRegion = new Uint8Array(NNEU);
+REGIONS.forEach(([n, c], ri) => { for (let k = 0; k < c; k++) rowRegion[R0[n] + k] = ri; });
+const regionColors = REGIONS.map((_, ri) => `hsl(${(ri / REGIONS.length) * 360},90%,60%)`);
+const rasterRowBucket = new Int8Array(raster.height);
 $('spk-label').textContent = `${NNEU.toLocaleString()} neurons (brain ${BRAIN_SCALE}), rows coloured by region, newest on the right`;
 const spikeAcc = new Uint8Array(NNEU);
-const surpHist = [], mseHist = [], varHist = [];
+const surpHist = [], mseHist = [], mse5Hist = [], varHist = [];
 const kapHist = [], tauHist = [], calHist = [];
 
 function bars(el, rows) {
@@ -352,14 +391,20 @@ function drawPanel() {
   if (p.hidden) return;
   const b = cr.brain;
 
-  // 1) Spike raster scroll
+  // 1) Spike raster scroll (row-bucketed so even 104,904-neuron XXL issues <= 213 fillRect calls)
   rctx.drawImage(raster, -2, 0);
   rctx.fillStyle = '#000';
   rctx.fillRect(raster.width - 2, 0, 2, raster.height);
+  rasterRowBucket.fill(-1);
+  const rH = raster.height;
   for (let i = 0; i < NNEU; i++) {
-    if (spikeAcc[i]) {
-      rctx.fillStyle = regionColor[i];
-      rctx.fillRect(raster.width - 2, rowY(i), 2, 1);
+    if (spikeAcc[i]) rasterRowBucket[((i * rH) / NNEU) | 0] = rowRegion[i];
+  }
+  for (let y = 0; y < rH; y++) {
+    const ri = rasterRowBucket[y];
+    if (ri >= 0) {
+      rctx.fillStyle = regionColors[ri];
+      rctx.fillRect(raster.width - 2, y, 2, 1);
     }
   }
   spikeAcc.fill(0);
@@ -367,31 +412,54 @@ function drawPanel() {
   bars($('nm'), [['DA', b.nm.DA], ['NE', b.nm.NE], ['5-HT', b.nm['5HT']], ['ACh', b.nm.ACh], ['cortisol', b.nm.cortisol]]);
   bars($('mot'), MOT_NAMES.map((n, m) => [n, cr.motRate[m] / 1.5]));
 
-  // 2) Binocular 32-ommatidium retina + looming + hippocampal SLAM confidence strip
+  // 2) Dual 24x12 2D binocular retinotopic sheets (L/R) + 12x6 V1 quadrature Gabor orientation columns + 19 EKF-SLAM cells
   if ($('retina')) {
     const ret = cr.retina, rx = $('retina').getContext('2d');
     rx.fillStyle = '#05030a';
-    rx.fillRect(0, 0, 360, 36);
-    const bw = 360 / NBINS;
-    for (let i = 0; i < NBINS; i++) {
-      const rr = Math.min(255, Math.round(ret.rgb[3 * i] * 210));
-      const gg = Math.min(255, Math.round(ret.rgb[3 * i + 1] * 210));
-      const bb = Math.min(255, Math.round(ret.rgb[3 * i + 2] * 210));
-      rx.fillStyle = `rgb(${rr},${gg},${bb})`;
-      rx.fillRect(i * bw, 0, Math.ceil(bw), 18);
-      const lm = Math.min(1, ret.loom[i]);
-      rx.fillStyle = `rgba(255,60,90,${lm.toFixed(2)})`;
-      rx.fillRect(i * bw, 19, Math.ceil(bw), 8);
+    rx.fillRect(0, 0, 360, 58);
+    // Left eye (x: 0..119) & Right eye (x: 122..241), each 24x12 @ 5x4 px (top row = sky, bottom row = ground)
+    const drawSheet = (sheet, x0) => {
+      for (let py = 0; py < H_RET; py++) {
+        const sy = H_RET - 1 - py; // invert elevation so sky is on top
+        for (let px = 0; px < W_RET; px++) {
+          const idx = (sy * W_RET + px) * 3;
+          const rr = Math.min(255, Math.round(sheet[idx] * 245));
+          const gg = Math.min(255, Math.round(sheet[idx + 1] * 245));
+          const bb = Math.min(255, Math.round(sheet[idx + 2] * 245));
+          rx.fillStyle = `rgb(${rr},${gg},${bb})`;
+          rx.fillRect(x0 + px * 5, py * 4, 5, 4);
+        }
+      }
+    };
+    drawSheet(ret.retL, 0);
+    drawSheet(ret.retR, 122);
+    // V1 Complex orientation columns 12x6 (x: 244..359, y: 0..47) coloured by dominant Gabor angle (0/45/90/135 deg)
+    const v1 = ret.v1Complex;
+    for (let vy = 0; vy < H_V1; vy++) {
+      const sy = H_V1 - 1 - vy;
+      for (let vx = 0; vx < W_V1; vx++) {
+        const base = (sy * W_V1 + vx) * N_ORI;
+        let bestO = 0, bestE = -1, eTot = 0;
+        for (let o = 0; o < N_ORI; o++) {
+          const e = v1[base + o];
+          eTot += e;
+          if (e > bestE) { bestE = e; bestO = o; }
+        }
+        const lum = Math.min(68, Math.round(8 + eTot * 240));
+        rx.fillStyle = `hsl(${bestO * 85 + 15},95%,${lum}%)`;
+        rx.fillRect(244 + Math.floor(vx * 9.66), vy * 8, 10, 8);
+      }
     }
-    // Foveal centre tick
-    rx.fillStyle = '#fff6';
-    rx.fillRect(179, 0, 2, 18);
-    // Hippocampal landmark confidence cells (16 plants + 3 pools)
+    // Dividers
+    rx.fillStyle = '#ffffff33';
+    rx.fillRect(120, 0, 2, 48);
+    rx.fillRect(242, 0, 2, 48);
+    // Hippocampal EKF-SLAM landmark confidence cells (16 plants + 3 pools)
     const totLm = ret.conf.length, lw = 360 / totLm;
     for (let i = 0; i < totLm; i++) {
       const cf = ret.conf[i];
       rx.fillStyle = i < 16 ? `rgba(60,255,160,${(0.12 + 0.88 * cf).toFixed(2)})` : `rgba(40,210,255,${(0.12 + 0.88 * cf).toFixed(2)})`;
-      rx.fillRect(i * lw + 1, 29, Math.max(2, lw - 2), 6);
+      rx.fillRect(i * lw + 1, 50, Math.max(2, lw - 2), 7);
     }
   }
 
@@ -433,11 +501,12 @@ function drawPanel() {
     sc.fillRect(k * 11 + 7, 38 - Math.min(36, cr.ssm.delta[k] * 12), 3, Math.min(36, cr.ssm.delta[k] * 12));
   }
 
-  // 6) Deep Residual World Model surprise, MSE & heteroscedastic variance
+  // 6) Causal RoPE-SwiGLU Transformer-XL World Model surprise, 1-step MSE, 5-step MSE & σ²
   surpHist.push(cr.wm.surprise);
   mseHist.push(cr.wm.mse);
+  mse5Hist.push(cr.wm.mse5 ?? cr.wm.mse);
   varHist.push(cr.wm.predVar ?? 0);
-  if (surpHist.length > 180) { surpHist.shift(); mseHist.shift(); varHist.shift(); }
+  if (surpHist.length > 180) { surpHist.shift(); mseHist.shift(); mse5Hist.shift(); varHist.shift(); }
   const wc = $('wm').getContext('2d');
   wc.fillStyle = '#000';
   wc.fillRect(0, 0, 360, 50);
@@ -452,6 +521,7 @@ function drawPanel() {
   };
   drawLine(wc, surpHist, '#ff0', 36, 48);
   drawLine(wc, mseHist, '#0ff', 60, 48);
+  drawLine(wc, mse5Hist, '#fa0', 60, 48);
   drawLine(wc, varHist, '#f6f', 55, 48);
 
   // 7) Metacognition & Frenet-Serret Thought Curvature κ(t), τ(t)
@@ -470,21 +540,24 @@ function drawPanel() {
   }
 
   const ws = MC?.ws || {};
+  const qSrc = cr.qrng.hwHealthy ? `${cr.qrng.hwSource} (${cr.qrng.hwBitsRemaining} hw bits)` : 'local Lindblad MCWF';
   stats($('mindstats'), [
-    ['sleep stage', STAGES[cr.sleep.stage]],
+    ['sleep stage / clock', `${STAGES[cr.sleep.stage]} · ${cr.timeCompression}× (${CLOCK_MODES[cr.clockMode]?.label || cr.clockMode})`],
     ['brain scale / backend', `${BRAIN_SCALE} (${b.backend}): ${b.N.toLocaleString()} neu, ${b.S.toLocaleString()} syn, ${(window.glitch.stats.stepMs ?? 0).toFixed(1)} ms/step`],
-    ['binocular retina / SLAM closures', `${cr.retina.seenCount}/19 mapped · ${cr.retina.loopClosures} loop fixes · σ_ego ${Math.sqrt(cr.retina.egoVar).toFixed(2)} u`],
+    ['3-comp laminar CTX / BAC bursts', `L4/L2-3/L5-6 microcolumns · ${b.plateauBursts || 0} apical Ca²⁺ bursts`],
+    ['2D retina / V1 Gabor / MT / SLAM', `V1 ${(cr.retina.v1EnergyMean || 0).toFixed(3)} · MT div ${(cr.retina.mtDiv || 0).toFixed(2)} · ${cr.retina.seenCount}/19 (${cr.retina.loopClosures} fixes)`],
+    ['trisynaptic EC->DG(5% k-WTA)->CA3->CA1', `CA3 ${cr.hop.X.length}/1024 · CA1 nov ${(cr.hop.ca1Novelty || 0).toFixed(2)} · skipped ${cr.hop.eventsSkipped || 0}`],
+    ['Transformer-XL WM (params / 1s / 5s MSE)', `${cr.wm.scaleName} (${(cr.wm.paramCount || 0).toLocaleString()}): ${cr.wm.mse.toFixed(4)} / ${(cr.wm.mse5 || 0).toFixed(4)} (H_attn ${(cr.wm.attnEntropy || 0).toFixed(2)})`],
+    ['RTRL SSM |∇| / heteroscedastic σ²', `${(cr.ssm.gradNorm ?? 0).toExponential(1)} / ${(cr.wm.predVar ?? 0).toFixed(3)}`],
     ['thought curvature κ(t) / torsion τ(t)', `${(MC?.kappa ?? 0).toFixed(2)} / ${(MC?.torsion ?? 0).toFixed(2)} (||z′|| ${(MC?.speed ?? 0).toFixed(2)})`],
     ['metacog confidence / regret / temp', `${(MC?.confidence ?? 0).toFixed(2)} / ${(MC?.regret ?? 0).toFixed(2)} / ${(MC?.exploreTemp ?? 1).toFixed(2)}×`],
     ['weight space learned (motor / steer / ctx)', `${((ws.motorLearnedFrac ?? 0) * 100).toFixed(1)}% / ${((ws.steerLearnedFrac ?? 0) * 100).toFixed(1)}% / ${((ws.brainLearnedFrac ?? 0) * 100).toFixed(1)}%`],
     ['EWC Fisher energy / SVD eff-rank', `${(cr.ewcEnergy ?? 0).toExponential(1)} / ${(ws.svdRank ?? 1).toFixed(1)} (bias ${(ws.biasNorm ?? 0).toFixed(2)})`],
-    ['Tsotchke 8-qubit QRNG entropy / steps', `${((cr.qrng.entropy ?? 0) * 8).toFixed(2)} / 8.00 bits (${cr.qrng.steps} unitary steps)`],
-    ['Tsotchke QGTL metric / Berry / MPS S', `${(ws.fubiniTrace ?? 0).toFixed(2)} / ${(ws.berryCurv ?? 0).toExponential(1)} / ${(ws.mpsEntropy ?? 0).toFixed(2)}`],
-    ['RTRL SSM |∇| / deep WM MSE (σ²)', `${(cr.ssm.gradNorm ?? 0).toExponential(1)} / ${cr.wm.mse.toFixed(3)} (${(cr.wm.predVar ?? 0).toFixed(3)})`],
+    ['Tsotchke 10-qubit Lindblad QRNG', `${((cr.qrng.entropy ?? 0) * 10).toFixed(2)} / 10.00 bits · purity ${(cr.qrng.purity ?? 1).toFixed(3)} · ${cr.qrng.quantumJumps || 0} jumps · ${qSrc}`],
+    ['Tsotchke QGTL / Vidal MPS (χ=8)', `Fubini ${(ws.fubiniTrace ?? 0).toFixed(2)} · Berry ${(ws.berryCurv ?? 0).toExponential(1)} · MPS S ${(ws.mpsEntropy ?? 0).toFixed(2)}`],
     ['predictive-coding error / surprise', `${cr.pc.err.toFixed(3)} / ${cr.pc.surprise.toFixed(2)}`],
     ['thirst / water drunk', `${cr.metab.thirst.toFixed(2)} / ${(cr.stats.drinks || 0).toFixed(1)}`],
     ['limb lengths (use-grown)', Array.from(cr.body.limbLen).map((x) => x.toFixed(2)).join(' ')],
-    ['Hopfield slots (of 1024) / familiarity', `${cr.hop.X.length} / ${cr.familiar.toFixed(2)}`],
     ['sleep consolidations / merged / key loss', `${cr.memStats.consolidations || 0} / ${cr.memStats.merged || 0} / ${cr.hop.conLoss.toFixed(2)}`],
     ['HDC features re-drawn (Wiener coherence)', `${cr.hdcFood.resampled + cr.hdcWater.resampled}`],
     ['synapses pruned+regrown / alignment', `${b.grown} / ${(alignC.v ?? 0).toFixed(2)}`],
@@ -503,9 +576,12 @@ function drawPanel() {
     ['world-model updates', cr.wm.n],
   ]);
 
-  const M = cr.metab;
+  const M = cr.metab, F = cr.fluid, B = cr.body;
   stats($('bodystats'), [
-    ['hour', cr.hour.toFixed(1)],
+    ['hour', cr.hour.toFixed(2)],
+    ['3D Neo-Hookean FEM (78 tets)', `J_mean ${(B.meanTetJ ?? 1).toFixed(3)} · J_min ${(B.minTetJ ?? 1).toFixed(3)} · U_strain ${(B.femEnergy ?? 0).toFixed(3)}`],
+    ['1D Navier-Stokes vascular MAP / CVP', `${(F?.mapPressure ?? 70).toFixed(1)} / ${(F?.P?.[11] ?? 7).toFixed(1)} mmHg (CO ${(F?.cardiacOutput ?? 28).toFixed(1)}, Re ${(F?.reynoldsMax ?? 100).toFixed(0)})`],
+    ['3D SPH blood / cerebral O₂', `mean ${(F?.meanO2 ?? 0.97).toFixed(3)} · brain ${(F?.o2Node?.[14] ?? 0.97).toFixed(3)} (120 SPH parcels)`],
     ['gut glc/fat/prot', `${M.gut.glc.toFixed(2)} / ${M.gut.fat.toFixed(2)} / ${M.gut.prot.toFixed(2)}`],
     ['blood glucose', M.blood.glc.toFixed(2)],
     ['blood FFA / AA / ketones', `${M.blood.ffa.toFixed(2)} / ${M.blood.aa.toFixed(2)} / ${M.blood.ket.toFixed(2)}`],
@@ -516,7 +592,7 @@ function drawPanel() {
     ['ghrelin / leptin', `${M.ghrelin.toFixed(2)} / ${M.leptin.toFixed(2)}`],
     ['cortisol', M.cortisol.toFixed(2)],
     ['ATP', M.atp.toFixed(2)],
-    ['heart rate', M.hr.toFixed(0)],
+    ['heart rate (baroreflex)', M.hr.toFixed(0)],
     ['water gut / blood', `${M.gut.water.toFixed(2)} / ${M.blood.water.toFixed(2)}`],
     ['bladder / colon', `${M.bladder.toFixed(2)} / ${M.colon.toFixed(2)}`],
     ['urinations / defecations', `${cr.stats.urine} / ${cr.stats.feces}`],
@@ -576,7 +652,12 @@ function frame(now) {
       acc -= 1;
       n++;
       S.stepN = (S.stepN || 0) + 1;
-      for (let i = 0; i < NNEU; i++) spikeAcc[i] |= cr.brain.spk[i];
+      if (cr.brain.delegated) {
+        for (let i = 0; i < R0.THAL; i++) spikeAcc[i] |= cr.brain.spk[i];
+        for (let i = R0.STR; i < NNEU; i++) spikeAcc[i] |= cr.brain.spk[i];
+      } else {
+        for (let i = 0; i < NNEU; i++) spikeAcc[i] |= cr.brain.spk[i];
+      }
       if (performance.now() - t0 > 14) { acc = 0; break; }
     }
     if (n > 0 && brainWorker && !workerPending) {
@@ -598,6 +679,9 @@ function frame(now) {
           atonia: cr.brain.atonia,
           achGain: cr.lesion.metacog ? 1 : (cr.metacog?.achGain ?? 1),
           place: !cr.lesion.nav && cr.sleep.stage === 0 ? [cr.nav.px, cr.nav.pz, 1.15] : null,
+          v1Complex: !cr.lesion.vision && cr.sleep.stage === 0 ? cr.retina.v1Complex : null,
+          ofcApp: cr.race ? cr.ofcApp : null,
+          ofcAv: cr.race ? cr.ofcAv : null,
           lesion: cr.brain.lesion,
         },
         [extCopy.buffer]
@@ -631,10 +715,10 @@ function frame(now) {
       else goodT = 0;
     }
     if (cr.t - alignC.t > 2) { alignC.t = cr.t; alignC.v = cr.brain.alignment(); }
-    if (!Q.get('brain') && BRAIN_SCALE !== 'S' && S.frames > 300 && (S.stepMs ?? 0) > 12) {
+    if (!Q.get('brain') && !cr.brain.delegated && BRAIN_SCALE !== 'S' && S.frames > 300 && (S.stepMs ?? 0) > 12) {
       slowT2 = (slowT2 || 0) + 1;
       if (slowT2 > 5) {
-        const nextScale = BRAIN_SCALE === 'XL' ? 'L' : BRAIN_SCALE === 'L' ? 'M' : 'S';
+        const nextScale = BRAIN_SCALE === 'XXL' ? 'XL' : BRAIN_SCALE === 'XL' ? 'L' : BRAIN_SCALE === 'L' ? 'M' : 'S';
         const u = new URL(location.href);
         u.searchParams.set('brain', nextScale);
         u.searchParams.set('auto', '1');
@@ -658,7 +742,7 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-// ---------------------------------------------------------------- lineage evolution (78-gene Mirrored CRN sep-CMA-ES in Web Workers)
+// ---------------------------------------------------------------- lineage evolution (78-gene Refine + De-Novo Random sep-CMA-ES in Web Workers)
 {
   let lin = null;
   const log = $('evo-log');
@@ -671,12 +755,13 @@ requestAnimationFrame(frame);
   };
   const show = () => {
     const rows = [
-      ['genome (78 genes)', lineageInfo ? `evolved in browser (${lineageInfo.gens} gens, CRN fitness ${lineageInfo.fit.toFixed(2)}, stack ${lineageStack.length})` : 'starter (78-gene multi-body CMA-ES, see CHANGELOG pass 15)'],
+      ['genome (78 genes)', lineageInfo ? `evolved in browser (${lineageInfo.mode === 'denovo' ? 'de-novo random, ' : ''}${lineageInfo.gens} gens, CRN fitness ${lineageInfo.fit.toFixed(2)}, stack ${lineageStack.length})` : 'starter (78-gene multi-body CMA-ES, see CHANGELOG pass 16)'],
     ];
     if (lin) {
-      rows.push(['mirrored sep-CMA-ES gen / σ', `${lin.gen} / ${lin.sigma.toFixed(3)}${lin.running ? ' (running in workers…)' : ''}`]);
-      rows.push(['genomes scored (2-body CRN)', `${lin.evals}${lin.startFit !== null ? ` · baseline ${lin.startFit.toFixed(2)}` : ''}`]);
-      for (const h of lin.hist.slice(-6)) {
+      const mStr = lin.mode === 'denovo' ? 'de-novo random [0.05,0.95]^78' : 'refine starter';
+      rows.push([`mode / gen / σ`, `${mStr} · gen ${lin.gen} / ${lin.sigma.toFixed(3)}${lin.running ? ' (running in workers…)' : ''}`]);
+      rows.push(['genomes scored (2-body CRN)', `${lin.evals}${lin.startFit !== null ? ` · initial ${lin.startFit.toFixed(2)}` : ''}`]);
+      for (const h of lin.hist.slice(-8)) {
         const dStr = (h.delta >= 0 ? '+' : '') + h.delta.toFixed(2);
         rows.push([
           `gen ${h.gen} (bodies ${h.seeds})`,
@@ -688,11 +773,12 @@ requestAnimationFrame(frame);
     $('evo-adopt').disabled = !lin || !lin.gen || lin.running;
     if ($('evo-undo')) $('evo-undo').disabled = !lineageStack.length || !!lin?.running;
     $('evo-run').disabled = !!lin?.running;
+    if ($('evo-denovo')) $('evo-denovo').disabled = !!lin?.running;
   };
   $('evo-run').onclick = async () => {
-    if (!lin) {
+    if (!lin || lin.mode !== 'refine') {
       const { Lineage } = await import('./lineage.js');
-      lin = new Lineage(cr.gen, show);
+      lin = new Lineage(cr.gen, show, [2, 5], { mode: 'refine' });
     }
     lin.run(6).catch((e) => {
       console.warn(e);
@@ -700,12 +786,24 @@ requestAnimationFrame(frame);
     });
     show();
   };
+  if ($('evo-denovo')) {
+    $('evo-denovo').onclick = async () => {
+      const { Lineage } = await import('./lineage.js');
+      lin = new Lineage(null, show, [2, 5], { mode: 'denovo' });
+      lin.run(10).catch((e) => {
+        console.warn(e);
+        stats(log, [['lineage', 'de-novo evolution failed: ' + e.message]]);
+      });
+      show();
+    };
+  }
   $('evo-adopt').onclick = () => {
     if (!lin) return;
     const g = lin.genome();
     const fit = lin.hist[lin.hist.length - 1].mean;
+    const mode = lin.mode;
     lineageStack.push(lineageInfo ? JSON.parse(JSON.stringify(lineageInfo)) : { starter: true });
-    lineageInfo = { genome: g, gens: (lineageInfo?.gens || 0) + lin.gen, fit };
+    lineageInfo = { genome: g, gens: mode === 'denovo' ? lin.gen : (lineageInfo?.gens || 0) + lin.gen, fit, mode };
     saveLineage();
     globalThis.TW = { ...(globalThis.TW || {}), genome: g };
     lin = null;

@@ -9,7 +9,7 @@
 import * as T from '../tsotchke/taylor.js';
 import { clamp, mulberry } from './util.js';
 import { weightSpaceDecomp, phasorQGT } from '../tsotchke/qgtl.js';
-import { spectralConsolidate, mpsEntanglement } from '../tsotchke/moonlab.js';
+import { spectralConsolidate, vidalMPS, mpsContract } from '../tsotchke/moonlab.js';
 
 export const K_CHART = 8;
 
@@ -159,23 +159,28 @@ export class Metacognition {
     this.exploreTemp = clamp(0.75 + 0.7 * (1 - this.confidence) + 0.45 * this.regret, 0.6, 1.8);
   }
 
-  /** Audit weight-space decomposition and perform sleep-time Moonlab SVD spectral consolidation */
+  /** Audit weight-space decomposition and perform sleep-time Moonlab SVD + Vidal canonical MPS consolidation */
   auditAndConsolidate(cr, doSleepConsolidate = false) {
     const mDec = weightSpaceDecomp(cr.Wc, cr.Wc0, cr.mnHomeo);
     const sDec = weightSpaceDecomp(cr.Wmot, cr.Wmot0, cr.motBias);
     const bDec = weightSpaceDecomp(cr.brain.w, cr.brain.w0, cr.brain.vBias, cr.brain.plastic);
     const qgt = phasorQGT(cr.hdcFood.ax, cr.hdcFood.az, cr.hdcFood.re, cr.hdcFood.im);
-    const mps = mpsEntanglement(cr.z, 6, 4);
+    const mps = vidalMPS(cr.z, 6, 8);
 
     if (doSleepConsolidate && !cr.lesion.metacog) {
       // Moonlab Jacobi SVD denoises rank-1 motor perturbation jitter in Wm (122 x 8) while keeping top-5 learned synergies
       const sv = spectralConsolidate(cr.Wm, cr.Wm0, cr.Wm.length >> 3, 8, 5, 0.35);
       this.ws.svdRank = sv.effRank;
+      // Vidal canonical MPS (bond chi = 6) compresses & denoises the 64-D SSM baseline mean zMean during NREM sleep
+      const zMps = vidalMPS(cr.zMean, 6, 6);
+      const zRec = mpsContract(zMps);
+      for (let i = 0; i < 64; i++) cr.zMean[i] = 0.7 * cr.zMean[i] + 0.3 * zRec[i];
     }
 
     let wmNorm = 0;
-    if (cr.wm.W1) for (let i = 0; i < cr.wm.W1.length; i++) wmNorm += cr.wm.W1[i] * cr.wm.W1[i];
-    if (cr.wm.W2) for (let i = 0; i < cr.wm.W2.length; i++) wmNorm += cr.wm.W2[i] * cr.wm.W2[i];
+    for (const arr of [cr.wm.Wout, cr.wm.Wskip, cr.wm.Wvel, cr.wm.Wout5]) {
+      if (arr) for (let i = 0; i < arr.length; i++) wmNorm += arr[i] * arr[i];
+    }
 
     this.ws.motorLearnedFrac = mDec.learnedFrac;
     this.ws.steerLearnedFrac = sDec.learnedFrac;
@@ -186,6 +191,8 @@ export class Metacognition {
     this.ws.fubiniTrace = qgt.trace;
     this.ws.berryCurv = qgt.berry;
     this.ws.mpsEntropy = mps.meanS;
+    this.ws.mpsBond = mps.maxBond;
+    this.ws.mpsFidelity = mps.keptFidelity;
     this.ws.ewcPenalty = cr.ewcEnergy || 0;
   }
 

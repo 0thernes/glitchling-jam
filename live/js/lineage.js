@@ -1,23 +1,31 @@
-// In-page lineage evolution: variance-reduced Mirrored Separable CMA-ES (Ros & Hansen 2008; Brockhoff et al. 2010)
+// In-page lineage evolution (upgraded in pass 16): supports BOTH
+//  A) Local variance-reduced Mirrored Separable CMA-ES refinement ('refine', default 6 gens from current/starter genome), AND
+//  B) True De-Novo Evolution From Pure Uniform Random [0, 1]^78 Weights ('denovo', 10 gens starting with a 12-member
+//     Stratified Latin-Hypercube primordial random screen + Mirrored Separable CMA-ES with CSA & CRN elitist verification),
 // over ALL 78 developmental genes (58 motor/CPG/synergy/gaze/roll-damping + 20 sense->MOT steering/obstacle/postural genes).
-// Fixes the pass-14 single-body noise problem via three mechanisms:
-//  1) Paired Multi-Body Common Random Numbers (CRN): every candidate in the lineage is evaluated on the same paired cohort of
-//     2 diverse rough-terrain bodies (with rocks, springs, forced locomotion/righting AND closed-loop goal steering).
-//  2) Antithetic (mirrored) sampling (+y_k, -y_k pairs), halving gradient estimation variance in 78D.
-//  3) Elitist CRN mean verification: the updated CMA-ES mean (and top mutant fallback) is verified on the CRN body pair before
-//     acceptance, guaranteeing non-decreasing multi-body lineage fitness across generations.
 import { FULL_GENES } from './sim/genome.js';
 
-const LAMBDA = 8, SECS = 5;
+const LAMBDA = 8, SECS = 5, LHS_POP = 12;
 
 export class Lineage {
-  constructor(start, onUpdate, refSeeds = [2, 5]) {
+  constructor(start, onUpdate, refSeeds = [2, 5], opts = {}) {
     this.onUpdate = onUpdate;
     this.refSeeds = refSeeds;
+    this.mode = opts.mode || (start === null ? 'denovo' : 'refine');
+    this.evalFn = opts.evalFn || null;
+    this.secs = opts.secs || SECS;
+    this.r = ((opts.seed ?? (0x9e3779b9 ^ Date.now())) >>> 0) || 0x9e3779b9;
+
     const n = (this.n = FULL_GENES.length);
-    this.m = FULL_GENES.map(([nm, lo, hi]) =>
-      Math.min(0.97, Math.max(0.03, ((start[nm] ?? (lo + hi) / 2) - lo) / (hi - lo)))
-    );
+    if (this.mode === 'denovo') {
+      // Pure uniform random [0.05, 0.95]^78 initialization — zero starter or hand-wired priors!
+      this.m = Array.from({ length: n }, () => 0.05 + 0.9 * this.rnd());
+    } else {
+      this.m = FULL_GENES.map(([nm, lo, hi]) =>
+        Math.min(0.97, Math.max(0.03, ((start[nm] ?? (lo + hi) / 2) - lo) / (hi - lo)))
+      );
+    }
+
     const mu = (this.mu = LAMBDA / 2);
     const w = Array.from({ length: mu }, (_, i) => Math.log(mu + 0.5) - Math.log(i + 1));
     const sw = w.reduce((a, b) => a + b);
@@ -32,7 +40,7 @@ export class Lineage {
     this.cmu = Math.min(1 - this.c1, (sep * 2 * (mueff - 2 + 1 / mueff)) / ((n + 2) ** 2 + mueff));
     this.chiN = Math.sqrt(n) * (1 - 1 / (4 * n) + 1 / (21 * n * n));
 
-    this.sigma = 0.028;
+    this.sigma = this.mode === 'denovo' ? 0.22 : 0.028;
     this.D2 = new Array(n).fill(1);
     this.pc = new Array(n).fill(0);
     this.ps = new Array(n).fill(0);
@@ -46,7 +54,6 @@ export class Lineage {
     this.jobs = new Map();
     this.nextId = 0;
     this.queue = [];
-    this.r = (0x9e3779b9 ^ Date.now()) >>> 0;
   }
 
   rnd() {
@@ -62,8 +69,25 @@ export class Lineage {
     );
   }
 
+  /** Stratified Latin-Hypercube sample of K uniform random points in [0.05, 0.95]^n (purely random marginals, space-filling) */
+  latinHypercube(K) {
+    const n = this.n;
+    const pop = Array.from({ length: K }, () => new Array(n));
+    const perm = Array.from({ length: K }, (_, k) => k);
+    for (let i = 0; i < n; i++) {
+      for (let k = K - 1; k > 0; k--) {
+        const j = Math.floor(this.rnd() * (k + 1));
+        const tmp = perm[k]; perm[k] = perm[j]; perm[j] = tmp;
+      }
+      for (let k = 0; k < K; k++) {
+        pop[k][i] = 0.05 + 0.9 * ((perm[k] + this.rnd()) / K);
+      }
+    }
+    return pop;
+  }
+
   pool() {
-    if (this.workers.length) return;
+    if (this.evalFn || this.workers.length) return;
     const hw = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
     const k = Math.max(2, Math.min(6, hw - 1));
     for (let i = 0; i < k; i++) {
@@ -91,22 +115,30 @@ export class Lineage {
   }
 
   score(u, seeds = this.refSeeds) {
+    const genome = this.dec(u);
+    const opts = { rough: true, steer: true };
+    if (this.evalFn) {
+      return Promise.resolve({ r: this.evalFn(genome, seeds, this.secs, opts) });
+    }
     return new Promise((res) => {
       const id = this.nextId++;
       this.queue.push({
         id,
         res,
-        msg: { id, genome: this.dec(u), seeds, secs: SECS, opts: { rough: true, steer: true } },
+        msg: { id, genome, seeds, secs: this.secs, opts },
       });
       this.pump();
     });
   }
 
-  async run(gens = 6) {
+  async run(gens = this.mode === 'denovo' ? 10 : 6) {
     if (this.running) return;
     this.running = true;
     this.pool();
     const n = this.n;
+    const minSigma = this.mode === 'denovo' ? 0.032 : 0.012;
+    const maxSigma = this.mode === 'denovo' ? 0.28 : 0.22;
+
     try {
       if (!this.curRes) {
         const r0 = await this.score(this.m);
@@ -117,6 +149,56 @@ export class Lineage {
       }
 
       for (let g = 0; g < gens && this.running; g++) {
+        if (this.mode === 'denovo' && this.gen === 0) {
+          // Generation 1 of de-novo mode: 12-member Stratified Latin-Hypercube primordial random population screen
+          const Xc = this.latinHypercube(LHS_POP);
+          const res = await Promise.all(Xc.map((u) => this.score(u)));
+          const bad = res.find((r) => r.err);
+          if (bad) throw new Error(bad.err);
+          this.evals += res.length;
+
+          const idx = res.map((_, k) => k).sort((a, b) => res[b].r.fit - res[a].r.fit);
+          const mRecomb = new Array(n).fill(0);
+          for (let r = 0; r < this.mu; r++) {
+            const uk = Xc[idx[r]];
+            for (let i = 0; i < n; i++) mRecomb[i] += this.w[r] * uk[i];
+          }
+          const rRec = await this.score(mRecomb);
+          if (rRec.err) throw new Error(rRec.err);
+          this.evals++;
+
+          const bestRandomRes = res[idx[0]].r;
+          if (rRec.r.fit >= bestRandomRes.fit && rRec.r.fit >= this.curRes.fit) {
+            this.m = mRecomb;
+            this.curRes = rRec.r;
+          } else if (bestRandomRes.fit > this.curRes.fit) {
+            this.m = Xc[idx[0]];
+            this.curRes = bestRandomRes;
+          }
+          // Estimate initial coordinate spread across top mu random survivors
+          for (let i = 0; i < n; i++) {
+            let v2 = 0;
+            for (let r = 0; r < this.mu; r++) v2 += this.w[r] * (Xc[idx[r]][i] - this.m[i]) ** 2;
+            this.D2[i] = Math.min(2.2, Math.max(0.45, v2 / (this.sigma * this.sigma)));
+          }
+          this.gen++;
+          const mr = this.curRes;
+          this.hist.push({
+            gen: this.gen,
+            mode: this.mode,
+            seeds: this.refSeeds.join(','),
+            mean: mr.fit,
+            delta: mr.fit - this.startFit,
+            best: Math.max(mr.fit, bestRandomRes.fit),
+            turn: (mr.yL + mr.yR) / 2,
+            v: mr.v,
+            up: mr.up,
+            goal: mr.goal ?? 0,
+          });
+          this.onUpdate?.(this);
+          continue;
+        }
+
         // Mirrored (antithetic) perturbation pairs (+y, -y) across all 78 genes
         const Y = [], X = [];
         for (let k = 0; k < LAMBDA / 2; k++) {
@@ -149,16 +231,19 @@ export class Lineage {
 
         const bestChildRes = res[idx[0]].r;
         let accepted = false;
-        if (rCand.r.fit >= fm - 1e-6) {
+        if (rCand.r.fit >= fm - 1e-6 && rCand.r.fit >= bestChildRes.fit - 0.05) {
           this.m = mCand;
           this.curRes = rCand.r;
           accepted = true;
         } else if (bestChildRes.fit > fm) {
-          // Elitist fallback: adopt the strictly superior verified mutant on the CRN cohort
           const yBest = Xc[idx[0]].map((u, i) => (u - this.m[i]) / Math.max(1e-6, this.sigma));
           for (let i = 0; i < n; i++) yw[i] = yBest[i];
           this.m = Xc[idx[0]];
           this.curRes = bestChildRes;
+          accepted = true;
+        } else if (rCand.r.fit >= fm - 1e-6) {
+          this.m = mCand;
+          this.curRes = rCand.r;
           accepted = true;
         }
 
@@ -172,18 +257,18 @@ export class Lineage {
             this.pc[i] = (1 - this.cc) * this.pc[i] + hs * Math.sqrt(this.cc * (2 - this.cc) * this.mueff) * yw[i];
             let rmu = 0;
             for (let r = 0; r < this.mu; r++) rmu += this.w[r] * Y[idx[r]][i] ** 2;
-            this.D2[i] = (1 - this.c1 - this.cmu) * this.D2[i] + this.c1 * this.pc[i] ** 2 + this.cmu * rmu;
+            this.D2[i] = Math.min(3.0, Math.max(0.25, (1 - this.c1 - this.cmu) * this.D2[i] + this.c1 * this.pc[i] ** 2 + this.cmu * rmu));
           }
-          this.sigma = Math.min(0.22, Math.max(0.012, this.sigma * Math.exp((this.cs / this.ds) * (psn / this.chiN - 1))));
+          this.sigma = Math.min(maxSigma, Math.max(minSigma, this.sigma * Math.exp((this.cs / this.ds) * (psn / this.chiN - 1))));
         } else {
-          // Step overshot on CRN cohort: hold elite mean and contract step size
-          this.sigma = Math.max(0.012, this.sigma * 0.8);
+          this.sigma = Math.max(minSigma, this.sigma * 0.82);
         }
 
         this.gen++;
         const mr = this.curRes;
         this.hist.push({
           gen: this.gen,
+          mode: this.mode,
           seeds: this.refSeeds.join(','),
           mean: mr.fit,
           delta: mr.fit - this.startFit,

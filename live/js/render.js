@@ -100,16 +100,53 @@ export class View {
     this.heart = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), glow(0xff1144, 3)); this.liver = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), glow(0x8a2be2, 1.5)); this.bladder = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), glow(0xffee55, 1.2)); this.fatM = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), glow(0xffe0a0, 0.6));
     this.colonM = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), glow(0x7a4a20, 0.6)); for (const m of [this.heart, this.liver, this.bladder, this.fatM, this.colonM]) this.cg.add(m);
     this.gutBalls = []; for (let i = 0; i < 10; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), glow(0x33ff99, 1.2)); this.cg.add(m); this.gutBalls.push(m); }
-    // brain: one point per neuron (NNEU), coloured by region, flashing on spikes
-    const bp = new Float32Array(NNEU * 3), bc = new Float32Array(NNEU * 3), bs = new Float32Array(NNEU); this.brainLocal = bp; const rc = new THREE.Color();
-    REGIONS.forEach(([name, cnt], ri) => { rc.setHSL(ri / REGIONS.length, 0.9, 0.6); const a = (ri / REGIONS.length) * Math.PI * 2; for (let k = 0; k < cnt; k++) { const i = R0[name] + k; const rr = 0.05 + 0.05 * Math.random(); const th = a + (Math.random() - 0.5) * 0.7, ph = (Math.random() - 0.5) * 2.4;
-        bp[3 * i] = 0.09 * Math.cos(ph) + (Math.random() - 0.5) * 0.04; bp[3 * i + 1] = Math.sin(ph) * rr + Math.cos(th) * 0.03; bp[3 * i + 2] = Math.sin(th) * rr; bc[3 * i] = rc.r; bc[3 * i + 1] = rc.g; bc[3 * i + 2] = rc.b; } });
-    const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NNEU * 3), 3)); bg.setAttribute('color', new THREE.BufferAttribute(bc, 3)); bg.setAttribute('spk', new THREE.BufferAttribute(bs, 1)); this.brainGeo = bg;
+    // brain: up to 12,000 stratified 3D points across all 16 regions (100% of subcortical nuclei + uniform sheet stride on XL/XXL)
+    const visIdx = [];
+    if (NNEU <= 12000) {
+      for (let i = 0; i < NNEU; i++) visIdx.push(i);
+    } else {
+      let fixed = 0, sheetTot = 0;
+      for (const [, cnt] of REGIONS) { if (cnt <= 256) fixed += cnt; else sheetTot += cnt; }
+      const budget = Math.max(1024, 12000 - fixed);
+      for (const [name, cnt] of REGIONS) {
+        const r0 = R0[name];
+        if (cnt <= 256) {
+          for (let k = 0; k < cnt; k++) visIdx.push(r0 + k);
+        } else {
+          const take = Math.max(64, Math.round((cnt / sheetTot) * budget));
+          for (let k = 0; k < take; k++) visIdx.push(r0 + Math.min(cnt - 1, Math.floor(((k + 0.5) * cnt) / take)));
+        }
+      }
+    }
+    this.visNeuIdx = Uint32Array.from(visIdx);
+    const NV = (this.visNeuCount = this.visNeuIdx.length);
+    const bp = new Float32Array(NV * 3), bc = new Float32Array(NV * 3), bs = new Float32Array(NV); this.brainLocal = bp; const rc = new THREE.Color();
+    const regIdxOf = new Uint8Array(NNEU);
+    REGIONS.forEach(([name, cnt], ri) => { for (let k = 0; k < cnt; k++) regIdxOf[R0[name] + k] = ri; });
+    for (let v = 0; v < NV; v++) {
+      const ni = this.visNeuIdx[v], ri = regIdxOf[ni];
+      rc.setHSL(ri / REGIONS.length, 0.9, 0.6);
+      const a = (ri / REGIONS.length) * Math.PI * 2;
+      const rr = 0.05 + 0.05 * Math.random(), th = a + (Math.random() - 0.5) * 0.7, ph = (Math.random() - 0.5) * 2.4;
+      bp[3 * v] = 0.09 * Math.cos(ph) + (Math.random() - 0.5) * 0.04;
+      bp[3 * v + 1] = Math.sin(ph) * rr + Math.cos(th) * 0.03;
+      bp[3 * v + 2] = Math.sin(th) * rr;
+      bc[3 * v] = rc.r; bc[3 * v + 1] = rc.g; bc[3 * v + 2] = rc.b;
+    }
+    const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NV * 3), 3)); bg.setAttribute('color', new THREE.BufferAttribute(bc, 3)); bg.setAttribute('spk', new THREE.BufferAttribute(bs, 1)); this.brainGeo = bg;
     this.brainPts = new THREE.Points(bg, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { px: { value: 1 } }, vertexShader: 'attribute float spk; attribute vec3 color; varying vec3 vC; varying float vS; uniform float px; void main(){ vC = color; vS = spk; vec4 mv = modelViewMatrix*vec4(position,1.0); gl_PointSize = px*(2.0 + 9.0*spk) * (3.0 / -mv.z); gl_Position = projectionMatrix*mv; }', fragmentShader: 'varying vec3 vC; varying float vS; void main(){ float d = length(gl_PointCoord-0.5); if(d>0.5) discard; gl_FragColor = vec4(vC*(0.4+4.0*vS)*(1.0-2.0*d), 1.0); }' }));
     this.brainPts.frustumCulled = false; this.brainPts.renderOrder = 5; this.cg.add(this.brainPts);
-    // blood: particles circulating along the body axis, speed from heart rate, colour from blood glucose
-    this.bloodN = 160; const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.bloodN * 3), 3)); this.bloodPh = Float32Array.from({ length: this.bloodN }, () => Math.random()); this.bloodOff = Float32Array.from({ length: this.bloodN * 2 }, () => Math.random() * 2 - 1);
-    this.bloodMat = new THREE.PointsMaterial({ color: 0xff3355, size: 0.035, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }); this.blood = new THREE.Points(fg, this.bloodMat); this.blood.frustumCulled = false; this.cg.add(this.blood);
+    // blood: reads live 3D SPH / 1D Navier-Stokes vascular blood parcels (px, py, pz, pO2, pGlc) directly from cr.fluid
+    this.bloodN = this.cr.fluid ? this.cr.fluid.px.length : 120;
+    const fg = new THREE.BufferGeometry();
+    fg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.bloodN * 3), 3));
+    const bCols = new Float32Array(this.bloodN * 3);
+    for (let i = 0; i < this.bloodN; i++) { bCols[3 * i] = 1; bCols[3 * i + 1] = 0.22; bCols[3 * i + 2] = 0.35; }
+    fg.setAttribute('color', new THREE.BufferAttribute(bCols, 3));
+    this.bloodPh = Float32Array.from({ length: this.bloodN }, () => Math.random());
+    this.bloodOff = Float32Array.from({ length: this.bloodN * 2 }, () => Math.random() * 2 - 1);
+    this.bloodMat = new THREE.PointsMaterial({ vertexColors: true, size: 0.038, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.blood = new THREE.Points(fg, this.bloodMat); this.blood.frustumCulled = false; this.cg.add(this.blood);
     // limbs, stalks, eyes
     const limbMat = new THREE.MeshPhysicalMaterial({ color: 0x9a6bff, roughness: 0.25, metalness: 0.1, iridescence: 1, iridescenceIOR: 1.8, transmission: 0.3, thickness: 0.2, emissive: 0x220833, transparent: true, opacity: 0.85 });
     this.bones = []; const cap = new THREE.CapsuleGeometry(1, 1, 4, 10); for (let i = 0; i < 16; i++) { const m = new THREE.Mesh(cap, limbMat); m.castShadow = true; this.cg.add(m); this.bones.push(m); }
@@ -148,18 +185,36 @@ export class View {
     const stg = cr.sleep.stage; this.skinU.t.value = t; if (this.poolU) this.poolU.t.value = t; if (this.poolU) this.poolU.t.value = t; this.skinU.ne.value = nm.NE; this.skinU.da.value = nm.DA; this.skinU.sleep.value = stg >= 2 ? 1 : stg === 1 ? 0.4 : 0; this.skinU.glitch.value = Math.max(0, (this.skinU.glitch.value || 0) * 0.92);
     // organs: placed in the body frame of their segment; sizes and colours come from metabolic state
     const M = cr.metab; const at = (seg, du, ds, df, obj, sc) => { const c = B.c[seg], fr = F[seg]; obj.position.set(X[c] + fr.u[0] * du + fr.s[0] * ds + fr.f[0] * df, Y[c] + fr.u[1] * du + fr.s[1] * ds + fr.f[1] * df, Z[c] + fr.u[2] * du + fr.s[2] * ds + fr.f[2] * df); obj.scale.setScalar(sc); };
-    this.heartPh += dtReal * (M.hr / 60) * (cr.speed || 1); const beat = Math.pow(Math.max(0, Math.sin(this.heartPh * Math.PI * 2)), 6); this.skinU.beat.value = beat; this.skinU.perf.value = Math.min(1, 0.3 + M.blood.glc / 6 + (M.hr - 60) / 120); this.skinU.sunDir.value.copy(this.sun.position).sub(this.sun.target.position).normalize(); this.skinU.sunI.value = this.sun.intensity / 2.6; at(4, 0.05, 0, 0, this.heart, 1 + 0.45 * beat); this.heart.material.emissiveIntensity = 1.5 + 4 * beat;
+    this.heartPh += dtReal * (M.hr / 60) * (cr.speed || 1); const beat = Math.pow(Math.max(0, Math.sin(this.heartPh * Math.PI * 2)), 6); this.skinU.beat.value = beat; const flPerf = cr.fluid ? Math.min(1, 0.25 + (cr.fluid.cardiacOutput / 38) * 0.45 + cr.fluid.meanO2 * 0.3) : Math.min(1, 0.3 + M.blood.glc / 6 + (M.hr - 60) / 120); this.skinU.perf.value = flPerf; this.skinU.sunDir.value.copy(this.sun.position).sub(this.sun.target.position).normalize(); this.skinU.sunI.value = this.sun.intensity / 2.6; at(4, 0.05, 0, 0, this.heart, 1 + 0.45 * beat); this.heart.material.emissiveIntensity = 1.5 + 4 * beat;
     at(3, -0.02, 0.06, 0, this.liver, 0.7 + M.liverGly / 40); this.liver.material.emissive.setHSL(0.75 - 0.25 * Math.min(1, M.liverGly / 40), 0.9, 0.45);
     at(1, -0.06, 0, -0.05, this.bladder, 0.6 + 1.6 * M.bladder); at(0, 0, 0, 0.1, this.colonM, 0.5 + 1.2 * M.colon); at(2, 0.06, -0.05, 0, this.fatM, 0.6 + M.fat / 400);
     const gutFill = M.gut.glc + M.gut.fat + M.gut.prot; const ensR = cr.brain.rate; this.gutBalls.forEach((g, i) => { const f = 1 + (i / 9) * 3.6; const seg = Math.floor(f), tt2 = f - seg; const ens = ensR[R0.ENS + i * 4] / 40; const sc = 0.5 + 0.35 * Math.min(2, gutFill / 3) + 0.5 * ens; at(seg, -0.05 + 0.03 * Math.sin(i + t * 2 * M.motility), 0, tt2 * 0.4, g, sc); g.material.emissiveIntensity = 0.6 + 2.5 * ens; });
-    // brain points ride in the head frame
+    // brain points ride in the head frame (stratified subset on XL/XXL so WebGL stays 60 fps)
     const hc = B.c[NS - 1], hf = F[NS - 1]; const bp = this.brainGeo.attributes.position.array, spk = this.brainGeo.attributes.spk.array, L = this.brainLocal; const tb = cr.brain.t;
-    for (let i = 0; i < NNEU; i++) { const a = L[3 * i], b = L[3 * i + 1], c = L[3 * i + 2]; bp[3 * i] = X[hc] + hf.f[0] * a + hf.u[0] * b + hf.s[0] * c; bp[3 * i + 1] = Y[hc] + hf.f[1] * a + hf.u[1] * b + hf.s[1] * c; bp[3 * i + 2] = Z[hc] + hf.f[2] * a + hf.u[2] * b + hf.s[2] * c; const ls = cr.brain.lastSpike[i]; spk[i] = ls < 0 ? 0 : Math.exp(-(tb - ls) / 0.08); }
+    const NV = this.visNeuCount, vIdx = this.visNeuIdx;
+    for (let v = 0; v < NV; v++) { const ni = vIdx[v], a = L[3 * v], b = L[3 * v + 1], c = L[3 * v + 2]; bp[3 * v] = X[hc] + hf.f[0] * a + hf.u[0] * b + hf.s[0] * c; bp[3 * v + 1] = Y[hc] + hf.f[1] * a + hf.u[1] * b + hf.s[1] * c; bp[3 * v + 2] = Z[hc] + hf.f[2] * a + hf.u[2] * b + hf.s[2] * c; const ls = cr.brain.lastSpike[ni]; spk[v] = ls < 0 ? 0 : Math.exp(-(tb - ls) / 0.08); }
     this.brainGeo.attributes.position.needsUpdate = true; this.brainGeo.attributes.spk.needsUpdate = true; this.brainPts.material.uniforms.px.value = this.renderer.getPixelRatio() * (this.renderer.domElement.height / 800);
-    // blood flow
-    const bpos = this.blood.geometry.attributes.position.array; const v = (M.hr / 70) * 0.12 * dtReal * (cr.speed || 1); for (let i = 0; i < this.bloodN; i++) { let ph = (this.bloodPh[i] += v * (i % 2 ? 1 : -1)); ph -= Math.floor(ph); const f = ph * (NS - 1); const seg = Math.min(NS - 2, Math.floor(f)), tt2 = f - seg; const c1 = B.c[seg], c2 = B.c[seg + 1], fr = F[seg]; const ro = 0.12 * (i % 2 ? 1 : -0.6);
-      for (let k = 0; k < 3; k++) { const base = [X, Y, Z][k]; bpos[3 * i + k] = base[c1] + (base[c2] - base[c1]) * tt2 + fr.u[k] * this.bloodOff[2 * i] * 0.08 + fr.s[k] * (this.bloodOff[2 * i + 1] * 0.08 + ro * 0.3); } }
-    this.blood.geometry.attributes.position.needsUpdate = true; const glc = Math.min(1.5, M.blood.glc / 3); this.bloodMat.color.setRGB(1, 0.15 + 0.4 * glc, 0.3 + 0.5 * glc);
+    // blood flow: directly reads 3D SPH parcel positions & per-parcel O2/glucose from Hemodynamics
+    const bpos = this.blood.geometry.attributes.position.array;
+    const bcol = this.blood.geometry.attributes.color.array;
+    if (cr.fluid) {
+      const FL = cr.fluid, nB = Math.min(this.bloodN, FL.px.length);
+      for (let i = 0; i < nB; i++) {
+        bpos[3 * i] = FL.px[i]; bpos[3 * i + 1] = FL.py[i]; bpos[3 * i + 2] = FL.pz[i];
+        const o2 = Math.max(0, Math.min(1, (FL.pO2[i] - 0.55) / 0.43));
+        const gl = Math.max(0, Math.min(1.3, FL.pGlc[i]));
+        // Arterial oxygenated scarlet-gold vs venous deoxygenated violet-crimson
+        bcol[3 * i] = 0.42 + 0.58 * o2;
+        bcol[3 * i + 1] = 0.06 + 0.24 * o2 * gl;
+        bcol[3 * i + 2] = 0.72 - 0.46 * o2;
+      }
+      this.blood.geometry.attributes.color.needsUpdate = true;
+    } else {
+      const v = (M.hr / 70) * 0.12 * dtReal * (cr.speed || 1);
+      for (let i = 0; i < this.bloodN; i++) { let ph = (this.bloodPh[i] += v * (i % 2 ? 1 : -1)); ph -= Math.floor(ph); const f = ph * (NS - 1); const seg = Math.min(NS - 2, Math.floor(f)), tt2 = f - seg; const c1 = B.c[seg], c2 = B.c[seg + 1], fr = F[seg]; const ro = 0.12 * (i % 2 ? 1 : -0.6);
+        for (let k = 0; k < 3; k++) { const base = [X, Y, Z][k]; bpos[3 * i + k] = base[c1] + (base[c2] - base[c1]) * tt2 + fr.u[k] * this.bloodOff[2 * i] * 0.08 + fr.s[k] * (this.bloodOff[2 * i + 1] * 0.08 + ro * 0.3); } }
+    }
+    this.blood.geometry.attributes.position.needsUpdate = true;
     // limbs
     let bi = 0; const bone = (a, b, r) => { const m = this.bones[bi++]; const ax = X[a], ay = Y[a], az = Z[a], dx = X[b] - ax, dy = Y[b] - ay, dz = Z[b] - az; const len = Math.hypot(dx, dy, dz) || 1e-3; m.position.set(ax + dx / 2, ay + dy / 2, az + dz / 2); m.scale.set(r, Math.max(0.001, len / 2 - r) , r); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx / len, dy / len, dz / len)); };
     B.limbs.forEach((Lb, k) => { const r = Lb.kind === 'arm' ? 0.045 : 0.05; bone(Lb.hip, Lb.knee, r); bone(Lb.knee, Lb.foot, r * 0.8); const f = this.feet[k]; f.position.set(X[Lb.foot], Y[Lb.foot], Z[Lb.foot]); const gp = B.gripP[Lb.foot] || 0; f.scale.setScalar(0.06 + 0.03 * gp); f.material.emissiveIntensity = 0.3 + 3 * gp; });

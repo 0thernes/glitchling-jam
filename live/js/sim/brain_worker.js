@@ -1,6 +1,6 @@
-// Off-main-thread Web Worker host for the spiking Brain (S / M / L / XL).
-// Steps the large cortical, hippocampal and thalamic sheets (8 x 2-ms LIF + 2-compartment apical + CSR STDP + structural
-// rewiring) off the UI/WebGL thread while exchanging transferable Float32Array / Uint8Array buffers with the main thread.
+// Off-main-thread Web Worker host for the spiking Brain (S / M / L / XL / XXL).
+// Steps the large 3-compartment laminar cortical, hippocampal and thalamic sheets off the UI/WebGL thread
+// while exchanging transferable Float32Array / Uint8Array buffers with the main thread.
 let brain = null;
 let spkAccum = null;
 let batchCount = 0;
@@ -46,6 +46,8 @@ self.onmessage = async (ev) => {
     const stage = msg.stage ?? msg.sleepStage ?? 0;
     brain.sleepStage = stage;
     if (msg.place) brain.drivePlaceCells(msg.place[0], msg.place[1], msg.place[2]);
+    if (msg.v1Complex) brain.driveVisualCortex(msg.v1Complex, 0.75);
+    if (msg.ofcApp && msg.ofcAv) brain.driveOFCColumns(msg.ofcApp, msg.ofcAv);
 
     spkAccum.fill(0);
     const sub = msg.substeps || 8;
@@ -82,6 +84,7 @@ self.onmessage = async (ev) => {
         stdpEvents: brain.stdpEvents,
         grown: brain.grown,
         pruned: brain.pruned,
+        plateauBursts: brain.plateauBursts || 0,
         dwLast: brain.dwLast || 0,
         backend: brain.backend,
         stepMs,

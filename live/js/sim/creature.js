@@ -1,12 +1,15 @@
-// Glitchling v2 "live" (pass 15 architecture):
-// Spiking 2-compartment cortical/hippocampal/thalamic brain + LTC CPG + 122 sLTC motor neurons + 3D soft Verlet body +
-// metabolism + binocular ommatidial retina & learned hippocampal SLAM landmark map + online RTRL selective SSM + deep SiLU
-// residual world model with heteroscedastic uncertainty + Eshkol order-3 Taylor-jet Frenet-Serret thought curvature &
-// metacognition + Fisher/EWC & Moonlab SVD weight-space consolidation + Tsotchke 8-qubit statevector QRNG + unified 21-option
-// striatal D1/D2 spike race (16 sites + 3 water pools + dropped snack + HDC epistemic exploration). DOM-free; runs in Node & Web.
+// Glitchling v2 "live" (pass 16 architecture):
+// Spiking 3-compartment canonical laminar brain (S=436..XXL=104,904 neurons / 4.76M synapses) + LTC CPG + 122 sLTC motor neurons +
+// 78-tet 3D volumetric Neo-Hookean FEM continuum soft body + 16-node/26-vessel 1D Navier-Stokes & 120-parcel 3D SPH hemodynamics +
+// metabolism + dual 24x12 2D binocular retinotopic sheets -> LGN DoG -> V1 quadrature Gabor orientation columns -> V4/MT + EKF-SLAM +
+// anatomical trisynaptic hippocampus (EC_II/III -> 576-cell 5% k-WTA DG -> CA3 -> CA1 mismatch event segmentation) +
+// online RTRL selective SSM + Causal Multi-Head RoPE SwiGLU Transformer-XL world model (110k std .. 1.17M xl, +0.1s & +0.5s horizons) +
+// Eshkol order-3 Taylor-jet Frenet-Serret thought curvature & metacognition + Tsotchke 10-qubit open-quantum Lindblad/photonic QRNG,
+// QGTL & Moonlab Vidal canonical MPS + selectable 1:1 biological real-time clock. DOM-free; runs identically in Node & Web.
 import { mulberry, clamp, gauss, betaIG, IG0 } from './util.js';
 import { World, SITES } from './world.js';
 import { Body, CH, NS } from './body.js';
+import { Hemodynamics } from './fluid.js';
 import { HDCMap, Hopfield } from './memory.js';
 import { develop, developSteer } from './genome.js';
 import { Nav, VIEW } from './nav.js';
@@ -19,6 +22,12 @@ import { CPG, NCPG } from './cpg.js';
 import { Metab } from './metab.js';
 import { SelectiveSSM, WorldModel, Sleep, PredictiveCoding } from './mind.js';
 import { Skin } from './skin.js';
+
+export const CLOCK_MODES = {
+  circadian: { framesPerMin: 15, scale: 240, label: '240× (6-min day · demo)' },
+  ultradian: { framesPerMin: 60, scale: 60, label: '60× (24-min day)' },
+  realtime:  { framesPerMin: 3600, scale: 1, label: '1× Biological real-time (24-hr day)' },
+};
 
 export const DEFAULT_FLAWS = {
   scramble: { on: false, period: 90, noise: 0.25 },
@@ -42,6 +51,8 @@ export class Creature {
 
     this.world = new World(seed);
     this.body = new Body(this.world, 0, 0, r() * Math.PI * 2);
+    this.fluid = new Hemodynamics(seed);
+    this.body.segO2 = this.fluid.segO2;
     this.brain = new Brain(seed);
     this.gen = { ...STARTER, ...(globalThis.TW?.genome || {}) };
     const gn = this.gen;
@@ -68,9 +79,13 @@ export class Creature {
     }
     this.retina = new Retina(seed, SITES, this.world.pools.length);
     this.ssm = new SelectiveSSM(NY + 8, 32, seed);
-    this.wm = new WorldModel(NZ, NY, seed, 48);
+    this.wm = new WorldModel(NZ, NY, seed, opts.wmScale || null);
     this.metacog = new Metacognition(seed, 96);
     this.metaFeat = new Float64Array(96);
+    this.ofcApp = new Float32Array(NSTR_OPT);
+    this.ofcAv = new Float32Array(NSTR_OPT);
+    this.dreamAct40 = new Float64Array(40);
+    this.dreamY5 = new Float64Array(NY);
 
     this.z = new Float64Array(NZ);
     this.y = new Float64Array(NY);
@@ -80,8 +95,12 @@ export class Creature {
     this.lesion = {
       mot: false, cpg: false, mn: false, stdp: false, wm: false, astro: false, learnMotor: false,
       efe: false, veto: false, dream: false, vision: false, metacog: false, ssmLearn: false, qrng: false, homeo: false,
+      fem: false, fluid: false, dg: false,
     };
     this.t = 0; this.frame = 0; this.tick = 0; this.hour = 8; this.dayLen = 1440;
+    const initClock = opts.clockMode || globalThis.CLOCK_MODE || globalThis.TW?.clock ||
+      (typeof location !== 'undefined' ? new URLSearchParams(location.search).get('clock') : null) || 'circadian';
+    this.setClockMode(initClock);
 
     // Motor connectome: innate genome-developed W*0 + learned plastic W* + intrinsic biases + diagonal Fisher EWC anchors
     this.mnAct = new Float64Array(NMN);
@@ -169,6 +188,13 @@ export class Creature {
 
     // Initial retinal look around starting pose
     this.retina.step(this.body, this.world, this.nav, false, false);
+  }
+
+  setClockMode(mode = 'circadian') {
+    const key = CLOCK_MODES[mode] ? mode : 'circadian';
+    this.clockMode = key;
+    this.framesPerSimMin = CLOCK_MODES[key].framesPerMin;
+    this.timeCompression = CLOCK_MODES[key].scale;
   }
 
   ev(type, msg) { this.events.push({ t: this.tick, type, msg }); if (this.events.length > 80) this.events.shift(); }
@@ -431,17 +457,19 @@ export class Creature {
       if (d > Math.PI) d = 2 * Math.PI - d;
       sens[i] = tg ? 1.5 * Math.exp(-(d * d) / 0.4) : 0;
     }
-    // Chromatic retinal response (pooled R/G/B + UV/shimmer across the 32 ommatidia)
+    // 2D retinotopic V1 Gabor orientation energy + V4 chromatic/form + MT 2D radial optic-flow divergence
     let rSum = 0, gSum = 0, bSum = 0;
     for (let b = 0; b < 32; b++) {
       rSum += this.retina.rgb[3 * b];
       gSum += this.retina.rgb[3 * b + 1];
       bSum += this.retina.rgb[3 * b + 2];
     }
-    sens[8] = clamp(gSum / 6) * 1.4;
-    sens[9] = clamp(rSum / 6) * 1.4;
-    sens[10] = clamp(bSum / 6) * 1.4;
-    sens[11] = clamp(this.retina.opticFlowMean * 3) * 1.2;
+    const v1E = this.lesion.vision ? 0 : (this.retina.v1EnergyMean || 0);
+    const mtD = this.lesion.vision ? 0 : Math.max(0, this.retina.mtDiv || 0);
+    sens[8] = clamp(gSum / 6 + 0.55 * v1E) * 1.4;
+    sens[9] = clamp(rSum / 6 + 0.35 * Math.abs(this.retina.v4Fovea?.[4] || 0)) * 1.4;
+    sens[10] = clamp(bSum / 6 + 0.35 * Math.abs(this.retina.v4Fovea?.[6] || 0)) * 1.4;
+    sens[11] = clamp(this.retina.opticFlowMean * 2.5 + 1.2 * mtD) * 1.25;
     sens[12] = 2 * clamp(this.nociception);
     sens[13] = rockT * 1.2;
     sens[14] = this.light * 1.0;
@@ -478,7 +506,10 @@ export class Creature {
     for (let i = 0; i < RN.CTX; i++) ext[R0.CTX + i] = 0.55 + 0.3 * nm.ACh;
     for (let i = 0; i < RN.THAL; i++) ext[R0.THAL + i] = awake ? 0.5 : this.sleep.stage === 4 ? 0.45 : 0.2;
     for (let i = 0; i < RN.HIP; i++) ext[R0.HIP + i] = 0.45;
-    if (!this.brain.delegated && !this.lesion.nav && awake) this.brain.drivePlaceCells(this.nav.px, this.nav.pz, 1.15);
+    if (!this.brain.delegated && awake) {
+      if (!this.lesion.nav) this.brain.drivePlaceCells(this.nav.px, this.nav.pz, 1.15);
+      if (!this.lesion.vision) this.brain.driveVisualCortex(this.retina.v1Complex, 0.75);
+    }
     if (this.familiar > 0 && this.hop.lastIdx >= 0) {
       for (let j = 0; j < 8; j++) ext[R0.HIP + ((this.hop.lastIdx * 7 + j * 5) % RN.HIP)] += 1.4 * this.familiar;
     }
@@ -523,9 +554,14 @@ export class Creature {
       const prag = foodDrive * (this.lesion.hdc ? 0.5 * this.wSite[k] + 0.5 * mean : 0.45 * this.wSite[k] + 0.45 * mean + 0.25 * hdcV);
       const epi = this.lesion.efe ? 0 : temp * (0.28 * (0.5 + this.brain.nm.ACh + 0.5 * this.brain.nm.NE) * (betaIG(this.bA[k], this.bB[k]) / IG0 - 0.5) + 0.14 * (1 - mp.conf));
       const { tTravel, baseCost } = this.travelTerms(mp.x, mp.z);
-      const visFruitPenalty = this.retina.vis[k] > 0 && P.fruit < 0.3 ? 0.45 : 0;
-      const cost = baseCost + visFruitPenalty + (this.lesion.ior ? 0 : 0.9 * this.recent[k]);
-      return { G: -(prag + epi - cost), prag, epi, cost, tTravel, harm: this.wAv[k] * (1 + M.cortisol) };
+      const visFruitPenalty = this.retina.vis[k] > 0 && P.fruit < 0.3 ? 0.55 : 0;
+      const iorCost = this.lesion.ior ? 0 : 1.15 * this.recent[k] + (this.recent[k] > 0.86 ? 1.35 : 0);
+      const cost = baseCost + visFruitPenalty + iorCost;
+      const featGen = this.visits[k] === 0 ? clamp(this.featC[P.c] + this.featS[P.s], 0, 1) : (0.5 * this.wSite[k] + 0.5 * mean);
+      const visBonus = !this.lesion.vision && this.retina.vis[k] > 0 ? (P.fruit > 0.45 ? 0.38 * P.fruit : -0.45) : 0;
+      const ofcApp = clamp(prag + foodDrive * 0.42 * featGen + visBonus - 0.65 * cost, 0, 2.2);
+      const ofcAv = clamp(1.3 * this.wAv[k] + visFruitPenalty * 1.5 + 1.1 * iorCost, 0, 2.2);
+      return { G: -(prag + epi - cost), prag, epi, cost, tTravel, harm: this.wAv[k] * (1 + M.cortisol), ofcApp, ofcAv };
     }
     if (k < SITES + 3) {
       // Water pool channel (p = k - 16)
@@ -598,12 +634,17 @@ export class Creature {
     let tot = 0;
     for (let k = 0; k < NSTR_OPT; k++) tot += this.brain.rate[R0.STR + k];
     const inhib = 0.0035 * tot;
+    this.ofcApp.fill(0);
+    this.ofcAv.fill(0);
     for (let k = 0; k < NSTR_OPT; k++) {
       const T = R.terms[k];
       if (!T) { ext[R0.STR + k] = -1; ext[R0.STR + NSTR_OPT + k] = 0.2; continue; }
       ext[R0.STR + k] = 0.85 + 1.6 * -T.G - inhib;
       ext[R0.STR + NSTR_OPT + k] = 0.8 + 1.5 * T.harm + 0.8 * T.cost;
+      this.ofcApp[k] = clamp((T.ofcApp ?? -T.G) * 0.95, 0, 1.8);
+      this.ofcAv[k] = clamp((T.ofcAv ?? (T.harm + 0.5 * T.cost)) * 0.85, 0, 1.8);
     }
+    if (!this.brain.delegated) this.brain.driveOFCColumns(this.ofcApp, this.ofcAv);
   }
 
   raceCount() {
@@ -749,9 +790,16 @@ export class Creature {
       this.limbUse[k] += Math.abs(B.u[sw]) + Math.abs(B.u[sw + 1]) + 0.5 * Math.abs(B.u[L.grip]);
     });
     this.limbUseN++;
+    B.lesionFEM = !!this.lesion.fem;
     B.scaleLift = this.lesion.scales ? 0 : this.liftK;
     B.step(1 / 120);
     B.step(1 / 120);
+
+    // Advance coupled 1D Navier-Stokes vascular network + 120 3D SPH blood parcels + baroreceptor reflex
+    this.fluid.lesion = !!this.lesion.fluid;
+    this.fluid.step(dt, B, this.metab, this.world, br.spikes);
+    this.metab.hr = clamp(this.metab.hr + 0.06 * this.fluid.baroDrive, 42, 195);
+    this.hop.lesionDG = !!this.lesion.dg;
 
     const com = B.com();
     this.vel = [com[0] - this.lastCom[0], com[1] - this.lastCom[1], com[2] - this.lastCom[2]];
@@ -763,7 +811,7 @@ export class Creature {
     this.interact();
     if (this.frame % 6 === 0) this.tenHz();
     if (this.frame % 4 === 0) this.skin.step(this);
-    if (this.frame % 15 === 0) this.minute();
+    if (this.frame % this.framesPerSimMin === 0) this.minute();
     this.updateNM(dt);
   }
 
@@ -852,10 +900,11 @@ export class Creature {
     this.ssm.features(z);
     for (let m = 0; m < 8; m++) z[64 + m] = this.mAvg[m];
 
+    const zPrevSnap = Float64Array.from(this.zPrev);
     let wmStepSE = 0;
     if (this.frame > 12) {
       const achMod = (0.5 + this.brain.nm.ACh) * (this.lesion.metacog ? 1 : (this.metacog?.achGain ?? 1));
-      wmStepSE = this.wm.learn(this.zPrev, this.y, 0.045 * achMod, this.lesion.ssmLearn ? null : this.ssm);
+      wmStepSE = this.wm.learn(this.zPrev, this.y, 0.045 * achMod, this.lesion.ssmLearn ? null : this.ssm, true);
     }
     this.zPrev.set(z);
     for (let i = 0; i < NZ; i++) this.zMean[i] += 0.01 * (z[i] - this.zMean[i]);
@@ -875,7 +924,7 @@ export class Creature {
       if (this.frame % 60 === 0) this.metacog.auditAndConsolidate(this, false);
     }
 
-    // Sleep consolidation on entering deep NREM (stage 3): Hopfield mDAE + InfoNCE, HDC cross-spectral Wiener, EWC anchor + Moonlab SVD
+    // Sleep consolidation on entering deep NREM (stage 3): Hopfield trisynaptic mDAE + DG + InfoNCE, HDC cross-spectral Wiener, EWC + Vidal MPS
     if (this.sleep.stage === 0) this.consolidated = false;
     else if (this.sleep.stage === 3 && !this.consolidated) {
       this.consolidated = true;
@@ -885,7 +934,7 @@ export class Creature {
       if (!this.lesion.hopfield) this.memStats.merged = (this.memStats.merged || 0) + this.hop.sleep();
       this.hdcFood.sleep();
       this.hdcWater.sleep();
-      // Consolidate motor weights via Moonlab Jacobi SVD denoising and update EWC synaptic anchors
+      // Consolidate motor weights via Moonlab Jacobi SVD + Vidal canonical MPS denoising and update EWC synaptic anchors
       this.metacog.auditAndConsolidate(this, true);
       for (let i = 0; i < this.Wc.length; i++) this.WcAnc[i] = 0.6 * this.WcAnc[i] + 0.4 * this.Wc[i];
       for (let i = 0; i < this.Wm.length; i++) this.WmAnc[i] = 0.6 * this.WmAnc[i] + 0.4 * this.Wm[i];
@@ -898,14 +947,19 @@ export class Creature {
       const R = this.hop.retrieve(c);
       this.familiar = R ? clamp((R.sim - 0.4) / 0.5) : 0;
       this.memStats.famMean += 0.02 * (this.familiar - this.memStats.famMean);
+      this.memStats.ca1Novelty = this.hop.ca1Novelty;
       this.memStats.retrievals++;
-      this.hop.store(c, { ep: this.episodes[this.episodes.length - 1], t: this.t }, this.r);
-      this.memStats.stored++;
+      // CA1 Schaffer-vs-temporoammonic mismatch event-boundary segmentation gates episodic encoding into CA3
+      if (this.hop.shouldStore(c, Math.abs(this.rpe) > 0.12)) {
+        this.hop.store(c, { ep: this.episodes[this.episodes.length - 1], t: this.t }, this.r);
+        this.memStats.stored++;
+      }
+      this.memStats.eventsSkipped = this.hop.eventsSkipped;
     }
     if (this.sleep.stage === 0 && (this.episodes.length < 400 ? true : this.frame % 60 === 0)) {
       const ctx = [];
       for (let i = 0; i < RN.CTX && ctx.length < 48; i++) if (this.brain.rate[R0.CTX + i] > 15) ctx.push(i);
-      const ep = { z: Float64Array.from(z), y: Float64Array.from(this.y), ssm: [Float64Array.from(this.ssm.re), Float64Array.from(this.ssm.im)], ctx, vf: this.vf };
+      const ep = { zPrev: zPrevSnap, z: Float64Array.from(z), y: Float64Array.from(this.y), ssm: [Float64Array.from(this.ssm.re), Float64Array.from(this.ssm.im)], ctx, vf: this.vf };
       this.episodes.push(ep);
       if (this.episodes.length > 400) this.episodes.splice(Math.floor(this.r() * 400), 1);
     }
@@ -1261,7 +1315,7 @@ export class Creature {
     if (!E.length) return;
     for (let j = 0; j < 4; j++) {
       const e = E[Math.floor(this.r() * E.length)];
-      this.wm.learn(e.z, e.y, 0.02);
+      this.wm.learn(e.zPrev || e.z, e.y, 0.02, null, false);
       for (const i of e.ctx) this.brain.jolt[R0.CTX + i] += 1.5;
       for (let i = 0; i < 4; i++) this.brain.jolt[R0.HIP + Math.floor(this.r() * RN.HIP)] += 1.2;
       this.stats.replays++;
@@ -1288,22 +1342,29 @@ export class Creature {
     }
     const ssm = this.ssm.clone();
     const log = [];
+    const act40 = this.dreamAct40, y5 = this.dreamY5;
     for (let m = 0; m < 8; m++) {
       ssm.re.set(e.ssm[0]);
       ssm.im.set(e.ssm[1]);
+      const rollCtx = this.wm.newRolloutCtx();
       const z = Float64Array.from(e.z), y = new Float64Array(NY), u = new Float64Array(NY + 8);
+      for (let s = 0; s < 5; s++) {
+        for (let q = 0; q < 8; q++) act40[s * 8 + q] = q === m ? 0.9 : 0.15;
+      }
+      this.wm.predict5(e.z, act40, y5);
       let prog = 0;
       for (let s = 0; s < 8; s++) {
         for (let q = 0; q < 8; q++) z[64 + q] = q === m ? 0.9 : 0.15;
-        this.wm.predict(z, y);
+        this.wm.predict(z, y, rollCtx, true);
         prog += y[12];
         u.set(y);
         for (let q = 0; q < 8; q++) u[NY + q] = z[64 + q];
-        ssm.step(u);
+        ssm.step(u, false);
         ssm.features(z);
       }
-      this.Vimg[m] += 0.2 * (prog / 8 - this.Vimg[m]);
-      log.push(prog / 8);
+      const val = 0.72 * (prog / 8) + 0.28 * y5[12];
+      this.Vimg[m] += 0.2 * (val - this.Vimg[m]);
+      log.push(val);
     }
     this.dreamLog = log;
     this.stats.dreams++;
