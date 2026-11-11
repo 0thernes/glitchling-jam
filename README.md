@@ -10,7 +10,8 @@ A deliberately broken baby clone of Alex Donahue's A-Life **Creature #1**, built
 ## Live
 
 - Landing page: https://0thernes.github.io/glitchling-jam/
-- **Play the live sim:** https://0thernes.github.io/glitchling-jam/play/
+- **Glitchling v2 (live 3D soft-body & spiking brain):** https://0thernes.github.io/glitchling-jam/live/
+- **Play the 2D sim:** https://0thernes.github.io/glitchling-jam/play/
 - Jam showcase: https://0thernes.github.io/glitchling-jam/site/
 - Brain viz (real activation playback): https://0thernes.github.io/glitchling-jam/brain-viz/
 
@@ -36,7 +37,8 @@ python plot.py                # -> results/glitchling.png, results/cursed_portra
 
 | Path | What |
 |---|---|
-| `play/` | Live playable browser port (`sim.js` model, `app.js` UI, `style.css`) |
+| `live/` | Glitchling v2 live 3D organism (3,268–25,924 spiking LIF neurons, LTC CPG, 51-particle soft body, binocular retina + EKF-SLAM, 78-gene CMA-ES genome, Web Worker / WebGPU brain, metacognition & Tsotchke stack; see [`live/README.md`](live/README.md)) |
+| `play/` | Live playable 2D browser port (`sim.js` model, `app.js` UI, `style.css`) |
 | `site/` | One-day jam showcase page |
 | `brain-viz/` | Real activation playback viewer |
 | `glitchling.ts`, `core/` | TypeScript reference sim |

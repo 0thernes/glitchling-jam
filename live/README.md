@@ -12,19 +12,21 @@ claim of awareness, feelings, sentience or consciousness.
 ## How it fits together
 
 ```
-senses (bearing, colour, touch, light)  ─► SENS ─┐
-proprioception (spine curvature via Taylor jets,  ├─► 3,258 spiking LIF neurons by default (14 reference regions + PROP + MN)
-  contacts, tilt, speed)                ─► PROP ─┤      STDP eligibility × dopamine, NREM consolidation, astrocyte gain
-interoception (glucose, ghrelin, bladder…) ► INS ─┘
-                     STR D1/D2 spike race ── expected free energy (value + info gain − cost − harm) ─► veto ─► goal site
-                     MOT (8) ─► LTC pattern generator (24) ─► motor neurons (122, liquid τ) ─► 61 muscle channels
-                                                                                 └─► soft body (51 particles, 250+ constraints)
-                     selective SSM (32 modes) ─► world model (online NLMS) ─► surprise → LC/NE; REM rollouts → synergy values
+32-ommatidium 260° binocular retina (ray occlusion + stereo) + EKF-SLAM map ─► SENS ─┐
+proprioception (spine curvature via Taylor jets, contacts, tilt, speed)     ─► PROP ─┼─► 3,268 spiking LIF neurons by default (S=436, M=3.3k, L=12k, XL=25.9k)
+interoception (glucose, ghrelin, thirst, bladder, cortisol…)                ─► INS  ─┘     2-comp apical CTX + HIP place sheet, 3-mech homeostasis, STDP × DA,
+                     unified 21-ch STR D1/D2 spike race (16 sites + 3 pools + snack + explore) ─► metacog veto ─► goal
+                     78-gene developmental genome ─► MOT (8) ─► LTC CPG (24) ─► sLTC motor neurons (122) ─► 61 muscles
+                                                                                                  └─► soft body (51 particles, 250+ constraints)
+                     online RTRL selective SSM (32 modes) ─► 2-layer SiLU residual world model (predVar) ─► surprise → LC/NE; REM rollouts
+                     Oja 8-D manifold + Eshkol order-3 Taylor jets ─► Frenet-Serret curvature κ(t) & torsion τ(t) + Fisher/EWC + Moonlab SVD
+                     Tsotchke stack: Eshkol Taylor AD + 8-qubit Born-rule QRNG + QGTL Fubini-Study/Berry geometry + Moonlab MPS entanglement
+                     compute backends: CPU cache-compact TypedArray CSR (default) | off-main-thread Web Worker | WebGPU WGSL compute shader
 metabolism: gut → blood → liver glycogen → fat, ketones, gluconeogenesis, insulin/glucagon/cortisol/ghrelin/leptin, water, waste
-sleep: adenosine S + circadian C, WAKE/N1/N2/N3/REM, atonia, NREM replay, REM dreaming
+sleep: adenosine S + circadian C, WAKE/N1/N2/N3/REM, atonia, NREM replay + SVD/mDAE/Wiener consolidation, REM dreaming
 ```
 
-## Mechanisms added in passes 2–14
+## Mechanisms added in passes 2–15
 
 Each one can be switched off from the brain panel ("lesions"). The effect of each, as measured, is in CHANGELOG.md.
 
@@ -42,29 +44,33 @@ Each one can be switched off from the brain panel ("lesions"). The effect of eac
 | 12 | evolved motor genome, head-direction ring, path integration, grid cells, motor babbling | CMA-ES-evolved developmental genome grows the CPG/MOT→muscle wiring (turning 0.3 → 2.3 rad/s); a 36-unit ring attractor tracks heading, dead reckoning tracks position, sight of a known site resets it; goals beyond 9 units are steered to by vector; 12 s of random synergy babbling calibrates the steering gain |
 | 13 | brain scale, structured wiring, structural plasticity | default 3,258 neurons / 121k synapses (`?brain=L`: 11,962 / 489k; `?brain=S`: 426): E/PV/SST cell types on 2D sheets, distance-dependent small-world cortex, topographic thalamus/proprioception input, motor strip; weak cortical synapses pruned and regrown onto active neighbours each second; adaptive size drop if a step costs > 12 ms |
 | 14 | in-page lineage evolution, rough-ground genome, thirst interrupt, bias-corrected repertoire | the Lesions tab runs a separable CMA-ES on the 44 motor genes in Web Workers (8 mutants per generation, fitness shown per generation) and can adopt the result; shipped genome re-evolved offline with rocks, springs and a zig-zag steering trial; strong thirst can interrupt a food trip |
+| 15 | 260° binocular retina + EKF-SLAM, cross-spectral Wiener HDC + mDAE/EB Hopfield, 4 brain scales + Web Worker / WebGPU + 3-mechanism homeostasis + 2-comp CTX/HIP place sheet, full 78-gene motor+steering CMA-ES & mirrored CRN lineage, online RTRL SSM + 2-layer SiLU residual world model, unified 21-ch striatal race, Oja + Taylor-jet Frenet-Serret thought curvature & metacognition, Fisher/EWC + Tsotchke QRNG/QGTL/Moonlab | near 8/8 & far 8/8 in 60 s (`upright` 0.86), 4/4 thirst water-finding, 56 feeds in 240 s (`M` > `S`'s 43), cortical homeostasis survives `struct` lesion, HDC/Hopfield encoders measurably improve held-out recall, evolved steering beats hand steering on 8 held-out bodies |
 
 ## Files
 
 | file | what it does |
 |---|---|
-| `js/sim/brain.js` | spiking substrate, STDP + third factor, neuromodulators, astrocyte calcium |
+| `js/sim/brain.js` | cache-compact TypedArray CSR spiking substrate (`S`/`M`/`L`/`XL`), 2-comp apical CTX, HIP place cells, 3-mechanism homeostasis, STDP × DA, neuromodulators |
+| `js/sim/brain_worker.js`, `js/sim/webgpu_brain.js` | off-main-thread Web Worker (`?backend=worker`) and WebGPU WGSL compute shader (`?backend=webgpu`) brain accelerators |
 | `js/sim/cpg.js` | 24 LTC neurons forming segmental, leg and arm half-centre oscillators |
-| `js/sim/body.js` | Verlet soft body, muscles, friction, grip, collisions, Taylor-jet curvature |
-| `js/sim/creature.js` | wiring, motor learning, striatal race, veto, eating, flaws, replay, dreams |
-| `js/sim/mind.js` | selective SSM, world model, two-level predictive coding, two-process sleep |
-| `js/sim/genome.js` | 44 motor + 17 steering genes and the developmental rules that grow synapses from them |
-| `js/sim/starter_genome.js` | the shipped (evolved) genome and how it was found |
-| `js/sim/fitness.js` | motor-genome fitness shared by the offline CMA-ES and the in-page lineage evolution |
-| `js/lineage.js`, `js/sim/lineage_worker.js` | in-page separable CMA-ES and its Web Worker |
-| `js/sim/nav.js` | head-direction ring attractor, sun compass, path integration, grid-cell readout |
-| `js/sim/memory.js` | hyperdimensional (FHRR) place maps and a modern Hopfield episodic memory |
+| `js/sim/body.js` | Verlet soft body, muscles, directional ventral scute ratchet & cross-slope keel, grip, collisions, Taylor-jet curvature |
+| `js/sim/vision.js` | 32-ommatidium 260° binocular retina on stalked eyes, 3D ray-rock/terrain occlusion, stereo + subtense depth, hippocampal EKF-SLAM landmark map |
+| `js/sim/creature.js` | wiring, motor learning + Fisher/EWC, unified 21-channel striatal race, metacognitive veto, eating, drinking, flaws, replay, dreams |
+| `js/sim/mind.js` | online diagonal RTRL selective SSM, 2-layer SiLU residual world model (`predVar`), two-level predictive coding, two-process sleep |
+| `js/sim/metacog.js` | Oja 8-D neural manifold, Eshkol order-3 Taylor-jet Frenet-Serret curvature $\kappa(t)$ & torsion $\tau(t)$, uncertainty calibration, regret, innate vs learned weight-space audit |
+| `js/sim/genome.js` | full 78-gene developmental genome (58 motor/synergy + 20 steering genes) growing all innate CPG/MOT/sense wiring |
+| `js/sim/starter_genome.js` | the shipped two-stage multi-body CMA-ES motor + steering genome and how it was found |
+| `js/sim/fitness.js` | rough-ground motor + closed-loop steering fitness shared by offline CMA-ES and in-page lineage evolution |
+| `js/lineage.js`, `js/sim/lineage_worker.js` | variance-reduced mirrored 2-body CRN separable CMA-ES over all 78 genes in Web Workers, with genome undo stack |
+| `js/sim/nav.js` | head-direction ring attractor, sun compass, roll-invariant path integration, grid-cell readout |
+| `js/sim/memory.js` | 1024-dim FHRR maps with cross-spectral Wiener coherence + Gauss-Newton frequency refinement; 1024-slot modern Hopfield with closed-form mDAE + Empirical-Bayes precision cosine + InfoNCE |
 | `js/sim/metab.js` | metabolism, hormones, fluids, waste |
 | `js/sim/skin.js` | excitable-medium chromatophore sheet plus a Gray-Scott pattern layer tuned by hormones |
 | `js/sim/world.js` | terrain, plants, snacks, rocks, springs, water pools |
 | `js/render.js` | three.js view (reads the sim, never moves it) |
 | `js/honesty.js` | the real-vs-simplified lists shown on the page |
-| `js/tsotchke/taylor.js` | port of Eshkol's Taylor-mode AD recurrences (Tsotchke, MIT) |
-| `test/*.mjs` | Node probes (physics, steering, lesions) and a headless-Chromium check |
+| `js/tsotchke/taylor.js`, `qrng.js`, `qgtl.js`, `moonlab.js` | Tsotchke stack: Eshkol Taylor-mode AD jets, 8-qubit statevector Born-rule QRNG, QGTL Fubini-Study metric & Berry curvature, Moonlab Jacobi SVD & bipartite MPS entanglement |
+| `test/*.mjs` | Node probes (physics, steering, memory, brain scale, water, CMA-ES) and headless-Chromium checks |
 
 ## Tests
 

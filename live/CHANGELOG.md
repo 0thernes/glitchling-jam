@@ -534,3 +534,71 @@ the gaps pass 12 left open.
     The slowdown comes from the machine, not this pass.
   - Quiet-machine numbers are in pass 13: phone 17 fps, desktop 13 fps (software WebGL), 3.5–4 ms per brain step.
   - Screenshots: `live-shots/s14-*.png` (`s14-desktop-lab.png` shows the lineage panel after 6 generations: 54 genomes, 56 s under load).
+
+## Pass 15 — binocular retina + EKF-SLAM, cross-spectral/mDAE memory, 4 brain scales + Worker/WebGPU + homeostasis, full 78-gene motor+steering CMA-ES, online RTRL SSM + residual world model, 21-ch striatal race, metacognition & Tsotchke stack
+
+Addresses the remaining `SIMPLIFIED` limitations from passes 11–14 across memory, vision/navigation, brain scale/systems/homeostasis, developmental genetics, world-model architecture, decision unification, metacognition and the Tsotchke stack.
+
+- **Memory encoder learning (`js/sim/memory.js`):**
+  - **HDC maps (1024-dim FHRR):** replaced heuristic magnitude pruning with 2-fold split cross-spectral coherence + Wiener ARD shrinkage + per-feature Gauss-Newton spatial-frequency refinement in N3 sleep.
+  - **Modern Hopfield (1024 slots):** replaced the identity-initialised InfoNCE-only map with a closed-form Marginalised Denoising Autoencoder (`mDAE`) projection for 50%-masked noisy cues, Empirical-Bayes subspace precision cosine (`C^{-1/2}`) + InfoNCE fine-tuning and 2-step CA3/CA1 retrieval.
+- **Binocular 260° retina + 3D occlusion + hippocampal EKF-SLAM (`js/sim/vision.js`), posture & navigation (`js/sim/body.js`, `js/sim/creature.js`, `js/sim/nav.js`):**
+  - 32 ommatidia anchored on the physical 3D stalked eyes (steered by neural gaze channels) cast rays against rock spheres and terrain heightfield ridges, computing chromatic opponent R/G/B/shimmer channels, looming/optic flow and binocular stereo + vertical-subtense inverse-depth range.
+  - Landmark coordinates start unmapped with high variance (`σ² = 28 u²`) rather than given exactly, updating online via per-landmark Kalman filtering and visual loop-closure resets.
+  - Fixed two roll-coupling bugs found during testing: (1) a stale `rightSide` latch in the vestibular righting reflex that kept inverted bodies pushing with airborne legs after rocking across `sy = 0` (`creature.js`), and (2) projecting horizontal path-integration velocity onto the rolled 3D side vector `F3.s` instead of horizontal `(-sin h, cos h)`. Added directional ventral scute ratchet friction and cross-slope keel resistance in `body.js`, saturating biophysical MOT readout (`1.05·tanh(rate/36)`), and steady-state `1.2-s` neonatal babbling blocks (`turnGain0 = 1.37 rad/s`).
+- **Brain scale (`S`/`M`/`L`/`XL`), cache-compact CSR, Web Worker & WebGPU backends, 3-mechanism homeostasis, 2-compartment CTX & HIP place fields (`js/sim/brain.js`, `js/sim/brain_worker.js`, `js/sim/webgpu_brain.js`):**
+  - Rebuilt `Brain` around contiguous `Float32Array` states/weights, `Uint16Array` CSR adjacency (`O(N+S)` bucket sort), inlined `xorshift32`, sparse `spkList` and trace-gated STDP; added `XL` (`25,924` neurons / `1.10M` synapses).
+  - Added off-main-thread `WebWorker-CSR` (`?backend=worker`) and `WebGPU-WGSL` compute shader (`?backend=webgpu`) accelerators offloading the `THAL` + `CTX` + `HIP` sheets (`brain.delegated`).
+  - Added three biological homeostatic mechanisms independent of structural rewiring: region set-point bias, slow deadzone intrinsic rheobase plasticity (`vBias`) and BCM sliding metaplasticity + Turrigiano multiplicative synaptic scaling.
+  - Added 2-compartment apical/basal coincidence amplification on cortical excitatory pyramidal cells (`HIP`/`INS` → apical) and topographic hippocampal place fields (`drivePlaceCells`) projecting plastically to `STR` and `CTX`.
+- **Full 78-gene developmental genome & variance-reduced in-page lineage evolution (`js/sim/genome.js`, `js/sim/starter_genome.js`, `js/sim/fitness.js`, `js/lineage.js`, `js/sim/lineage_worker.js`):**
+  - Expanded the genome to 78 bounded developmental genes (`58` motor/synergy + `20` steering), growing pitch/rear, curl, jump, reach, grip, gaze and all `sense → MOT` weights with zero hand-wired synergy loops.
+  - Evolved offline in two multi-body CMA-ES stages across 6 rough-ground bodies (`1,2,3,9,10,11`): Stage 1 (16 gens × 16 motor genomes) and Stage 2 (12 gens × 12 closed-loop navigation steering genomes).
+  - Upgraded in-page lineage evolution to optimise all 78 genes using mirrored (antithetic) sampling + paired 2-body Common-Random-Number (CRN) rough-ground + closed-loop steering trials, with a persistent undo stack (`Previous genome`).
+- **Online RTRL selective SSM, deep residual world model, unified 21-channel striatal race, metacognition, thought curvature & full Tsotchke stack (`js/sim/mind.js`, `js/sim/metacog.js`, `js/tsotchke/{qrng,qgtl,moonlab}.js`):**
+  - `SelectiveSSM` learns `B`, `Wd`, `bd` and `omega` online via RMS-normalised diagonal RTRL + elastic basis anchor; `WorldModel` is now a 2-hidden-layer (`72 → 48 → 48 → 25`) `SiLU` residual MLP with learned heteroscedastic `predVar`.
+  - Expanded `STR` to 42 MSNs (`21` D1 + `21` D2) unifying 16 plant sites, 3 water pools, dropped food and continuous FHRR-HDC epistemic exploration in one expected-free-energy spike race (retiring innate snack orienting and the discrete `24×24` novelty grid).
+  - Added `Metacognition`: online Oja 8-D neural manifold + order-3 Eshkol Taylor-jet Frenet-Serret curvature $\kappa(t)$ and torsion $\tau(t)$, 2nd-order uncertainty calibration, counterfactual regret, innate (`W0`) vs learned (`ΔW`) weight-space telemetry, diagonal Fisher/EWC motor consolidation, Moonlab Jacobi SVD sleep denoising + bipartite MPS entanglement entropy, QGTL Fubini-Study metric trace + Berry curvature, and an 8-qubit statevector Born-rule QRNG.
+
+Measured (Node & headless Chromium, idle machine):
+
+- **Memory (`test/memory2_probe.mjs`):**
+  - **(a) HDC held-out spatial regression (seeds 1–8):**
+    - Well-tuned prior (`0.35`): `superpose-512` `0.894` → `delta-fixed-1024` `0.957` → **`delta-learned-1024` `0.964` (`+0.007`)**.
+    - Mis-tuned prior (`0.80`): `superpose-512` `0.816` → `delta-fixed-1024` `0.928` → **`delta-learned-1024` `0.964` (`+0.036`)**.
+  - **(b) Hopfield 600-s runs (`50%`-masked + noisy cues, `early / late / held-out` cosine):**
+    - Brain `M` seed 2: `pass-3 (256)` `0.74 / 0.81 / 0.64` → `1024 raw keys` `0.79 / 0.82 / 0.65` → **`1024 + mDAE/EB learned keys` `0.80 / 0.85 / 0.67`**.
+    - Brain `S` seeds 2/3/5: `1024 raw keys` `0.77/0.77/0.73` early, `0.85/0.81/0.81` late, `0.69/0.66/0.65` held-out → **`1024 + learned keys` `0.77/0.75/0.76` early, `0.86/0.82/0.83` late, `0.71/0.67/0.67` held-out**.
+- **Two-stage multi-body CMA-ES on held-out bodies:**
+  - **Stage 1 motor genome** (`EVAL_ROUGH=1`, held-out bodies `4,5,6,7,8,12`): `fwd` `0.665 u/s` (pass 14: `0.43`), `turn` `2.20 / 1.74 rad/s`, `upright` `0.918`, `zig-zag` `0.362 u/s` (`upZ 0.942`), **rough fitness `5.550`** (pass 14: `5.05`).
+  - **Stage 2 steering genome** (`test/evolve_steer.mjs`, held-out bodies `4,5,6,7,8,12,13,14`, 16 near+far closed-loop trials):
+    - `HAND_STEER`: fitness `1.824`, arrived `15/16`, upright `0.894`, on back `2.55%`.
+    - **`EVO BEST` (shipped `STEER`)**: **fitness `1.939` (`+0.115`)**, **arrived `15/16`**, **upright `0.920`**, **on back `0.49%`** (5× fewer inverted steps).
+- **Navigation, foraging & thirst across brain scales:**
+
+  | test | pass 14 (M) | pass 15 (S) | **pass 15 (M, default)** | pass 15 (L) | pass 15 (M, pathway lesioned) |
+  |---|---|---|---|---|---|
+  | `nav_probe` 60 s, seeds 1–8: near (4–8 u) | 7/8 (14.4 s) | 7/7 (9.7 s) | **8/8 (9.4 s)** | 8/8 (8.5 s) | `nav` off: 6/8 (11.4 s) |
+  | `nav_probe` 60 s, seeds 1–8: far (14+ u) | 3/8 (38.6 s) | 8/8 (33.0 s) | **8/8 (33.9 s)** | 6/8 (29.2 s) | `nav` off: 3/8 (49.4 s) |
+  | `nav_probe` mean upright (on its back) | 0.75 (5–8%) | 0.85 (5%) | **0.86 (4%)** | 0.84 (4%) | `nav` off: 0.91 |
+  | `forage_bench` 240 s, seeds 1–8: fed / arrivals / give-ups | 12 / 20 / — | 43 / 74 / 1 | **56 / 85 / 1** | 36 / 70 / 5 | — |
+  | `water_probe` 300 s, seeds 1–4: bodies that drank | 1/4 | — | **4/4** (`5.7–8.8` drunk) | — | `thirst` off: **0/4** |
+
+- **Brain scale, step cost & structural-rewiring lesion (`test/brain_probe.mjs`):**
+
+  | brain | neurons / synapses | single-thread CPU ms/step | Web Worker main-thread ms/step | CTX / HIP / THAL Hz | pruned+regrown |
+  |---|---|---|---|---|---|
+  | S (120 s) | 436 / 2,236 | 2.22 | — | 6.3 / 7.0 / 7.9 | — |
+  | **M (300 s, default)** | **3,268 / 123,162** | **3.52** | **2.66** | **7.3 / 8.0 / 4.4** | **5,117** |
+  | **M (300 s, `struct` lesioned)** | **same** | **3.49** | — | **10.7 / 10.1 / 8.6 (stays active!)** | **0** |
+  | L (120 s) | 11,972 / 495,515 | 12.56 | **2.98** | 6.8 / 6.8 / 7.1 | 7,536 |
+  | XL (30 s) | 25,924 / 1,102,524 | 35.7 | — | 9.7 / 9.1 / 9.3 | — |
+
+- **World model, RTRL SSM, reflexes & Tsotchke telemetry:**
+  - Matched-trajectory 240-s world-model MSE (seeds 1–4): `linearWM` `0.0356` → `deepWM-fixedSSM` `0.0353` → **`deepWM+RTRL-SSM` `0.0352`** (closed-loop `measure` 90-s `wmMSE`: `0.042`).
+  - `measure` 90 s (seeds 1–3, brain M): intact `dist 63.8, fed 2.33, entropy 4.19, entropy2 5.82, states 40.3, upright 0.82`; `mn` lesioned `dist 6.23, fed 0, entropy 0.22, states 1.67`.
+  - `righting_probe`: **10/10 righted, median 2.1 s** (`mn` lesioned: **0/10**). `babble_probe`: mean gain `1.41 rad/s`, CV `0.16`. `symmetry_probe`: `−0.08 / −0.02 / −0.04 rad/s`. Cephalic insulin (`water_probe b`): peak blood glucose `3.28 / 3.42 / 2.05` ON vs `3.79 / 3.88 / 2.90` OFF (~17% lower).
+  - Tsotchke & manifold telemetry: Frenet-Serret $\kappa \approx 1.92$, $|\tau| \approx 6.65$; QGTL Fubini-Study trace `0.22–0.26`, Berry curvature `±1.5e-3`; Moonlab MPS entanglement entropy `0.59–0.89`; 8-qubit QRNG normalised entropy `0.91–0.93`.
+- **Headless Chromium (`browser_check.mjs`, `lineage_check.mjs`):**
+  - Zero console or page errors on phone (`390×844`: `45.2 fps`, `stepMs 2.82 ms`, motion intact `7.44` vs `mn` lesioned `0.97`), desktop (`1280×800` SwiftShader: `20.7 fps`, `stepMs 2.37 ms`, motion intact `8.02` vs `mn` lesioned `1.10`), and Web Worker mode (`?backend=worker` on M and L).
+  - `lineage_check.mjs`: 6 generations (55 2-body CRN genome evaluations) completed with zero errors, non-decreasing CRN fitness (`6.44`, turn `1.94 rad/s`, fwd `0.59 u/s`, upright `0.95`), clean adoption and `Previous genome` undo stack restoration.

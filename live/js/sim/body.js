@@ -91,7 +91,7 @@ export class Body {
       let dx = X[i] - OX[i], dy = Y[i] - OY[i], dz = Z[i] - OZ[i]; const dn = dx * nx + dy * ny + dz * nz; dx -= dn * nx; dy -= dn * ny; dz -= dn * nz;
       const k = this.kind[i]; let mu;
       if (k === 'foot' || k === 'hand') { const L = this.limbs.find((l) => l.foot === i); const gp = clamp(0.5 + 0.5 * u[L.grip]); this.gripP[i] = gp; mu = 0.15 + 0.83 * gp; if (hit === 2 && gp > 0.6) this.grabbing++; }
-      else { const seg = this.segOf(i); const f = F[seg].f; const along = dx * f[0] + dy * f[1] + dz * f[2]; const mAlong = along > 0 ? 0.08 : 0.55, mLat = (this.mLat ?? 0.6) * (1 - (this.scaleLift ?? 0) * Math.max(0, u[CH.radial + seg])); /* ventral scale erection: radial-muscle contraction lowers lateral grip (pass 9) */
+      else { const seg = this.segOf(i); const f = F[seg].f; const along = dx * f[0] + dy * f[1] + dz * f[2]; const mAlong = along > 0 ? 0.05 : 0.86, mLat = Math.max(0.28, (this.mLat ?? 0.65) * (1 - (this.scaleLift ?? 0) * Math.max(0, u[CH.radial + seg]))); /* directional ventral scute ratchet + minimum lateral keel on cross-slopes (pass 9, 15) */
         const ax = along * f[0], ay = along * f[1], az = along * f[2];
         if (this.coulomb) { /* Coulomb contact (pass 12): friction can remove at most mu * (normal correction) of tangential motion, per direction (position-based friction, Macklin et al. 2014). Load-bearing particles grip; barely touching ones slide. */ const C = this.coulomb, lx = dx - ax, ly = dy - ay, lz = dz - az, la = Math.abs(along), ll = Math.hypot(lx, ly, lz);
           const fa = la > 1e-12 ? Math.min(1, (along > 0 ? C.fwd : C.back) * pen / la) : 0, fl = ll > 1e-12 ? Math.min(1, C.lat * (1 - (this.scaleLift ?? 0) * Math.max(0, u[CH.radial + seg])) * pen / ll) : 0;

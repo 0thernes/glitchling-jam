@@ -1,14 +1,35 @@
-// Shipped starter genome.
-// Motor part: evolved by test/evolve_genome.mjs (CMA-ES, lambda 16, start = centre of the gene bounds, sigma 0.3) in two runs on training bodies 1-3: run 1, 43 generations
-// (688 genomes) from the centre of the gene bounds, whose fitness counted displacement in any direction (a bug: it favoured
-// sideways gaits); run 2, 30 generations (496 genomes) warm-started from run 1's mean with travel measured along the body's
-// heading and sideways travel penalised (run 2's best-ever genome, generation 4, shipped in pass 12). Pass 14: run 3, 24 generations x 16 on
-// bodies 1-2 with brain M, warm-started from that genome (sigma 0.1), 'rough' fitness (rocks and springs kept, plus a zigzag trial whose
-// turn command switches side every 1.5 s, extra weight on staying upright). This is run 3's final CMA-ES mean (more robust on held-out
-// bodies 4-9 than its single best-ever sample). Fitness and held-out results: CHANGELOG pass 12 and pass 14.
-// Steering part (sense -> MOT): see STEER below.
-import { HAND_STEER } from './genome.js';
-export const MOTOR = {"segAg0": 2.4569, "segAg1": 1.0739, "segAnt0": 0, "segAnt1": -1.0881, "segTop": 1.07, "segRad": -0.562, "wvAsc": 0, "wvDesc": 1.4548, "sF": 2.8955, "sB": -1.488, "gF": 2.3483, "gB": -1.0579, "eF": 1.615, "eB": -0.7697, "eB2": -0.5388, "cS": 1.4034, "cO": -0.908, "rS": 2.3852, "rO": -1.3256, "tauA": 0.7211, "cf": 2.1274, "aS": 2.0054, "aR1": -0.0652, "aR2": 1.5306, "aG": -0.8877, "cturn": 1.8161, "legTurn": -1.7789, "t0": 1.8711, "t1": 1.187, "tAnt": -0.3327, "tRad0": 0.8461, "tRad1": 2.3932, "tGripIn": 0.1391, "tGripOut": -1.4816, "tSwIn": 1.9291, "tSwOut": 0.0271, "tExIn": -0.4595, "tExOut": -1.4501, "tArmIn": 1.8777, "tArmOut": -1.4241, "lift": 0.6862, "rLeg": 1.4872, "rArm": 2.1711, "rVent": 1.9805};
-export const STEER = { ...HAND_STEER };
+// Shipped full 78-gene developmental starter genome (58 motor/CPG/turning/righting/synergy/gaze + 20 sense->MOT steering/obstacle/posture).
+// Found by two-stage multi-body rough-ground CMA-ES across 6 training bodies (seeds 1,2,3,9,10,11) and verified on held-out bodies:
+//   - Stage 1 (evolve_genome.mjs, 16 gens x 16 = 256 multi-body genomes on rough terrain with rocks, springs & zig-zag trials):
+//     held-out rough fitness (seeds 4,5,6,7,8,12) rose from 5.05 (pass 14) / 5.30 to 5.55 (v = 0.67 u/s, up = 0.92, upZ = 0.94).
+//   - Stage 2 (evolve_steer.mjs, 12 gens x 12 = 144 multi-body closed-loop near+far navigation genomes on seeds 1,2,3,9,10,11):
+//     reached 12/12 training goals and beat HAND_STEER on held-out bodies 4,5,6,7,8,12,13,14 (fit 1.939 vs 1.824, 15/16 arrived
+//     in 45 s, upright 0.920 vs 0.894, inverted steps 0.49% vs 2.55%).
+export const MOTOR = {
+  segAg0: 1.632, segAg1: 0.6459, segAnt0: 0.0789, segAnt1: -1.2376, segTop: 1.2319, segRad: -0.5279, wvAsc: 0, wvDesc: 1.3519,
+  sF: 3.0408, sB: -1.4223, gF: 2.1798, gB: -1.0966, eF: 1.1843, eB: -1.1578, eB2: -0.1029,
+  cS: 1.4571, cO: -1.1298, rS: 2.1257, rO: -1.0935, tauA: 0.705, cf: 2.1508,
+  aS: 1.7425, aR1: -0.0302, aR2: 1.9338, aG: -0.6166,
+  cturn: 1.527, legTurn: -1.296, t0: 1.436, t1: 1.0485, tAnt: -0.271, tRad0: 0.6069, tRad1: 2.0418,
+  tGripIn: -0.5406, tGripOut: -1.4304, tSwIn: 2, tSwOut: -0.3847, tExIn: -0.2895, tExOut: -1.9549, tArmIn: 2, tArmOut: -1.3165,
+  lift: 0.6357, rLeg: 1.8867, rArm: 2.3533, rVent: 1.6432, rRollDamp: 1.0283,
+  synPitchLong: 1.1475, synPitchArm: 1.1061, synReachSw: 1.285, synReachEx: 1.1161, synGripArm: 1.6457, synGripLeg: 1.4112,
+  synJumpLeg: 2.3256, synJumpRad: 0.9427, synCurlVent: 1.2676, synCurlRad: 0.4145, synStalkTurn: 0.9238, synGazeYaw: 1.6312, synGazePitch: 1.2553,
+};
+
+export const STEER = {
+  kBear: 2.0993, kSlow: 0.1138, kFwd: 2.5975, kStuckF: -0.4949,
+  kObstP: 0.0935, kRockP: 0.0252, kNearR: 1.6822, kRockG: 1.4278, kObstG: 0.627,
+  kStuckJ: 0.2796, kSpringJ: 0.5344, kNociC: 1.6271, kUpsC: 0, kDream: 0.6162,
+  kBias: 0.5279, kBiasPost: 0.0134, kNearF: 0.0535, kCourse: 0,
+  kObstTurn: 1.2079, kObstSlow: -0.1069,
+};
+
 export const STARTER = { ...MOTOR, ...STEER };
-export const STARTER_INFO = { source: 'motor: evolved (CMA-ES, runs of 43 + 30 + 24 generations); steer: hand-set', turnGain0: 1.36 };
+export const STARTER_INFO = {
+  source: 'two-stage multi-body CMA-ES (58 motor/synergy + 20 steering genes, 6 rough-ground training bodies 1,2,3,9,10,11)',
+  trainSeeds: [1, 2, 3, 9, 10, 11],
+  motorGens: 16,
+  steerGens: 12,
+  turnGain0: 1.37,
+};

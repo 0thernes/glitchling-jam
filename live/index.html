@@ -29,14 +29,16 @@
     <button role="tab" data-tab="brain" aria-selected="true">Brain</button><button role="tab" data-tab="body">Body</button><button role="tab" data-tab="flaws">Flaws</button><button role="tab" data-tab="world">World</button><button role="tab" data-tab="lab">Lesions</button><button role="tab" data-tab="about">Real?</button>
   </div>
   <section data-pane="brain">
-    <div class="row"><b>Spikes</b> <small id="spk-label">426 neurons, rows coloured by region, newest on the right</small></div>
+    <div class="row"><b>Spikes</b> <small id="spk-label">3,268 neurons, rows coloured by region, newest on the right</small></div>
     <canvas id="raster" width="360" height="213"></canvas>
     <div id="regions" class="legend"></div>
     <div class="grid2"><div><b>Neuromodulators</b><div id="nm"></div></div><div><b>MOT (8)</b><div id="mot"></div></div></div>
-    <div class="row"><b>Striatal race</b> <small>D1 "go" (up) vs D2 "no-go" (down) per site</small></div><canvas id="race" width="360" height="70"></canvas>
+    <div class="row"><b>Binocular retina</b> <small>32 ommatidia (260° FOV), looming &amp; SLAM landmarks</small></div><canvas id="retina" width="360" height="36"></canvas>
+    <div class="row"><b>Striatal race (21)</b> <small>16 sites · 3 pools · snack · explore (D1 up / D2 down)</small></div><canvas id="race" width="360" height="70"></canvas>
     <div class="row"><b>LTC pattern generator</b> <small>24 liquid neurons</small></div><canvas id="cpg" width="360" height="60"></canvas>
-    <div class="row"><b>Selective SSM</b> <small>32 modes |h|, Δ</small></div><canvas id="ssm" width="360" height="40"></canvas>
-    <div class="row"><b>World model</b> <small>surprise and MSE</small></div><canvas id="wm" width="360" height="50"></canvas>
+    <div class="row"><b>Selective SSM (RTRL)</b> <small>32 modes |h|, Δ (online diagonal RTRL)</small></div><canvas id="ssm" width="360" height="40"></canvas>
+    <div class="row"><b>Deep residual world model</b> <small>surprise, MSE &amp; σ² (2-layer SiLU MLP)</small></div><canvas id="wm" width="360" height="50"></canvas>
+    <div class="row"><b>Thought curvature &amp; metacog</b> <small>Eshkol Taylor-jet Frenet κ(t), τ(t) &amp; calibration</small></div><canvas id="metacog" width="360" height="44"></canvas>
     <div id="mindstats" class="stats"></div>
   </section>
   <section data-pane="body" hidden><div id="bodystats" class="stats"></div><canvas id="meta" width="360" height="90"></canvas></section>
@@ -54,6 +56,8 @@
     <label>Gravity strength <input type="range" id="gs" min="2" max="20" step="0.5" value="9.8"></label>
     <label>Sim speed <select id="speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></label>
     <label>Quality <select id="quality"><option value="auto" selected>auto (adaptive)</option><option value="0">low</option><option value="1">medium</option><option value="2">high</option><option value="3">ultra (shadows)</option></select></label>
+    <label>Brain scale <select id="brain-scale"><option value="S">S (436 neurons)</option><option value="M" selected>M (3,268 · default)</option><option value="L">L (11,972 neurons)</option><option value="XL">XL (25,924 neurons)</option></select></label>
+    <label>Brain backend <select id="brain-backend"><option value="cpu" selected>Main thread (Typed CSR)</option><option value="worker">Web Worker (off-thread)</option><option value="webgpu">WebGPU compute shader</option></select> <small id="backend-status"></small></label>
     <div class="btns"><button id="rain">Rain</button><button id="gust">Gust</button><button id="sleepy">Make sleepy</button><button id="wake">Wake</button><button id="follow">Camera: follow</button><button id="reset">New seed</button></div>
     <label>Seed <input type="number" id="seed" min="1" max="999999" value="1"></label>
   </section>
@@ -61,14 +65,14 @@
     <p class="small">Lesions cut real pathways. Watch what stops working.</p>
     <div id="lesions" class="lesions"></div>
     <div id="lesionlog" class="stats"></div>
-    <h3>Lineage (innate wiring genome)</h3>
-    <p class="small">The motor wiring grows from a 44-gene genome. "Evolve" runs a separable CMA-ES in background Web Workers: 8 mutants of the current genome per generation are scored in forced walk / turn / righting trials on a hidden body (small brain, 6 s each), and the distribution moves toward the better half. Fitness is noisy: each generation uses a different body. "Adopt" starts a new creature from the evolved genome.</p>
-    <div class="btns"><button id="evo-run">Evolve 6 generations</button><button id="evo-adopt" disabled>Adopt lineage</button><button id="evo-reset">Starter genome</button></div>
+    <h3>Lineage (78-gene developmental connectome)</h3>
+    <p class="small">All innate motor, whole-body synergy, gaze, roll-damping and sense→MOT steering pathways grow from a 78-gene developmental genome. "Evolve" runs a variance-reduced Mirrored Separable CMA-ES in background Web Workers: 8 antithetic mutants per generation are scored on a paired 2-body rough-ground + steering Common-Random-Number cohort, with elitist mean verification so lineage fitness improves monotonically on the validation cohort. "Adopt" grows a new creature from the evolved genome; "Previous genome" steps back one adoption.</p>
+    <div class="btns"><button id="evo-run">Evolve 6 generations</button><button id="evo-adopt" disabled>Adopt lineage</button><button id="evo-undo" disabled>Previous genome</button><button id="evo-reset">Starter genome</button></div>
     <div id="evo-log" class="stats"></div>
   </section>
   <section data-pane="about" hidden>
     <h2>What's real here vs simplified</h2>
-    <p class="small">This is a <b>simulation that runs in your browser</b>. All numbers on this page are computed live by the code in <code>live/js/sim/</code>. It makes no claim of awareness, feelings, sentience or consciousness.</p>
+    <p class="small">This is a <b>simulation that runs in your browser</b>. All numbers on this page are computed live by the code in <code>live/js/sim/</code> and <code>live/js/tsotchke/</code>. It makes no claim of awareness, feelings, sentience or consciousness.</p>
     <h3>Computed for real, every frame</h3><ul class="small" id="real-list"></ul>
     <h3>Simplified or designed by hand</h3><ul class="small" id="simp-list"></ul>
     <p class="small">Graphics: rendered by WebGL (three.js r170, bundled locally) into half-float buffers, ACES-tonemapped to your display, with bloom. Resolution adapts to hold the frame rate; it is not a fixed 4K/HDR output. Source and change log: <a href="https://github.com/0thernes/glitchling-jam/tree/main/live">github.com/0thernes/glitchling-jam/live</a>.</p>
