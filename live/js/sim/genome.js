@@ -68,7 +68,119 @@ export const MORPH_GENES = [
   ['neuroCtxPlastic', 0.70, 1.40],// cortical & motor STDP / 3-factor plasticity multiplier (1.0 = starter)
 ];
 
-export const FULL_GENES = [...GENES, ...STEER_GENES, ...MORPH_GENES];
+/**
+ * Pass 18 Embryonic Hox + Morphogen Reaction-Diffusion Gene-Regulatory Network (GRN) Genome (16 genes -> FULL_GENES = 108):
+ * Integrates a 4-morphogen (Anterior Wnt-antagonist, Thoracic Shh/Dll appendage field, Abdominal Fgf8, Dorsal Bmp4)
+ * embryonic reaction-diffusion cascade across segments 0..6, expressing topological limb-pair count (2 = 4-limb quadruped,
+ * 3 = 6-limb hexapod, 4 = 8-limb octopod), axial girth/stiffness profiles, dorsal osteoderm armor, gill/antenna barbules,
+ * and Huxley actin-myosin cross-bridge maximum shortening velocity (sarcomereVmax).
+ */
+export const HOX_GENES = [
+  ['hoxAnt', 0.25, 1.35],         // anterior HoxA / labial cranial-cervical identity (0.80 = starter)
+  ['hoxThor', 0.25, 1.35],        // thoracic HoxB / Antennapedia appendage-field identity (0.85 = starter)
+  ['hoxAbd', 0.25, 1.35],         // abdominal HoxC / Ultrabithorax trunk identity (0.75 = starter)
+  ['hoxCaud', 0.25, 1.35],        // caudal HoxD / Abdominal-B tail identity (0.70 = starter)
+  ['grnAA', -0.55, 0.55],         // GRN anterior auto-regulation weight (0.0 = starter)
+  ['grnAB', -0.55, 0.55],         // GRN anterior -> thoracic cross-regulation (0.0 = starter)
+  ['grnBA', -0.55, 0.55],         // GRN abdominal -> thoracic Ultrabithorax repression (0.0 = starter)
+  ['grnBB', -0.55, 0.55],         // GRN thoracic bistable self-activation (0.0 = starter)
+  ['grnShh', 0.45, 1.55],         // Sonic hedgehog (Shh) ventral/limb-bud outgrowth gain (1.0 = starter)
+  ['grnFgf', 0.45, 1.55],         // FGF8 posterior elongation & somite wave gain (1.0 = starter)
+  ['grnBmp', 0.45, 1.55],         // BMP4 dorsal crest & osteoderm mineralization gain (1.0 = starter)
+  ['grnWnt', 0.45, 1.55],         // Canonical Wnt rostro-caudal organizer slope (1.0 = starter)
+  ['limbTopo', 0.0, 1.0],         // topological limb-bud selector (<0.24 => 4-limb, 0.24..0.76 => 6-limb, >0.76 => 8-limb; 0.50 = starter)
+  ['osteoderm', 0.05, 1.25],      // dorsal osteoderm scute armor relief & dermal toughness (0.45 = starter)
+  ['gillFronds', 0.15, 1.45],     // cephalic chemotactic antenna / gill-barbule span (0.68 = starter)
+  ['sarcomereVmax', 0.65, 1.45],  // Huxley sarcomere actin-myosin max shortening velocity Vmax (1.0 = starter)
+];
+
+export const FULL_GENES = [...GENES, ...STEER_GENES, ...MORPH_GENES, ...HOX_GENES];
+
+function runHoxCascade(g) {
+  const NS = 7;
+  const hAnt = g.hoxAnt ?? 0.80, hThor = g.hoxThor ?? 0.85, hAbd = g.hoxAbd ?? 0.75, hCaud = g.hoxCaud ?? 0.70;
+  const wAA = g.grnAA ?? 0.0, wAB = g.grnAB ?? 0.0, wBA = g.grnBA ?? 0.0, wBB = g.grnBB ?? 0.0;
+  const shh = g.grnShh ?? 1.0, fgf = g.grnFgf ?? 1.0, bmp = g.grnBmp ?? 1.0, wnt = g.grnWnt ?? 1.0;
+
+  const A = new Float64Array(NS), T = new Float64Array(NS), B = new Float64Array(NS), D = new Float64Array(NS);
+  const nA = new Float64Array(NS), nT = new Float64Array(NS), nB = new Float64Array(NS), nD = new Float64Array(NS);
+
+  // Maternal rostro-caudal morphogen boundary conditions (s = 0 tail .. s = 6 head)
+  for (let s = 0; s < NS; s++) {
+    const u = s / (NS - 1); // 0 = caudal, 1 = rostral
+    A[s] = hAnt * Math.exp(-((1 - u) ** 2) / 0.18) * wnt;
+    T[s] = hThor * Math.exp(-((u - 0.52) ** 2) / 0.16) * shh;
+    B[s] = hAbd * Math.exp(-((u - 0.26) ** 2) / 0.16) * fgf + 0.35 * hCaud * (1 - u);
+    D[s] = 0.55 * bmp * (0.6 + 0.4 * Math.sin(Math.PI * u));
+  }
+
+  const tanh = Math.tanh;
+  const diff = 0.16, dt = 0.28;
+  for (let step = 0; step < 6; step++) {
+    for (let s = 0; s < NS; s++) {
+      const sL = s > 0 ? s - 1 : s, sR = s + 1 < NS ? s + 1 : s;
+      const lapA = A[sL] + A[sR] - 2 * A[s];
+      const lapT = T[sL] + T[sR] - 2 * T[s];
+      const lapB = B[sL] + B[sR] - 2 * B[s];
+      const lapD = D[sL] + D[sR] - 2 * D[s];
+
+      const rA = tanh(0.9 * A[s] + wAA * A[s] - 0.35 * B[s]) - 0.75 * A[s];
+      const rT = tanh((0.85 + wBB) * T[s] + wAB * A[s] - (0.30 - wBA) * B[s] + 0.18 * shh) - 0.72 * T[s];
+      const rB = tanh(0.88 * B[s] - 0.30 * A[s] + 0.15 * fgf) - 0.74 * B[s];
+      const rD = tanh(0.75 * D[s] + 0.25 * bmp * (T[s] + 0.5 * A[s])) - 0.70 * D[s];
+
+      nA[s] = Math.max(0.02, A[s] + dt * (diff * lapA + rA));
+      nT[s] = Math.max(0.02, T[s] + dt * (diff * lapT + rT));
+      nB[s] = Math.max(0.02, B[s] + dt * (diff * lapB + rB));
+      nD[s] = Math.max(0.02, D[s] + dt * (diff * lapD + rD));
+    }
+    A.set(nA); T.set(nT); B.set(nB); D.set(nD);
+  }
+  return { A, T, B, D };
+}
+
+const REF_HOX = runHoxCascade({});
+
+/**
+ * Evaluate the 16-gene Embryonic Hox + Morphogen GRN to express adult body-plan topology & segmental tissue properties.
+ * Normalized relative to REF_HOX so STARTER keeps exact calibrated 1.0 baseline gains while mutations sculpt topology & form.
+ */
+export function evalHoxGRN(g = {}) {
+  const { A, T, B, D } = runHoxCascade(g);
+  const segGirthMod = new Float64Array(7);
+  const segStiffMod = new Float64Array(7);
+  const osteodermProfile = new Float64Array(7);
+  const cpgPhaseBias = new Float64Array(5);
+  const osteoBase = Math.min(1.5, Math.max(0, g.osteoderm ?? 0.45));
+
+  for (let s = 0; s < 7; s++) {
+    const dT = T[s] - REF_HOX.T[s], dB = B[s] - REF_HOX.B[s], dA = A[s] - REF_HOX.A[s], dD = D[s] - REF_HOX.D[s];
+    segGirthMod[s] = Math.min(1.24, Math.max(0.80, 1.0 + 0.24 * dT + 0.18 * dB - 0.10 * dA));
+    segStiffMod[s] = Math.min(1.32, Math.max(0.75, 1.0 + 0.28 * dD + 0.15 * dT));
+    osteodermProfile[s] = Math.min(1.6, Math.max(0.02, osteoBase * (0.65 + 0.55 * (D[s] / (REF_HOX.D[s] || 1)))));
+  }
+  for (let s = 0; s < 5; s++) {
+    const grad = (B[s + 1] - B[s]) - (REF_HOX.B[s + 1] - REF_HOX.B[s]);
+    cpgPhaseBias[s] = Math.min(0.28, Math.max(-0.28, 0.45 * grad));
+  }
+
+  // Thoracic Dll/Shh limb-bud score combines explicit limbTopo selector with integrated embryonic thoracic morphogen delta
+  const thorDelta = ((T[2] + T[3]) - (REF_HOX.T[2] + REF_HOX.T[3])) * 0.32;
+  const topoScore = (g.limbTopo ?? 0.50) + thorDelta;
+  const limbPairs = topoScore < 0.24 ? 2 : topoScore > 0.76 ? 4 : 3;
+
+  return {
+    limbPairs, // 2 = 4-limb quadruped, 3 = 6-limb hexapod, 4 = 8-limb octopod
+    topoScore,
+    segGirthMod,
+    segStiffMod,
+    osteodermProfile,
+    cpgPhaseBias,
+    osteoderm: osteoBase,
+    gillFronds: Math.min(1.6, Math.max(0.1, g.gillFronds ?? 0.68)),
+    sarcomereVmax: Math.min(1.6, Math.max(0.55, g.sarcomereVmax ?? 1.0)),
+  };
+}
 
 /** Legacy pass-1..14 hand values kept solely as an ablation comparison point */
 export const HAND_STEER = {

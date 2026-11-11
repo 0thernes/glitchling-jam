@@ -1,10 +1,11 @@
-// Moonlab Tensor-Network, Vidal Canonical MPS & One-Sided Jacobi SVD — upgraded in pass 16 from
+// Moonlab Tensor-Network, Vidal Canonical MPS, 4-Layer Binary MERA & One-Sided Jacobi SVD — upgraded in pass 18 from
 // tsotchke/moonlab (src/algorithms/tensor_network/tensor.c, MIT, © Tsotchke).
 // Provides:
 //  1) Deterministic Hestenes one-sided Jacobi SVD (exact orthogonal Givens sweeps, zero RNG).
 //  2) Spectral entanglement consolidation `spectralConsolidate` for motor/world-model synaptic matrices.
 //  3) Full Vidal Canonical Matrix Product State (`vidalMPS`, explicit site tensors Gamma^[s] and Schmidt singular-value
-//     vectors Lambda^[s] up to bond dimension chi = 8) + exact statevector contraction `mpsContract` + bond-chi denoising!
+//     vectors Lambda^[s] up to bond dimension chi = 24 over L = 8 / 256-D cognitive registers) + exact `mpsContract`!
+//  4) 4-Layer (8 -> 4 -> 2 -> 1) Binary Multi-scale Entanglement Renormalization Ansatz (`meraRenormalize`).
 
 export function jacobiSVD(data, rows, cols, maxSweeps = 35) {
   if (rows < cols) {
@@ -113,7 +114,7 @@ export function spectralConsolidate(W, W0, rows, cols, chi, blend = 0.5) {
  * Construct an explicit Vidal Canonical Matrix Product State (Gamma^[0..L-1], Lambda^[0..L-2]) of a 2^L vector:
  *   psi_{i_0 ... i_{L-1}} = norm * sum_{a_0..a_{L-2}} Gamma^[0]_{0, i_0, a_0} Lambda^[0]_{a_0} Gamma^[1]_{a_0, i_1, a_1} ... Gamma^[L-1]_{a_{L-2}, i_{L-1}, 0}
  */
-export function vidalMPS(vec, L = 6, chiMax = 8) {
+export function vidalMPS(vec, L = Math.min(8, Math.max(2, Math.round(Math.log2(vec.length || 64)))), chiMax = 24) {
   const N = 1 << L;
   let psi = new Float64Array(N);
   let n2 = 0;
@@ -227,8 +228,8 @@ export function mpsContract(mps) {
   return cur;
 }
 
-/** Sequential Vidal MPS entanglement analysis (upgraded to chiMax = 16 in pass 17) */
-export function mpsEntanglement(vec, L = 6, chiMax = 16) {
+/** Sequential Vidal MPS entanglement analysis (upgraded to chiMax = 24 in pass 18) */
+export function mpsEntanglement(vec, L = Math.min(8, Math.max(2, Math.round(Math.log2(vec.length || 64)))), chiMax = 24) {
   const mps = vidalMPS(vec, L, chiMax);
   return { meanS: mps.meanS, maxS: mps.maxS, keptFidelity: mps.keptFidelity, maxBond: mps.maxBond };
 }

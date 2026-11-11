@@ -134,12 +134,12 @@ export function naturalGradient(g, rhs, P, ridge = 1e-2) {
  * plus neuronal bias norm and QGTL distribution fidelity between innate and current weight magnitudes.
  */
 export function weightSpaceDecomp(W, W0, bias = null, mask = null) {
-  const n = W.length;
-  const st = n > 250000 ? 8 : 1;
+  const n = W ? W.length : 0;
+  const st = n > 250000 ? Math.max(8, (n / 65536) | 0) : 1;
   let n0 = 0, ndw = 0, nw = 0, dot = 0, b2 = 0, fSum = 0, sa = 0, sb = 0;
   for (let i = 0; i < n; i += st) {
     if (mask && !mask[i]) continue;
-    const w = W[i], w0 = W0[i], dw = w - w0;
+    const w = W[i], w0 = W0 ? W0[i] : w, dw = w - w0;
     n0 += w0 * w0;
     ndw += dw * dw;
     nw += w * w;
@@ -150,7 +150,7 @@ export function weightSpaceDecomp(W, W0, bias = null, mask = null) {
     fSum += Math.sqrt(aw * aw0);
   }
   n0 *= st; ndw *= st; nw *= st; dot *= st; sa *= st; sb *= st; fSum *= st;
-  const bSt = bias && bias.length > 16384 ? 4 : 1;
+  const bSt = bias && bias.length > 16384 ? Math.max(4, (bias.length / 4096) | 0) : 1;
   if (bias) {
     for (let i = 0; i < bias.length; i += bSt) b2 += bias[i] * bias[i];
     b2 *= bSt;

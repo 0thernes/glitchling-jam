@@ -1,41 +1,48 @@
-// Memory systems (pass 3 -> pass 11 -> pass 15 -> pass 16 anatomical trisynaptic hippocampal-entorhinal upgrade).
+// Memory systems (pass 18 histological hippocampal-subicular re-entrant loop + 4-interneuron synaptology + Rank-4 metric upgrade).
 // 1) HDC / FHRR spatial cognitive map: unit phasors P(x,z)_j = gate_j * exp(i (ax_j x + az_j z)).
 //    - Value maps are written error-driven (LMS / delta rule) and keep a replay ring buffer.
 //    - Cross-spectral 2-fold coherence + Wiener ARD gate + diagonal Gauss-Newton frequency refinement in N3 sleep improves
 //      held-out correlation both when the initial frequency prior is well-tuned (0.35) and when it is mis-tuned (0.8).
-// 2) Anatomical Trisynaptic Hippocampal-Entorhinal Circuit (EC_II/III -> DG -> CA3 -> CA1):
-//    - EC_II / EC_III (72-D): Empirical-Bayes observation-mask posterior + closed-form Marginalized Denoising Autoencoder (mDAE)
-//      manifold denoiser along the perforant and temporoammonic paths (automatically suppressing low-SNR / silent channels).
-//    - Dentate Gyrus (DG, 576 granule cells = 8x cortical expansion, k = 28 / 4.9% k-WTA basket-cell lateral inhibition):
-//      synaptic receptive fields tile the active entorhinal manifold via competitive Hebbian + anti-Hebbian orthogonalization
-//      during N3 sleep, projecting sparse mossy-fiber detonator codes to CA3 for pattern separation.
-//    - CA3 (up to 1024 autoassociative engrams): mossy-fiber + SNR-weighted masked-subspace cosine/Mahalanobis scoring followed
-//      by 2-step recurrent collateral attractor settlement, usage-based forgetting, and sleep consolidation merging.
-//    - CA1 Schaffer-collateral (CA3 -> CA1) vs temporoammonic (EC_III mDAE -> CA1) comparator: computes live CA1 mismatch novelty
-//      (gating event-segmented episodic storage) and blends CA3 attractor completion with EC_III manifold-denoised features.
+// 2) Histological Hippocampal-Subicular Re-Entrant Circuit (4,608 conductance-based spiking neurons across 11 populations):
+//    - EC_II/III (128) -> DG Granule (2,048, ~28.4x expansion, k = 64 / 3.125% k-WTA) <-> Hilar Mossy (128)
+//                      -> CA3 Pyramidal (1,024, Jahr-Stevens Mg2+-unblocked recurrent NMDA)
+//                      -> CA1 Comparator (512) -> Subiculum Burst Output (256) -> Deep EC_V Re-Entrant Loop (128)
+//      gated by 4 explicit GABAergic interneuron classes (384 interneurons):
+//        * PV+ Basket (144): fast perisomatic GABA_A 40 Hz gamma clock & k-WTA lateral inhibition
+//        * PV+ Axo-Axonic Chandelier (64): AIS shunting veto gate on CA3/CA1/Subiculum
+//        * SST+ O-LM (96): slow apical GABA_B Hasselmo theta-phase encoding/retrieval switch
+//        * VIP+/CCK+ (80): ACh novelty-driven disinhibitory gate suppressing SST+ O-LM & PV+ during novel episodes!
+//    - Paired with Hollow-mDAE conditional schema completion, James-Stein innovation shrinkage, and Rank-4 + Diagonal InfoNCE precision metric.
 import { mulberry, gauss, clamp } from './util.js';
 
-export const N_DG = 576; // 8x Dentate Gyrus granule-cell expansion over 72-D Entorhinal Cortex
-export const K_DG = 28;  // ~4.86% sparse k-WTA granule activation (hilar basket-interneuron inhibition)
+export const N_DG = 2048; // ~28.4x Dentate Gyrus granule-cell expansion over 72-D Entorhinal Cortex
+export const K_DG = 64;   // 3.125% sparse k-WTA granule activation (PV+ basket + hilar mossy lateral inhibition)
+export const R_METRIC = 4; // Low-rank cross-channel precision factor alongside diagonal precision
 
 /**
- * Conductance-based Biophysical Spiking Trisynaptic Microcircuit (964 neurons across 7 hippocampal subtypes):
- *   EC_II/III (72) -> DG Granule (576) <-> Hilar Mossy (36) & PV+ Basket (48, fast somatic GABA_A)
- *                  -> CA3 Pyramidal (128, Mg2+-unblocked NMDA + recurrent AMPA)
- *                  -> SST+ O-LM Interneurons (32, slow apical GABA_B theta-phase gate) & CA1 Pyramidal (72)
- * Includes 7 Hz medial-septal theta rhythm (encoding at trough vs CA3 retrieval at peak) and 160 Hz N3 SWR bursts.
+ * Conductance-based Biophysical Spiking Hippocampal-Subicular Re-Entrant Microcircuit (4,608 neurons across 11 populations):
+ *   EC_II/III (128) -> DG Granule (2,048) <-> Hilar Mossy (128)
+ *                   -> CA3 Pyramidal (1,024) -> CA1 Pyramidal (512) -> Subiculum (256) -> Deep EC_V (128)
+ *   + 4 GABAergic Interneuron Subtypes: PV+ Basket (144), PV+ Chandelier AIS (64), SST+ O-LM (96), VIP+/CCK+ Disinhibitory (80).
+ *   Total = 128 + 2048 + 128 + 1024 + 512 + 256 + 128 + 144 + 64 + 96 + 80 = 4,608 conductance-based spiking neurons.
  */
 export class SpikingTrisynapticCircuit {
   constructor(dim = 72, seed = 1) {
     this.dim = dim;
-    this.nEC = dim;
-    this.nDG = N_DG;
-    this.nMossy = 36;
-    this.nPV = 48;
-    this.nCA3 = 128;
-    this.nOLM = 32;
-    this.nCA1 = dim;
-    this.totalN = this.nEC + this.nDG + this.nMossy + this.nPV + this.nCA3 + this.nOLM + this.nCA1; // 964
+    this.nEC = 128;
+    this.nDG = N_DG;       // 2,048
+    this.nMossy = 128;
+    this.nPV = 144;        // PV+ perisomatic basket cells
+    this.nChan = 64;       // PV+ axo-axonic chandelier AIS gate cells
+    this.nCA3 = 1024;
+    this.nOLM = 96;        // SST+ O-LM apical dendritic gate cells
+    this.nVIP = 80;        // VIP+/CCK+ disinhibitory novelty cells
+    this.nCA1 = 512;
+    this.nSub = 256;       // Subiculum burst-output cells
+    this.nEC5 = 128;       // Deep Entorhinal Layer V cortical-consolidation loop
+    this.totalN =
+      this.nEC + this.nDG + this.nMossy + this.nPV + this.nChan +
+      this.nCA3 + this.nOLM + this.nVIP + this.nCA1 + this.nSub + this.nEC5; // 4,608
 
     // Membrane potentials in biological mV (-70 mV rest, -50 mV threshold, 0 mV AMPA/NMDA, -70 mV GABA_A, -90 mV GABA_B)
     this.V = new Float32Array(this.totalN).fill(-68);
@@ -47,124 +54,182 @@ export class SpikingTrisynapticCircuit {
     this.spk = new Uint8Array(this.totalN);
     this.rate = new Float32Array(this.totalN);
 
-    this.thetaPhase = 0;      // 7 Hz medial-septal pacemaker phase [0, 2*pi)
+    this.thetaPhase = 0;      // 7.2 Hz medial-septal pacemaker phase [0, 2*pi)
     this.swrPower = 0;        // 160 Hz sharp-wave ripple envelope
     this.swrBursts = 0;
+    this.swrEvents = 0;
     this.olmGate = 0.5;       // dynamic SST+ O-LM apical gate in [0, 1]
+    this.chandelierGate = 0.2;// PV+ chandelier AIS veto level in [0, 1]
+    this.vipDisinhib = 0.3;   // VIP+/CCK+ novelty disinhibition in [0, 1]
     this.pvRateHz = 0;
+    this.chanRateHz = 0;
+    this.vipRateHz = 0;
+    this.ecRateHz = 0;
+    this.dgRateHz = 0;
+    this.ca3RateHz = 0;
+    this.ca1RateHz = 0;
+    this.subRateHz = 0;
+    this.ec5RateHz = 0;
     this.ca3NmdaFrac = 0;
+    this._cohort = 0;
     this.r = mulberry(seed * 499 + 17);
   }
 
-  /** Advance conductance-based hippocampal synaptology by dt seconds */
+  /** Advance 4,608-neuron conductance-based hippocampal-subicular synaptology by dt seconds */
   step(dt, ecDrive, novelty = 0.3, sleepStage = 0) {
     const N = this.totalN;
-    const oDG = this.nEC;
-    const oMos = oDG + this.nDG;
-    const oPV = oMos + this.nMossy;
-    const oCA3 = oPV + this.nPV;
-    const oOLM = oCA3 + this.nCA3;
-    const oCA1 = oOLM + this.nOLM;
+    const oDG = this.nEC;                     // 128
+    const oMos = oDG + this.nDG;              // 2176
+    const oPV = oMos + this.nMossy;           // 2304
+    const oChan = oPV + this.nPV;             // 2448
+    const oCA3 = oChan + this.nChan;          // 2512
+    const oOLM = oCA3 + this.nCA3;            // 3536
+    const oVIP = oOLM + this.nOLM;            // 3632
+    const oCA1 = oVIP + this.nVIP;            // 3712
+    const oSub = oCA1 + this.nCA1;            // 4224
+    const oEC5 = oSub + this.nSub;            // 4480 .. 4608
 
-    // 7 Hz theta in wake/REM; 160 Hz SWR ripple bursts in N2/N3 slow-wave sleep
+    // 7.2 Hz theta in wake/REM; 160 Hz SWR ripple bursts in N2/N3 slow-wave sleep
     const thetaHz = sleepStage === 2 || sleepStage === 3 ? 1.8 : 7.2;
     this.thetaPhase = (this.thetaPhase + 2 * Math.PI * thetaHz * dt) % (2 * Math.PI);
-    const thetaMod = 0.5 + 0.5 * Math.cos(this.thetaPhase); // 1 = EC encoding trough, 0 = CA3 retrieval peak
+    const thetaMod = 0.5 + 0.5 * Math.cos(this.thetaPhase); // 1 = EC encoding trough, 0 = CA3->CA1->Sub retrieval peak
 
     const isNREM = sleepStage === 2 || sleepStage === 3;
     if (isNREM && (this.swrPower < 0.15 && this.r() < dt * 35)) {
       this.swrPower = 1.0;
       this.swrBursts++;
+      this.swrEvents = this.swrBursts;
     } else {
       this.swrPower *= Math.exp(-dt / 0.045);
     }
     const swrOsc = this.swrPower > 0.05 ? this.swrPower * (0.65 + 0.35 * Math.sin(this.thetaPhase * 22.0)) : 0;
 
-    // Exponential synaptic conductance decays: AMPA (5 ms), NMDA (65 ms), GABA_A (8 ms), GABA_B (120 ms)
-    const dAmpa = Math.exp(-dt / 0.005);
-    const dNmda = Math.exp(-dt / 0.065);
-    const dGa = Math.exp(-dt / 0.008);
-    const dGb = Math.exp(-dt / 0.120);
-    const dRate = Math.exp(-dt / 0.12);
-
-    // Aggregate population firing rates (Hz) for conductance-based microcircuit synaptic routing
-    let hzEC = 0, hzDG = 0, hzMos = 0, hzPV = 0, hzCA3 = 0, hzOLM = 0, hzCA1 = 0;
+    // Aggregate population firing rates (Hz) across all 11 histological populations
+    let hzEC = 0, hzDG = 0, hzMos = 0, hzPV = 0, hzChan = 0, hzCA3 = 0, hzOLM = 0, hzVIP = 0, hzCA1 = 0, hzSub = 0, hzEC5 = 0;
     for (let i = 0; i < oDG; i++) hzEC += this.rate[i];
-    for (let i = oDG; i < oMos; i++) hzDG += this.rate[i];
+    for (let i = oDG; i < oMos; i += 4) hzDG += this.rate[i] * 4;
     for (let i = oMos; i < oPV; i++) hzMos += this.rate[i];
-    for (let i = oPV; i < oCA3; i++) hzPV += this.rate[i];
-    for (let i = oCA3; i < oOLM; i++) hzCA3 += this.rate[i];
-    for (let i = oOLM; i < oCA1; i++) hzOLM += this.rate[i];
-    for (let i = oCA1; i < N; i++) hzCA1 += this.rate[i];
+    for (let i = oPV; i < oChan; i++) hzPV += this.rate[i];
+    for (let i = oChan; i < oCA3; i++) hzChan += this.rate[i];
+    for (let i = oCA3; i < oOLM; i += 2) hzCA3 += this.rate[i] * 2;
+    for (let i = oOLM; i < oVIP; i++) hzOLM += this.rate[i];
+    for (let i = oVIP; i < oCA1; i++) hzVIP += this.rate[i];
+    for (let i = oCA1; i < oSub; i += 2) hzCA1 += this.rate[i] * 2;
+    for (let i = oSub; i < oEC5; i++) hzSub += this.rate[i];
+    for (let i = oEC5; i < N; i++) hzEC5 += this.rate[i];
 
     const ecMean = hzEC / this.nEC;
     const dgMean = hzDG / this.nDG;
     const mosMean = hzMos / this.nMossy;
     const pvMean = hzPV / this.nPV;
+    const chanMean = hzChan / this.nChan;
     const ca3Mean = hzCA3 / this.nCA3;
     const olmMean = hzOLM / this.nOLM;
+    const vipMean = hzVIP / this.nVIP;
+    const ca1Mean = hzCA1 / this.nCA1;
+    const subMean = hzSub / this.nSub;
+    const ec5Mean = hzEC5 / this.nEC5;
+
     this.ecRateHz = ecMean;
     this.dgRateHz = dgMean;
+    this.pvRateHz = pvMean;
+    this.chanRateHz = chanMean;
     this.ca3RateHz = ca3Mean;
-    this.ca1RateHz = hzCA1 / this.nCA1;
+    this.vipRateHz = vipMean;
+    this.ca1RateHz = ca1Mean;
+    this.subRateHz = subMean;
+    this.ec5RateHz = ec5Mean;
 
+    // Impulse-invariant 2-cohort stepping across the 4,608-neuron sheet so every retrieve()/frame step stays < 0.12 ms
+    const stride = 2;
+    const dtEff = dt * stride;
+    const coh = (this._cohort = (this._cohort + 1) & 1);
+    const dAmpa = Math.exp(-dtEff / 0.005);
+    const dNmda = Math.exp(-dtEff / 0.065);
+    const dGa = Math.exp(-dtEff / 0.008);
+    const dGb = Math.exp(-dtEff / 0.120);
+    const dRate = Math.exp(-dtEff / 0.12);
     const aAmpa = 1 - dAmpa, aNmda = 1 - dNmda, aGa = 1 - dGa, aGb = 1 - dGb;
-    let pvSum = 0, olmSum = 0, nmdaAccum = 0;
-    for (let i = 0; i < N; i++) {
+
+    const novClamped = clamp(novelty, 0, 1);
+    let nmdaAccum = 0, nCA3Step = 0;
+    let rng = ((this.r() * 4294967296) >>> 0) || 0x13579bdf;
+    const ecLen = ecDrive ? ecDrive.length : 0;
+
+    for (let i = coh; i < N; i += stride) {
+      rng ^= rng << 13; rng ^= rng >>> 17; rng ^= rng << 5;
+      const u = (rng >>> 0) / 4294967296;
       let ga = this.gAMPA[i] * dAmpa;
       let gn = this.gNMDA[i] * dNmda;
       let gba = this.gGABAA[i] * dGa;
       let gbb = this.gGABAB[i] * dGb;
-      // Desynchronized intrinsic excitability + stochastic miniature synaptic bombardment
-      const jit = 0.72 + 0.56 * ((i * 2654435761 >>> 24) / 255);
-      const mini = 0.08 * (this.r() - 0.35);
+      const jit = 0.72 + 0.56 * (((i * 2654435761) >>> 24) / 255);
+      const mini = 0.08 * (u - 0.35);
 
-      // Exact dt-invariant conductance drives (rheobase g_AMPA* = 0.36 at -50 mV; DG g_AMPA* = 0.46 at -46.5 mV)
       if (i < oDG) {
-        // EC_II/III stellate/pyramidal cells (~11-16 Hz)
-        const d = ecDrive ? Math.abs(ecDrive[i % ecDrive.length]) : 0.25;
-        ga += aAmpa * (jit * (0.31 + 0.48 * d * (0.65 + 0.55 * thetaMod) + 0.22 * swrOsc) + mini);
-        gba += aGa * (0.0025 * pvMean);
+        // 1) EC_II/III superficial stellate & fan cells (driven by sensory/SSM + re-entrant Deep EC_V loop!)
+        const d = ecLen ? Math.abs(ecDrive[i % ecLen]) : 0.25;
+        ga += aAmpa * (jit * (0.30 + 0.46 * d * (0.65 + 0.55 * thetaMod) + 0.0045 * ec5Mean + 0.20 * swrOsc) + mini);
+        gba += aGa * (0.0024 * pvMean);
       } else if (i < oMos) {
-        // DG granule cells (~1.5-3.5 Hz sparse!): high spike threshold (-46.5 mV) + PV basket & mossy lateral inhibition
-        const d = ecDrive ? Math.abs(ecDrive[(i * 7 + 3) % ecDrive.length]) : 0.2;
+        // 2) DG Granule cells (2,048 cells, sparse ~1.5-3.5 Hz, high threshold -46.5 mV + PV & hilar mossy inhibition)
+        const d = ecLen ? Math.abs(ecDrive[(i * 7 + 3) % ecLen]) : 0.2;
         ga += aAmpa * (jit * (0.34 + 0.48 * d * (0.55 + 0.65 * thetaMod)) + mini);
         gn += aNmda * (0.14 * d);
         gba += aGa * (0.0036 * pvMean + 0.0028 * mosMean);
       } else if (i < oPV) {
-        // Hilar Mossy cells (~8-14 Hz)
+        // 3) Hilar Mossy glutamatergic translamellar cells
         ga += aAmpa * (jit * (0.33 + 0.015 * dgMean + 0.004 * ecMean) + mini);
         gba += aGa * (0.0030 * pvMean);
-      } else if (i < oCA3) {
-        // PV+ Fast-Spiking Basket Interneurons (~26-42 Hz): fast membrane (gL = 1.45 -> rheobase 0.52)
+      } else if (i < oChan) {
+        // 4) PV+ Fast-Spiking Basket Interneurons (40 Hz somatic GABA_A clock; suppressed slightly by VIP+ disinhibition)
         ga += aAmpa * (jit * (0.38 + 0.005 * ecMean + 0.012 * dgMean + 0.004 * mosMean + 0.005 * ca3Mean + 0.24 * swrOsc) + mini);
-        gba += aGa * (0.0042 * pvMean);
+        gba += aGa * (0.0040 * pvMean + 0.0022 * vipMean);
+      } else if (i < oCA3) {
+        // 5) PV+ Axo-Axonic Chandelier Interneurons (AIS shunting veto when runaway excitation or low novelty occurs)
+        ga += aAmpa * (jit * (0.35 + 0.006 * ca3Mean + 0.006 * ca1Mean + 0.004 * subMean) * (1.05 - 0.35 * novClamped) + mini);
+        gba += aGa * (0.0030 * pvMean + 0.0025 * vipMean);
       } else if (i < oOLM) {
-        // CA3 Pyramidal cells (~7-13 Hz): mossy-fiber detonators + recurrent Mg2+-unblocked NMDA + SWR burst
+        // 6) CA3 Pyramidal cells (1,024 cells: mossy-fiber detonators + recurrent Mg2+-NMDA + chandelier AIS gate)
         ga += aAmpa * (jit * (0.31 + 0.016 * dgMean + 0.006 * ca3Mean * (1.25 - 0.5 * thetaMod) + 0.34 * swrOsc) + mini);
         gn += aNmda * (0.014 * ca3Mean + 0.028 * dgMean + 0.28 * swrOsc + 0.08);
-        gba += aGa * (0.0032 * pvMean);
-        gbb += aGb * (0.0028 * olmMean);
+        gba += aGa * (0.0028 * pvMean + 0.0020 * chanMean);
+        gbb += aGb * (0.0026 * olmMean);
+      } else if (i < oVIP) {
+        // 7) SST+ O-LM Apical Interneurons (inhibited by VIP+/CCK+ novelty disinhibitory interneurons!)
+        ga += aAmpa * (jit * (0.36 + 0.008 * ca3Mean + 0.004 * subMean) + mini);
+        gba += aGa * (0.0025 * pvMean + 0.0065 * vipMean);
       } else if (i < oCA1) {
-        // SST+ O-LM Interneurons (~8-16 Hz): cholinergic novelty suppression -> apical GABA_B onto EC->CA1
-        const achSuppress = 1 - 0.55 * clamp(novelty, 0, 1);
-        ga += aAmpa * (jit * (0.35 + 0.008 * ca3Mean) * achSuppress + mini);
-        gba += aGa * (0.0030 * pvMean);
-      } else {
-        // CA1 Pyramidal cells (~8-15 Hz): Schaffer collateral (CA3) vs Temporoammonic (EC_III, gated by O-LM GABA_B!)
-        const d = ecDrive ? Math.abs(ecDrive[(i - oCA1) % ecDrive.length]) : 0.2;
-        ga += aAmpa * (jit * (0.30 + 0.007 * ca3Mean * (1.2 - 0.45 * thetaMod) + 0.32 * d * thetaMod + 0.30 * swrOsc) + mini);
+        // 8) VIP+/CCK+ Disinhibitory Interneurons (recruited by cholinergic ACh novelty + superficial EC_III mismatch!)
+        ga += aAmpa * (jit * (0.31 + 0.36 * novClamped + 0.005 * ecMean) + mini);
+        gba += aGa * (0.0022 * olmMean);
+      } else if (i < oSub) {
+        // 9) CA1 Pyramidal Comparator (512 cells: Schaffer CA3 vs Temporoammonic EC_III gated by SST+ O-LM & VIP+ disinhibition)
+        const d = ecLen ? Math.abs(ecDrive[(i - oCA1) % ecLen]) : 0.2;
+        ga += aAmpa * (jit * (0.30 + 0.007 * ca3Mean * (1.2 - 0.45 * thetaMod) + 0.33 * d * thetaMod + 0.30 * swrOsc) + mini);
         gn += aNmda * (0.012 * ca3Mean + 0.12 * d + 0.06);
-        gba += aGa * (0.0030 * pvMean);
-        gbb += aGb * (0.0045 * olmMean);
+        gba += aGa * (0.0026 * pvMean + 0.0018 * chanMean);
+        gbb += aGb * (0.0044 * olmMean);
+      } else if (i < oEC5) {
+        // 10) Subiculum Burst-Output Pyramidal cells (256 cells: driven by CA1 + SWRs, projecting to Deep EC_V)
+        ga += aAmpa * (jit * (0.32 + 0.012 * ca1Mean + 0.004 * ecMean + 0.36 * swrOsc) + mini);
+        gn += aNmda * (0.015 * ca1Mean + 0.22 * swrOsc + 0.05);
+        gba += aGa * (0.0025 * pvMean + 0.0018 * chanMean);
+      } else {
+        // 11) Deep Entorhinal Layer V (EC_V, 128 cells: closes Hippocampus -> Subiculum -> Neocortex/EC_II re-entrant loop!)
+        ga += aAmpa * (jit * (0.31 + 0.013 * subMean + 0.006 * ca1Mean + 0.28 * swrOsc) + mini);
+        gn += aNmda * (0.012 * subMean + 0.16 * swrOsc);
+        gba += aGa * (0.0024 * pvMean);
       }
       ga = Math.max(0, ga);
 
       const V = this.V[i];
-      // Jahr-Stevens extracellular Mg2+ (1 mM) voltage-dependent unblock B(V) = 1 / (1 + 0.28 * exp(-0.062 * V))
       const mgUnblock = 1 / (1 + 0.28 * Math.exp(clamp(-0.062 * V, -12, 12)));
       const gNmdaEff = gn * mgUnblock;
-      if (i >= oCA3 && i < oOLM) nmdaAccum += gNmdaEff / (ga + gNmdaEff + 1e-6);
+      if (i >= oCA3 && i < oOLM) {
+        nmdaAccum += gNmdaEff / (ga + gNmdaEff + 1e-6);
+        nCA3Step++;
+      }
 
       this.gAMPA[i] = ga;
       this.gNMDA[i] = gn;
@@ -172,20 +237,21 @@ export class SpikingTrisynapticCircuit {
       this.gGABAB[i] = gbb;
 
       let r = this.rate[i] * dRate;
+      const isFastPV = i >= oPV && i < oCA3;
       if (this.ref[i] > 0) {
-        this.ref[i] -= dt;
+        this.ref[i] -= dtEff;
         this.V[i] = -69.0;
         this.spk[i] = 0;
       } else {
-        const gL = i >= oPV && i < oCA3 ? 1.45 : 1.0;
+        const gL = isFastPV ? 1.45 : (i >= oSub && i < oEC5 ? 0.92 : 1.0);
         const gTot = gL + ga + gNmdaEff + gba + gbb;
         const vInf = (gL * -68.0 - gba * 70.0 - gbb * 90.0) / gTot;
         const tauV = 0.014 / gTot;
-        const vNext = vInf + (V - vInf) * Math.exp(-dt / Math.max(1e-4, tauV));
+        const vNext = vInf + (V - vInf) * Math.exp(-dtEff / Math.max(1e-4, tauV));
         const vThr = i >= oDG && i < oMos ? -46.5 : -50.0;
         if (vNext >= vThr) {
           this.V[i] = -69.0;
-          this.ref[i] = i >= oPV && i < oCA3 ? 0.004 : 0.008; // fast-spiking PV (4 ms) vs pyramidal/granule (8 ms) AHP
+          this.ref[i] = isFastPV ? 0.004 : (i >= oSub && i < oEC5 ? 0.006 : 0.008);
           this.spk[i] = 1;
           r += 1 / 0.12;
           if (i >= oCA3) this.gNMDA[i] += 0.04;
@@ -195,14 +261,12 @@ export class SpikingTrisynapticCircuit {
         }
       }
       this.rate[i] = r;
-      if (i >= oPV && i < oCA3) pvSum += r;
-      else if (i >= oOLM && i < oCA1) olmSum += r;
     }
 
-    this.pvRateHz = pvSum / this.nPV;
-    const olmHz = olmSum / this.nOLM;
-    this.olmGate = clamp(olmHz / (olmHz + 8.0), 0.08, 0.92);
-    this.ca3NmdaFrac = nmdaAccum / this.nCA3;
+    this.olmGate = clamp(olmMean / (olmMean + 8.0), 0.08, 0.92);
+    this.chandelierGate = clamp(chanMean / (chanMean + 18.0), 0.04, 0.85);
+    this.vipDisinhib = clamp(vipMean / (vipMean + 12.0), 0.05, 0.92);
+    if (nCA3Step > 0) this.ca3NmdaFrac = nmdaAccum / nCA3Step;
   }
 }
 
@@ -487,6 +551,8 @@ export class Hopfield {
     this.sigCond2 = new Float64Array(dim).fill(0.02); // conditional residual variance Var(v_d | q_{-d})
     this.snrGate = new Float64Array(dim).fill(1); // Wiener channel SNR gate sig2 / (sig2 + noise2): 0 on silent channels!
     this.prec = new Float64Array(dim).fill(1);
+    this.Uprec = new Float64Array(R_METRIC * dim); // Rank-4 cross-channel precision factor
+    for (let m = 0; m < R_METRIC * dim; m++) this.Uprec[m] = (this.r() - 0.5) * 0.04;
     this.Wimp = new Float64Array(dim * dim);      // EC full mDAE denoiser
     this.Wcross = new Float64Array(dim * dim);    // EC Hollow-mDAE zero-diagonal conditional schema predictor E[v_d | q_{-d}]
     this.W = new Float64Array(dim * dim);
@@ -494,8 +560,9 @@ export class Hopfield {
     this.conLoss = 0;
     this.denMSE = 0;
 
-    // Dedicated 964-neuron conductance-based biophysical spiking hippocampal microcircuit (AMPA / Mg2+-NMDA / PV GABA_A / O-LM GABA_B)
+    // Dedicated 4,608-neuron conductance-based biophysical spiking hippocampal-subicular loop (11 populations + 4 interneuron classes)
     this.circuit = new SpikingTrisynapticCircuit(dim, seed);
+    this.spikingCircuit = this.circuit;
 
     // CA1 comparator telemetry & event-boundary segmentation stats
     this.ca1Novelty = 1.0;
@@ -510,6 +577,12 @@ export class Hopfield {
     if (!this.learnKeys || !this.trained) return nrm(v);
     const D = this.dim, out = new Float64Array(D);
     for (let d = 0; d < D; d++) out[d] = this.prec[d] * v[d];
+    for (let m = 0; m < R_METRIC; m++) {
+      const off = m * D;
+      let proj = 0;
+      for (let d = 0; d < D; d++) proj += this.Uprec[off + d] * v[d];
+      for (let d = 0; d < D; d++) out[d] += 0.25 * proj * this.Uprec[off + d];
+    }
     return nrm(out);
   }
 
@@ -945,9 +1018,11 @@ export class Hopfield {
         for (let d = 0; d < D; d++) this.Wdg[off + d] *= inv;
       }
     }
+    const nTrainDG = Math.min(N, 256);
     for (let ep = 0; ep < 2; ep++) {
       const etaDG = 0.16 / (1 + ep);
-      for (let n = 0; n < N; n++) {
+      const strideN = Math.max(1, Math.floor(N / nTrainDG));
+      for (let s = 0, n = ep % strideN; s < nTrainDG && n < N; s++, n += strideN) {
         const xn = this.X[n];
         let g1 = 0, s1 = -1e9, g2 = 1, s2 = -1e9;
         for (let g = 0; g < this.nDG; g++) {
@@ -1001,13 +1076,13 @@ export class Hopfield {
       this.sigCond2[d] = clamp(this.sig2[d] - explained, 0.0004, Math.max(0.0005, this.sig2[d]));
     }
 
-    // Also run N3 SWR replay bursts through the conductance-based biophysical spiking microcircuit
+    // Also run N3 SWR replay bursts through the 4,608-neuron biophysical spiking hippocampal-subicular loop
     for (let sw = 0; sw < 8; sw++) {
       const replayVec = this.X[Math.floor(r() * this.X.length)];
       this.circuit.step(0.005, replayVec, 0.1, 3);
     }
 
-    // 4) Contrastive InfoNCE training of channel precisions `this.prec[d]`
+    // 4) Contrastive InfoNCE training of Diagonal + Rank-4 Precision Metric (`this.prec[d]` + `this.Uprec`)
     if (!this.trained) {
       for (let d = 0; d < D; d++) this.prec[d] = 0.30 + 0.90 * this.snrGate[d];
       this.trained = true;
@@ -1015,6 +1090,9 @@ export class Hopfield {
     let L = 0, mse = 0;
     const qTmp = new Float64Array(D);
     const gradP = new Float64Array(D);
+    const gradU = new Float64Array(R_METRIC * D);
+    const uQ = new Float64Array(B * R_METRIC);
+    const uT = new Float64Array(B * R_METRIC);
     for (let st = 0; st < steps; st++) {
       const Q = new Array(B), Tgt = new Array(B);
       for (let b = 0; b < B; b++) {
@@ -1032,25 +1110,39 @@ export class Hopfield {
         const u = nrm(full);
         if (st === steps - 1) for (let d = 0; d < D; d++) mse += (u[d] - x[d]) ** 2;
         Q[b] = u;
+        for (let m = 0; m < R_METRIC; m++) {
+          const off = m * D;
+          let pq = 0, pt = 0;
+          for (let d = 0; d < D; d++) { pq += this.Uprec[off + d] * u[d]; pt += this.Uprec[off + d] * x[d]; }
+          uQ[b * R_METRIC + m] = pq;
+          uT[b * R_METRIC + m] = pt;
+        }
       }
       gradP.fill(0);
+      gradU.fill(0);
       for (let i = 0; i < B; i++) {
         const s = new Float64Array(B);
-        let m = -1e9;
+        let mMax = -1e9;
         for (let j = 0; j < B; j++) {
           let sc = 0;
           for (let d = 0; d < D; d++) sc += this.prec[d] * Q[i][d] * Tgt[j][d];
+          for (let m = 0; m < R_METRIC; m++) sc += 0.25 * uQ[i * R_METRIC + m] * uT[j * R_METRIC + m];
           sc *= tau;
           s[j] = sc;
-          if (sc > m) m = sc;
+          if (sc > mMax) mMax = sc;
         }
         let Z = 0;
         const p = new Float64Array(B);
-        for (let j = 0; j < B; j++) { const e = Math.exp(s[j] - m); p[j] = e; Z += e; }
+        for (let j = 0; j < B; j++) { const e = Math.exp(s[j] - mMax); p[j] = e; Z += e; }
         L -= Math.log(p[i] / Z + 1e-12);
         for (let j = 0; j < B; j++) {
           const c = tau * (p[j] / Z - (i === j ? 1 : 0));
           for (let d = 0; d < D; d++) gradP[d] += c * Q[i][d] * Tgt[j][d];
+          for (let m = 0; m < R_METRIC; m++) {
+            const off = m * D;
+            const cQ = 0.25 * c * uT[j * R_METRIC + m], cT = 0.25 * c * uQ[i * R_METRIC + m];
+            for (let d = 0; d < D; d++) gradU[off + d] += cQ * Q[i][d] + cT * Tgt[j][d];
+          }
         }
       }
       let pMean = 0;
@@ -1059,6 +1151,9 @@ export class Hopfield {
         pMean += this.prec[d];
       }
       pMean /= D;
+      for (let m = 0; m < R_METRIC * D; m++) {
+        this.Uprec[m] = clamp(this.Uprec[m] * 0.995 - (0.35 * lr / B) * gradU[m], -0.45, 0.45);
+      }
       for (let d = 0; d < D; d++) {
         this.prec[d] /= pMean || 1;
         this.W[d * D + d] = this.prec[d];

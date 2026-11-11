@@ -18,7 +18,8 @@ export function evalGenome(genome, seeds = [1, 2], secs = 10, opts = {}) {
       ...(ROUGH ? [['Z', [1, 0, 0, 0, 0, 0, 0, 0]]] : []),
     ];
     for (const [name, mot] of trials) {
-      const c = new Creature(seed);
+      const c = new Creature(seed, { noVision: true, motorEval: true });
+      c.world.fastEval = true;
       if (!ROUGH) { c.world.rocks = []; c.world.springs = []; }
       c.noSkin = true;
       c.lesion.fluid = true;
@@ -27,6 +28,7 @@ export function evalGenome(genome, seeds = [1, 2], secs = 10, opts = {}) {
       c.lesion.wm = true;
       c.lesion.hopfield = true;
       c.lesion.metacog = true;
+      c.lesion.qrng = true;
       c.forceMot = mot;
       let prev = null, un = 0, up = 0, c0 = null, fwd = 0, side = 0, pc = null;
       const N = secs * 60;
@@ -73,7 +75,8 @@ export function evalGenome(genome, seeds = [1, 2], secs = 10, opts = {}) {
 
     // Flipped-body vestibular righting trial
     {
-      const c = new Creature(seed);
+      const c = new Creature(seed, { noVision: true, motorEval: true });
+      c.world.fastEval = true;
       if (!ROUGH) { c.world.rocks = []; c.world.springs = []; }
       c.noSkin = true;
       c.lesion.fluid = true;
@@ -82,6 +85,7 @@ export function evalGenome(genome, seeds = [1, 2], secs = 10, opts = {}) {
       c.lesion.wm = true;
       c.lesion.hopfield = true;
       c.lesion.metacog = true;
+      c.lesion.qrng = true;
       for (let f = 0; f < 90; f++) c.step();
       const B = c.body, com = B.com();
       const f = B.F[3].f, n = Math.hypot(f[0], f[2]) || 1, ax = [f[0] / n, 0, f[2] / n];
@@ -104,13 +108,15 @@ export function evalGenome(genome, seeds = [1, 2], secs = 10, opts = {}) {
 
     // Closed-loop autonomous goal-homing trial (scores STEER_GENES + rough-terrain posture)
     if (STEER) {
-      const c = new Creature(seed);
+      const c = new Creature(seed, { motorEval: true });
+      c.world.fastEval = true;
       c.noSkin = true;
       c.lesion.fluid = true;
       c.lesion.learnMotor = true;
       c.lesion.wm = true;
       c.lesion.hopfield = true;
       c.lesion.metacog = true;
+      c.lesion.qrng = true;
       for (let f = 0; f < 30; f++) c.step();
       const hd = c.body.head();
       const cand = c.world.plants

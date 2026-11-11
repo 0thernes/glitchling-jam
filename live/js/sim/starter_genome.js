@@ -31,9 +31,16 @@ export const MORPH = {
   neuroHipAlloc: 1.0, neuroCtxPlastic: 1.0,
 };
 
-export const STARTER = { ...MOTOR, ...STEER, ...MORPH };
+export const HOX = {
+  hoxAnt: 0.80, hoxThor: 0.85, hoxAbd: 0.75, hoxCaud: 0.70,
+  grnAA: 0.0, grnAB: 0.0, grnBA: 0.0, grnBB: 0.0,
+  grnShh: 1.0, grnFgf: 1.0, grnBmp: 1.0, grnWnt: 1.0,
+  limbTopo: 0.50, osteoderm: 0.45, gillFronds: 0.68, sarcomereVmax: 1.0,
+};
+
+export const STARTER = { ...MOTOR, ...STEER, ...MORPH, ...HOX };
 export const STARTER_INFO = {
-  source: 'two-stage multi-body CMA-ES + 92-gene Evo-Devo morpho-neural specification (58 motor + 20 steering + 14 morphology/neuro genes)',
+  source: 'two-stage multi-body CMA-ES + 108-gene Hox-GRN Evo-Devo morpho-neural specification (58 motor + 20 steering + 14 morpho/neuro + 16 Hox/morphogen GRN genes)',
   trainSeeds: [1, 2, 3, 9, 10, 11],
   motorGens: 16,
   steerGens: 12,

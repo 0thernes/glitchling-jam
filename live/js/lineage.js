@@ -1,13 +1,14 @@
-// In-page 92-gene Evo-Devo body + brain co-evolution (upgraded in pass 17): supports BOTH
+// In-page 108-gene Hox + Morphogen Evo-Devo body + brain co-evolution (upgraded in pass 18): supports BOTH
 //  A) Local variance-reduced Active Mirrored Separable CMA-ES refinement ('refine', default 6 gens from current/starter genome), AND
-//  B) True 92-Gene Evo-Devo De-Novo Co-Evolution From Pure Uniform Random [0.05, 0.95]^92 Weights ('denovo', default 12 gens:
+//  B) True 108-Gene Evo-Devo De-Novo Co-Evolution From Pure Uniform Random [0.05, 0.95]^108 Weights ('denovo', default 12 gens:
 //     14-member Stratified Latin-Hypercube primordial screen + Archive-Backed Diagonal-Quadratic Surrogate Pre-Screened
 //     Active Mirrored Separable CMA-ES with CSA & CRN elitist verification),
 // simultaneously co-evolving:
 //   - 58 innate CPG / motor / posture / gaze / synergy weights
 //   - 20 sense -> MOT closed-loop steering & boulder-avoidance weights
-//   - 14 3D Evo-Devo body morphology, collagen fiber stiffness, dorsal crest/fluke, thermal & neural-allocation genes!
-import { FULL_GENES } from './sim/genome.js';
+//   - 14 3D Evo-Devo body morphology, collagen fiber stiffness, dorsal crest/fluke, thermal & neural-allocation genes
+//   - 16 Embryonic Hox + Morphogen (Shh/Fgf/Bmp/Wnt) GRN genes governing variable 4/6/8-limb body plans & osteoderms!
+import { FULL_GENES, evalHoxGRN } from './sim/genome.js';
 
 const LAMBDA = 8, SECS = 5, LHS_POP = 14, SURR_PAIRS = 12;
 
@@ -22,7 +23,7 @@ export class Lineage {
 
     const n = (this.n = FULL_GENES.length);
     if (this.mode === 'denovo') {
-      // Pure uniform random [0.05, 0.95]^92 initialization — zero starter or hand-wired priors!
+      // Pure uniform random [0.05, 0.95]^108 initialization — zero starter or hand-wired priors!
       this.m = Array.from({ length: n }, () => 0.05 + 0.9 * this.rnd());
     } else {
       this.m = FULL_GENES.map(([nm, lo, hi]) =>
@@ -154,11 +155,17 @@ export class Lineage {
     const k = Math.max(2, Math.min(10, hw - 1));
     for (let i = 0; i < k; i++) {
       const w = new Worker(new URL('./sim/lineage_worker.js?brain=S', import.meta.url), { type: 'module' });
+      w.ready = false;
       w.onmessage = (e) => {
+        if (e.data && e.data.ready) {
+          w.ready = true;
+          this.pump();
+          return;
+        }
         const j = this.jobs.get(e.data.id);
         this.jobs.delete(e.data.id);
         w.busy = false;
-        j(e.data);
+        if (j) j(e.data);
         this.pump();
       };
       w.onerror = (e) => console.warn('lineage worker', e.message);
@@ -168,7 +175,7 @@ export class Lineage {
 
   pump() {
     for (const w of this.workers) {
-      if (w.busy || !this.queue.length) continue;
+      if (!w.ready || w.busy || !this.queue.length) continue;
       const q = this.queue.shift();
       w.busy = true;
       this.jobs.set(q.id, q.res);
@@ -203,12 +210,16 @@ export class Lineage {
 
   morphSummary() {
     const g = this.dec(this.m);
+    const hox = evalHoxGRN(g);
     return {
+      limbs: hox.limbPairs * 2,
+      limbPairs: hox.limbPairs,
       bodyLen: g.bodyLen,
       foreLimb: g.foreLimb,
       hindLimb: g.hindLimb,
       crestFin: g.crestFin,
       tailFluke: g.tailFluke,
+      osteoderm: g.osteoderm,
       neuroHipAlloc: g.neuroHipAlloc,
     };
   }
@@ -262,6 +273,8 @@ export class Lineage {
             for (let r = 0; r < this.mu; r++) v2 += this.w[r] * (Xc[idx[r]][i] - this.m[i]) ** 2;
             this.D2[i] = Math.min(2.2, Math.max(0.45, v2 / (this.sigma * this.sigma)));
           }
+          // Transition from global [0.05, 0.95]^108 LHS screen to local 108-gene CMA-ES basin refinement
+          this.sigma = 0.11;
           this.gen++;
           const mr = this.curRes;
           this.hist.push({
@@ -317,8 +330,10 @@ export class Lineage {
         this.evals += res.length;
 
         const fm = this.curRes.fit;
-        const F = res.map((r, k) => r.r.fit - 0.5 * X[k].reduce((a, u) => a + Math.max(0, -u) + Math.max(0, u - 1), 0));
+        const F = res.map((r, k) => r.r.fit - 0.08 * X[k].reduce((a, u) => a + Math.max(0, -u) + Math.max(0, u - 1), 0));
         const idx = F.map((_, k) => k).sort((a, b) => F[b] - F[a]);
+        let bestRawIdx = 0;
+        for (let k = 1; k < res.length; k++) if (res[k].r.fit > res[bestRawIdx].r.fit) bestRawIdx = k;
 
         const yw = new Array(n).fill(0);
         for (let r = 0; r < this.mu; r++) Y[idx[r]].forEach((v, i) => { yw[i] += this.w[r] * v; });
@@ -328,16 +343,16 @@ export class Lineage {
         if (rCand.err) throw new Error(rCand.err);
         this.evals++;
 
-        const bestChildRes = res[idx[0]].r;
+        const bestChildRes = res[bestRawIdx].r;
         let accepted = false;
         if (rCand.r.fit >= fm - 1e-6 && rCand.r.fit >= bestChildRes.fit - 0.05) {
           this.m = mCand;
           this.curRes = rCand.r;
           accepted = true;
         } else if (bestChildRes.fit > fm) {
-          const yBest = Xc[idx[0]].map((u, i) => (u - this.m[i]) / Math.max(1e-6, this.sigma));
+          const yBest = Xc[bestRawIdx].map((u, i) => (u - this.m[i]) / Math.max(1e-6, this.sigma));
           for (let i = 0; i < n; i++) yw[i] = yBest[i];
-          this.m = Xc[idx[0]];
+          this.m = Xc[bestRawIdx];
           this.curRes = bestChildRes;
           accepted = true;
         } else if (rCand.r.fit >= fm - 1e-6) {
@@ -386,6 +401,8 @@ export class Lineage {
       }
     } finally {
       this.running = false;
+      for (const w of this.workers) w.terminate?.();
+      this.workers = [];
       this.onUpdate?.(this);
     }
   }

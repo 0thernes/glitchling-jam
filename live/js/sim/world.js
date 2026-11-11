@@ -1,10 +1,12 @@
-// The 3D A-Life Biosphere & Abiotic World (upgraded in pass 17):
-//  - Dynamic morphing heightfield, 16 fruiting plants, climbable iridescent rocks, spring pads & 3 water pools
+// The 3D A-Life Biosphere & Abiotic World (upgraded in pass 18):
+//  - Dynamic morphing heightfield, 16 fruiting plants, climbable basalt-geode rocks, spring pads & 3 water pools
 //    (exact primary RNG stream preserved so single-creature navigation/foraging benchmarks remain bit-aligned).
 //  - 3 Geothermal Hydrothermal Vents (radiating physical warmth & mineral nutrients) + 4 Crystal Spire Shelters.
 //  - 32x32 Soil Nitrogen/Carbon Nutrient Grid fertilized by creature waste (urine -> N, feces -> C) & hydrothermal minerals,
 //    coupled to a 32-edge Underground Mycelial Fungal Network transporting nutrients & systemic stress signals between plants,
 //    plus co-evolving plant fruit/defense traits on seed-dispersal regeneration.
+//  - 64x64 Saprotrophic Soil Decomposer, Diazotrophic Rhizobial & Bioluminescent Aquatic Phytoplankton Metapopulation
+//    Continuum (> 1.4M microorganisms closing the N/C mineralization, nitrogen-fixation & aquatic trophic loop).
 //  - 64x64x3 Wind-Advected Reaction-Diffusion Pheromone Field (Ch 0: Food trail, Ch 1: Alarm Schreckstoff, Ch 2: Courtship/Kin).
 //  - 4-Season Ecological Cycle ('spring' | 'summer' | 'autumn' | 'winter') & microclimate thermal field ambientTemp(x, z, hour).
 import { fbm, mulberry, clamp } from './util.js';
@@ -12,6 +14,7 @@ import { fbm, mulberry, clamp } from './util.js';
 export const SITES = 16, WORLD = 22;
 export const N_SOIL = 32;
 export const N_PHER = 64;
+export const N_MICRO = 64;
 export const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 
 export class World {
@@ -115,6 +118,42 @@ export class World {
       }
     }
 
+    // 64x64 Saprotrophic Soil Microbe + Rhizobial & Aquatic Bioluminescent Phytoplankton Continuum (units: 10^3 organisms / cell)
+    this.microbeGrid = new Float32Array(N_MICRO * N_MICRO);
+    this.planktonGrid = new Float32Array(N_MICRO * N_MICRO);
+    this.microbeTmp = new Float32Array(N_MICRO * N_MICRO);
+    this.poolMask = new Float32Array(N_MICRO * N_MICRO);
+    this.rhizoMask = new Float32Array(N_MICRO * N_MICRO);
+    let initPop = 0, pBloomSum = 0, pBloomCnt = 0;
+    for (let iz = 0; iz < N_MICRO; iz++) {
+      const wz = ((iz + 0.5) / N_MICRO - 0.5) * 2 * WORLD;
+      for (let ix = 0; ix < N_MICRO; ix++) {
+        const wx = ((ix + 0.5) / N_MICRO - 0.5) * 2 * WORLD;
+        const idx = iz * N_MICRO + ix;
+        let rootBoost = 0;
+        for (let k = 0; k < SITES; k++) {
+          const d2 = (wx - this.plants[k].x) ** 2 + (wz - this.plants[k].z) ** 2;
+          if (d2 < 9.0) rootBoost += 0.35 * Math.exp(-d2 / 3.2);
+        }
+        this.rhizoMask[idx] = Math.min(1.0, rootBoost);
+        let poolW = 0;
+        for (let p = 0; p < this.pools.length; p++) {
+          const pl = this.pools[p];
+          const dp = Math.hypot(wx - pl.x, wz - pl.z);
+          if (dp < pl.r * 1.35) poolW = Math.max(poolW, clamp(1.25 - dp / pl.r, 0, 1));
+        }
+        this.poolMask[idx] = poolW;
+        const m0 = (0.28 + 0.16 * fbm(wx * 0.15 - 4, wz * 0.15 + 2, seed + 41) + 0.24 * this.rhizoMask[idx]) * (1 - 0.55 * poolW);
+        const pk0 = poolW > 0.02 ? poolW * (1.85 + 0.75 * fbm(wx * 0.28, wz * 0.28, seed + 53)) : 0;
+        this.microbeGrid[idx] = m0;
+        this.planktonGrid[idx] = pk0;
+        initPop += (m0 + pk0) * 1000;
+        if (poolW > 0.2) { pBloomSum += pk0; pBloomCnt++; }
+      }
+    }
+    this.microbeTotalPop = Math.round(initPop); // > 1.4M microorganisms across the 4,096 spatial cells
+    this.planktonBloom = pBloomCnt > 0 ? clamp(pBloomSum / (pBloomCnt * 2.6), 0, 1) : 0.65;
+
     // 64x64x3 Wind-Advected Reaction-Diffusion Pheromone Grid (interleaved 3 channels: [food, alarm, mate])
     this.pher = new Float32Array(N_PHER * N_PHER * 3);
     this.pherTmp = new Float32Array(N_PHER * N_PHER * 3);
@@ -125,7 +164,7 @@ export class World {
     this.seasonPhase = 0.15; // starts in spring
     this.season = 'spring';
     this.baseTemp = 22.0;    // Celsius
-    this.meanSoilN = 0.5;
+    this.meanSoilN = 0.48;
     this.totalPheromone = 0;
     this.coEvolvePlants = false; // enabled automatically when Ecosystem is attached
 
@@ -134,7 +173,6 @@ export class World {
     this.wind = { x: 0, z: 0, tx: 0, tz: 0, rain: 0 };
     this.eco = null; // populated when Ecosystem multi-agent biosphere is active
     this.pherMean = 0;
-    this.meanSoilN = 0.48;
     this.fixY();
   }
 
@@ -187,6 +225,20 @@ export class World {
     return iz * N_SOIL + ix;
   }
 
+  microbeIndex(x, z) {
+    const ix = clamp(Math.floor(((x / (2 * WORLD)) + 0.5) * N_MICRO), 0, N_MICRO - 1);
+    const iz = clamp(Math.floor(((z / (2 * WORLD)) + 0.5) * N_MICRO), 0, N_MICRO - 1);
+    return iz * N_MICRO + ix;
+  }
+
+  sampleMicrobe(x, z) {
+    return this.microbeGrid[this.microbeIndex(x, z)];
+  }
+
+  samplePlankton(x, z) {
+    return this.planktonGrid[this.microbeIndex(x, z)];
+  }
+
   depositPheromone(x, z, ch, amount) {
     if (amount <= 0 || ch < 0 || ch > 2) return;
     const fx = ((x / (2 * WORLD)) + 0.5) * (N_PHER - 1);
@@ -221,7 +273,7 @@ export class World {
     return [0.5 * (cL + cR), cL - cR];
   }
 
-  /** Step 64x64x3 wind-advected reaction-diffusion pheromones + 32x32 soil/mycelial nutrient transport at 10 Hz */
+  /** Step 64x64 microbial/planktonic continuum + 64x64x3 wind-advected pheromones + 32x32 soil/mycelial network at 10 Hz */
   stepBiosphereGrid(dt) {
     // 1) Season progression
     if (this.seasonMode === 'auto') {
@@ -233,23 +285,74 @@ export class World {
     this.season = SEASONS[Math.floor(this.seasonPhase * 4) % 4];
     const seasonGrow = this.season === 'spring' ? 1.22 : this.season === 'summer' ? 1.1 : this.season === 'autumn' ? 0.92 : 0.68;
 
-    // 2) Waste mineralization into soil N & C + hydrothermal vent mineral enrichment
+    // 2) Waste detritus inoculation + hydrothermal vent mineral enrichment
     const sN = this.soilN, sC = this.soilC;
+    const MG = this.microbeGrid, PG = this.planktonGrid, MT = this.microbeTmp;
     for (let i = 0; i < this.waste.length; i++) {
       const w = this.waste[i];
       const idx = this.soilIndex(w.x, w.z);
+      const mIdx = this.microbeIndex(w.x, w.z);
       if (w.type === 'urine') sN[idx] = Math.min(2.0, sN[idx] + dt * 0.08 * (w.amount || 1));
-      else sC[idx] = Math.min(2.0, sC[idx] + dt * 0.09 * (w.amount || 1));
+      else {
+        sC[idx] = Math.min(2.0, sC[idx] + dt * 0.09 * (w.amount || 1));
+        MG[mIdx] = Math.min(1.6, MG[mIdx] + dt * 0.14 * (w.amount || 1));
+      }
     }
     for (let i = 0; i < this.vents.length; i++) {
       const v = this.vents[i];
       v.phase = (v.phase + dt * 2.4) % (Math.PI * 2);
       const idx = this.soilIndex(v.x, v.z);
+      const mIdx = this.microbeIndex(v.x, v.z);
       sN[idx] = Math.min(2.0, sN[idx] + dt * 0.025 * v.mineral);
       sC[idx] = Math.min(2.0, sC[idx] + dt * 0.02 * v.mineral);
+      MG[mIdx] = Math.min(1.6, MG[mIdx] + dt * 0.04 * v.mineral); // thermophilic chemolithotrophs!
     }
 
-    // 3) Underground Mycelial Fungal Network: redistribute soil N/C & systemic plant defense signals!
+    // 3) 64x64 Saprotrophic Soil Decomposer, Rhizobial N2-Fixation & Bioluminescent Phytoplankton Continuum PDE
+    const q10 = seasonGrow * (1 + 0.18 * (this.wind.rain || 0));
+    const mDiff = clamp(0.06 * dt, 0, 0.12);
+    let popSum = 0, pBloomSum = 0, pBloomCnt = 0;
+    for (let iz = 0; iz < N_MICRO; iz++) {
+      const sz = iz >> 1;
+      const zU = iz > 0 ? iz - 1 : 0, zD = iz + 1 < N_MICRO ? iz + 1 : N_MICRO - 1;
+      for (let ix = 0; ix < N_MICRO; ix++) {
+        const sx = ix >> 1;
+        const sIdx = sz * N_SOIL + sx;
+        const idx = iz * N_MICRO + ix;
+        const xL = ix > 0 ? ix - 1 : 0, xR = ix + 1 < N_MICRO ? ix + 1 : N_MICRO - 1;
+
+        const mCur = MG[idx];
+        const lap = MG[iz * N_MICRO + xL] + MG[iz * N_MICRO + xR] + MG[zU * N_MICRO + ix] + MG[zD * N_MICRO + ix] - 4 * mCur;
+        const cAvail = sC[sIdx];
+        const rhizo = this.rhizoMask[idx];
+        const poolW = this.poolMask[idx];
+        // Monod saprotrophic growth + diazotrophic root N2-fixation carrying capacity
+        const carryM = (0.26 + 0.42 * (cAvail / (0.35 + cAvail)) + 0.28 * rhizo) * (1 - 0.5 * poolW);
+        const mNext = clamp(mCur + dt * 0.16 * q10 * mCur * (1 - mCur / Math.max(0.08, carryM)) + mDiff * lap, 0.04, 1.8);
+        MT[idx] = mNext;
+
+        // Saprotrophic mineralization of soilC -> bioavailable soilN + rhizobial N2 fixation
+        const mineralize = dt * 0.0022 * mNext * cAvail;
+        sC[sIdx] = Math.max(0.08, sC[sIdx] - mineralize * 0.65);
+        sN[sIdx] = Math.min(2.0, sN[sIdx] + mineralize + dt * 0.0014 * rhizo * mNext);
+
+        // Aquatic bioluminescent phytoplankton logistic bloom in water pools
+        let pkNext = 0;
+        if (poolW > 0.02) {
+          const pkCur = PG[idx];
+          const carryP = poolW * (1.75 + 1.35 * sN[sIdx]) * seasonGrow;
+          pkNext = clamp(pkCur + dt * 0.22 * (pkCur + 0.03 * poolW) * (1 - pkCur / Math.max(0.1, carryP)), 0.02, 4.2);
+          if (poolW > 0.2) { pBloomSum += pkNext; pBloomCnt++; }
+        }
+        PG[idx] = pkNext;
+        popSum += (mNext + pkNext) * 1000;
+      }
+    }
+    MG.set(MT);
+    this.microbeTotalPop = Math.round(popSum);
+    this.planktonBloom = pBloomCnt > 0 ? clamp(pBloomSum / (pBloomCnt * 2.6), 0.05, 1.0) : 0.65;
+
+    // 4) Underground Mycelial Fungal Network: redistribute soil N/C & systemic plant defense signals!
     for (let e = 0; e < this.mycelia.length; e++) {
       const m = this.mycelia[e];
       const pa = this.plants[m.a], pb = this.plants[m.b];
@@ -298,7 +401,7 @@ export class World {
       }
     }
 
-    // 4) 64x64x3 Semi-Lagrangian Wind Advection + 5-point Diffusion + Decay
+    // 5) 64x64x3 Semi-Lagrangian Wind Advection + 5-point Diffusion + Decay
     const P = this.pher, T = this.pherTmp;
     const cellSize = (2 * WORLD) / N_PHER;
     const shiftX = (this.wind.x * 0.32 * dt) / cellSize;
@@ -370,7 +473,7 @@ export class World {
     if (Math.floor(this.t / 2) !== Math.floor((this.t - dt) / 2)) this.fixY();
 
     this._ecoAcc += dt;
-    if (this._ecoAcc >= 0.1) {
+    if (!this.fastEval && this._ecoAcc >= 0.1) {
       const dte = this._ecoAcc;
       this._ecoAcc = 0;
       this.stepBiosphereGrid(dte);

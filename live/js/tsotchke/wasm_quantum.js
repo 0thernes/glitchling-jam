@@ -1,7 +1,8 @@
-// Zero-build inline W3C WebAssembly f64 quantum statevector kernel (up to 12+ qubits, DIM = 4,096).
-// Assembles a valid compact WASM binary module in memory at startup and instantiates it over shared WebAssembly.Memory
-// so Hadamard layers, Rz(theta) + Ising-ZZ(phi) unitary phase evolutions, CNOT ring entanglers, and Born norm reductions
-// execute in native V8/browser JIT machine code (with automatic JS fallback if WebAssembly is unavailable).
+// Zero-build inline W3C WebAssembly f64 quantum statevector kernel (up to 14 qubits, DIM = 16,384) +
+// Optional 16-Qubit (DIM = 65,536) WebGPU WGSL Compute-Shader Statevector Coprocessor (Pass 18).
+// Assembles a valid compact WASM binary module in memory at startup and instantiates it over 8-page (512 KB) shared
+// WebAssembly.Memory so Hadamard layers, Rz(theta) + Ising-ZZ(phi) unitary phase evolutions, CNOT ring entanglers, and
+// Born norm reductions execute in native V8/browser JIT machine code (with automatic JS fallback if WebAssembly is unavailable).
 
 function uleb(n) {
   const out = [];
@@ -40,23 +41,19 @@ function strBytes(s) {
 
 const I32 = 0x7f, F64 = 0x7c;
 
-// Memory layout (byte offsets in 2-page = 128 KB WebAssembly.Memory, enough for up to DIM = 4,096):
-//   0      .. 32,767 : re[0..4095] (Float64Array)
-//   32,768 .. 65,535 : im[0..4095] (Float64Array)
-//   65,536 .. 98,303 : tmpRe[0..4095] / phaseCos
-//   98,304 .. 131,071: tmpIm[0..4095] / phaseSin
+// Memory layout (byte offsets in 8-page = 512 KB WebAssembly.Memory, enough for up to 14 qubits / DIM = 16,384):
+//   0       .. 131,071 : re[0..16383]       (Float64Array)
+//   131,072 .. 262,143 : im[0..16383]       (Float64Array)
+//   262,144 .. 393,215 : phaseCos[0..16383] (Float64Array)
+//   393,216 .. 524,287 : phaseSin[0..16383] (Float64Array)
+export const MAX_WASM_DIM = 16384;
 export const OFF_RE = 0;
-export const OFF_IM = 32768;
-export const OFF_COS = 65536;
-export const OFF_SIN = 98304;
+export const OFF_IM = 131072;
+export const OFF_COS = 262144;
+export const OFF_SIN = 393216;
 
 function buildQuantumWasmBytes() {
   // Function 0: hadamardStep(halfBytes: i32, dimBytes: i32, invS2: f64) -> void
-  // Loops base = 0; base < dimBytes; base += (halfBytes << 1):
-  //   j = 0; j < halfBytes; j += 8:
-  //     a = base + j; b = a + halfBytes;
-  //     ar = re[a]; br = re[b]; re[a] = (ar + br)*s; re[b] = (ar - br)*s;
-  //     ai = im[a]; bi = im[b]; im[a] = (ai + bi)*s; im[b] = (ai - bi)*s;
   // Locals: p0=halfBytes(i32), p1=dimBytes(i32), p2=invS2(f64) | l3=step(i32), l4=base(i32), l5=j(i32), l6=a(i32), l7=b(i32), l8=ar(f64), l9=br(f64)
   const fn0Locals = [...uleb(2), ...uleb(5), I32, ...uleb(2), F64];
   const fn0Code = [
@@ -93,8 +90,6 @@ function buildQuantumWasmBytes() {
   ];
 
   // Function 1: applyDiagonalPhasesAndNorm(dimBytes: i32) -> f64
-  // Multiplies (re[k] + i im[k]) by (phaseCos[k] + i phaseSin[k]) in-place and returns sum_k (re[k]^2 + im[k]^2).
-  // Params: p0=dimBytes(i32) | Locals: l1=off(i32), l2=rk(f64), l3=ik(f64), l4=ck(f64), l5=sk(f64), l6=nr(f64), l7=ni(f64), l8=norm(f64)
   const fn1Locals = [...uleb(2), ...uleb(1), I32, ...uleb(7), F64];
   const fn1Code = [
     0x41, 0x00, 0x21, 0x01,                   // off = 0
@@ -108,11 +103,9 @@ function buildQuantumWasmBytes() {
         0x20, 0x01, 0x2b, 0x03, ...uleb(OFF_SIN), 0x21, 0x05, // sk
         // nr = rk*ck - ik*sk
         0x20, 0x02, 0x20, 0x04, 0xa2, 0x20, 0x03, 0x20, 0x05, 0xa2, 0xa1, 0x22, 0x06,
-        // store re[off] = nr
         0x20, 0x01, 0x20, 0x06, 0x39, 0x03, ...uleb(OFF_RE),
         // ni = rk*sk + ik*ck
         0x20, 0x02, 0x20, 0x05, 0xa2, 0x20, 0x03, 0x20, 0x04, 0xa2, 0xa0, 0x22, 0x07,
-        // store im[off] = ni
         0x20, 0x01, 0x20, 0x07, 0x39, 0x03, ...uleb(OFF_IM),
         // norm += nr*nr + ni*ni
         0x20, 0x08, 0x20, 0x06, 0x20, 0x06, 0xa2, 0x20, 0x07, 0x20, 0x07, 0xa2, 0xa0, 0xa0, 0x21, 0x08,
@@ -125,15 +118,12 @@ function buildQuantumWasmBytes() {
   ];
 
   // Function 2: cnotPair(dim: i32, cMask: i32, tMask: i32) -> void
-  // For idx = 0 .. dim-1: if ((idx & cMask) != 0 && (idx & tMask) == 0) swap amplitude idx <-> (idx ^ tMask)
-  // Params: p0=dim(i32), p1=cMask(i32), p2=tMask(i32) | Locals: l3=idx(i32), l4=aOff(i32), l5=bOff(i32), l6=tmp(f64)
   const fn2Locals = [...uleb(2), ...uleb(3), I32, ...uleb(1), F64];
   const fn2Code = [
     0x41, 0x00, 0x21, 0x03,                   // idx = 0
     0x02, 0x40,
       0x03, 0x40,
         0x20, 0x03, 0x20, 0x00, 0x4f, 0x0d, 0x01, // br_if exit (idx >=u dim)
-        // check (idx & cMask) != 0 && (idx & tMask) == 0
         0x20, 0x03, 0x20, 0x01, 0x71,         // idx & cMask
         0x04, 0x40,                           // if != 0
           0x20, 0x03, 0x20, 0x02, 0x71, 0x45, // (idx & tMask) == 0
@@ -167,7 +157,7 @@ function buildQuantumWasmBytes() {
     ...uleb(1),
     ...strBytes('env'),
     ...strBytes('mem'),
-    0x02, 0x00, ...uleb(2), // memory min = 2 pages (128 KB)
+    0x02, 0x00, ...uleb(8), // memory min = 8 pages (512 KB, supports up to 14 qubits / DIM = 16,384 f64)
   ];
   const funcs = [...uleb(3), 0x00, 0x01, 0x02];
   const exportsSec = [
@@ -199,11 +189,11 @@ function buildQuantumWasmBytes() {
 let CACHED_MOD = null;
 let WASM_SUPPORTED = true;
 
-export function createWasmQuantumKernel(dim = 4096) {
-  if (!WASM_SUPPORTED || typeof WebAssembly === 'undefined' || dim > 4096) return null;
+export function createWasmQuantumKernel(dim = 16384) {
+  if (!WASM_SUPPORTED || typeof WebAssembly === 'undefined' || dim > MAX_WASM_DIM) return null;
   try {
     if (!CACHED_MOD) CACHED_MOD = new WebAssembly.Module(buildQuantumWasmBytes());
-    const mem = new WebAssembly.Memory({ initial: 2 });
+    const mem = new WebAssembly.Memory({ initial: 8 });
     const inst = new WebAssembly.Instance(CACHED_MOD, { env: { mem } });
     const buf = mem.buffer;
     return {
@@ -227,5 +217,176 @@ export function createWasmQuantumKernel(dim = 4096) {
   } catch {
     WASM_SUPPORTED = false;
     return null;
+  }
+}
+
+/**
+ * Optional 16-Qubit (DIM = 65,536) WebGPU WGSL Compute-Shader Quantum Statevector Coprocessor.
+ * Executes Hadamard butterfly layers, parameterized Rz(theta_q) + Ising ZZ(phi) unitary diagonal evolutions,
+ * and 16-qubit CNOT ring gates directly on GPU storage buffers (`vec2<f32>` complex amplitudes).
+ */
+export const WGSL_QUANTUM_16Q = /* wgsl */ `
+struct GateParams {
+  mode: u32,      // 0 = Hadamard qubit q, 1 = Diagonal Rz + Ising ZZ, 2 = CNOT(cMask, tMask)
+  qBit: u32,
+  tMask: u32,
+  zzPhi: f32,
+  thetas0: vec4<f32>,
+  thetas1: vec4<f32>,
+  thetas2: vec4<f32>,
+  thetas3: vec4<f32>,
+};
+
+@group(0) @binding(0) var<storage, read_write> state: array<vec2<f32>>;
+@group(0) @binding(1) var<uniform> params: GateParams;
+
+fn thetaAt(q: u32) -> f32 {
+  if (q < 4u) { return params.thetas0[q]; }
+  if (q < 8u) { return params.thetas1[q - 4u]; }
+  if (q < 12u) { return params.thetas2[q - 8u]; }
+  return params.thetas3[q - 12u];
+}
+
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let idx = gid.x;
+  let dim = 65536u;
+  if (params.mode == 0u) {
+    // Butterfly pair over dim/2 = 32,768 threads
+    if (idx >= 32768u) { return; }
+    let half = params.qBit;
+    let lo = idx & (half - 1u);
+    let hi = (idx ^ lo) << 1u;
+    let i0 = hi | lo;
+    let i1 = i0 | half;
+    let a0 = state[i0];
+    let a1 = state[i1];
+    let s = 0.70710678f;
+    state[i0] = (a0 + a1) * s;
+    state[i1] = (a0 - a1) * s;
+  } else if (params.mode == 1u) {
+    if (idx >= dim) { return; }
+    var ang = 0.0f;
+    var aligned = 0.0f;
+    for (var q = 0u; q < 16u; q = q + 1u) {
+      let bq = (idx >> q) & 1u;
+      if (bq == 1u) { ang = ang + thetaAt(q); }
+      let nq = (q + 1u) & 15u;
+      let bq1 = (idx >> nq) & 1u;
+      aligned = aligned + select(-1.0f, 1.0f, bq == bq1);
+    }
+    ang = ang - params.zzPhi * aligned;
+    let c = cos(ang);
+    let s = sin(ang);
+    let a = state[idx];
+    state[idx] = vec2<f32>(a.x * c - a.y * s, a.x * s + a.y * c);
+  } else if (params.mode == 2u) {
+    if (idx >= dim) { return; }
+    if ((idx & params.qBit) != 0u && (idx & params.tMask) == 0u) {
+      let j = idx ^ params.tMask;
+      let tmp = state[idx];
+      state[idx] = state[j];
+      state[j] = tmp;
+    }
+  }
+}
+`;
+
+export class WebGPUQuantumStatevector {
+  constructor(nQ = 16) {
+    this.nQ = nQ;
+    this.dim = 1 << nQ;
+    this.ready = false;
+    this.device = null;
+    this.pipeline = null;
+    this.stateBuf = null;
+    this.paramBuf = null;
+    this.readBuf = null;
+    this.bindGroup = null;
+    this.steps = 0;
+  }
+
+  async init() {
+    if (typeof navigator === 'undefined' || !navigator.gpu) return false;
+    try {
+      const adapter = await navigator.gpu.requestAdapter();
+      if (!adapter) return false;
+      const device = await adapter.requestDevice();
+      const mod = device.createShaderModule({ code: WGSL_QUANTUM_16Q });
+      const pipeline = device.createComputePipeline({
+        layout: 'auto',
+        compute: { module: mod, entryPoint: 'main' },
+      });
+      const byteSize = this.dim * 8; // vec2<f32> * 65,536 = 512 KB
+      const initAmp = new Float32Array(this.dim * 2);
+      initAmp[0] = 1.0; // |0>^{⊗16}
+      const stateBuf = device.createBuffer({
+        size: byteSize,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      });
+      device.queue.writeBuffer(stateBuf, 0, initAmp);
+
+      const paramBuf = device.createBuffer({
+        size: 80, // 4 u32/f32 (16B) + 4 vec4<f32> (64B) = 80B
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      const readBuf = device.createBuffer({
+        size: 4096, // sample 512 complex amplitudes for entropy/Toeplitz seeding
+        usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+      });
+      const bindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: stateBuf } },
+          { binding: 1, resource: { buffer: paramBuf } },
+        ],
+      });
+      this.device = device;
+      this.pipeline = pipeline;
+      this.stateBuf = stateBuf;
+      this.paramBuf = paramBuf;
+      this.readBuf = readBuf;
+      this.bindGroup = bindGroup;
+      this.ready = true;
+      return true;
+    } catch {
+      this.ready = false;
+      return false;
+    }
+  }
+
+  async stepLayer(thetas16, zzPhi = 0.085) {
+    if (!this.ready) return null;
+    const dev = this.device;
+    const uBuf = new ArrayBuffer(80);
+    const u32 = new Uint32Array(uBuf, 0, 4);
+    const f32 = new Float32Array(uBuf);
+    for (let i = 0; i < 16; i++) f32[4 + i] = thetas16[i % thetas16.length] || 0;
+    f32[3] = zzPhi;
+
+    const dispatchMode = (mode, qBit, tMask, groups) => {
+      u32[0] = mode; u32[1] = qBit; u32[2] = tMask;
+      dev.queue.writeBuffer(this.paramBuf, 0, uBuf);
+      const enc = dev.createCommandEncoder();
+      const pass = enc.beginComputePass();
+      pass.setPipeline(this.pipeline);
+      pass.setBindGroup(0, this.bindGroup);
+      pass.dispatchWorkgroups(groups);
+      pass.end();
+      dev.queue.submit([enc.finish()]);
+    };
+
+    for (let q = 0; q < 16; q++) dispatchMode(0, 1 << q, 0, 128);
+    dispatchMode(1, 0, 0, 256);
+    for (let q = 0; q < 16; q++) dispatchMode(2, 1 << q, 1 << ((q + 1) & 15), 256);
+
+    const enc = dev.createCommandEncoder();
+    enc.copyBufferToBuffer(this.stateBuf, 0, this.readBuf, 0, 4096);
+    dev.queue.submit([enc.finish()]);
+    await this.readBuf.mapAsync(GPUMapMode.READ);
+    const sample = Float32Array.from(new Float32Array(this.readBuf.getMappedRange()));
+    this.readBuf.unmap();
+    this.steps++;
+    return sample;
   }
 }

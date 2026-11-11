@@ -1,20 +1,21 @@
-// Open-Ended Multi-Agent A-Life Biosphere (pass 17):
-//  - Autonomous Conspecific Glitchlings (`peers`) with heritable 92-gene Evo-Devo genomes, articulated 7-segment 3D bodies,
-//    chemotactic pheromone navigation, foraging, drinking, geothermal basking, bio-acoustic courtship, and senescence.
-//  - Diploid Sexual Reproduction via Simulated Binary Crossover (SBX) + Polynomial Mutation across all 92 genes, producing
+// Open-Ended Multi-Agent A-Life Biosphere (pass 18):
+//  - Up to 32 Autonomous Conspecific Glitchlings (`peers`) with heritable 108-gene Hox + Morphogen Evo-Devo genomes
+//    (expressing variable 4-limb quadruped, 6-limb hexapod, and 8-limb octopod topologies + dorsal osteoderms),
+//    articulated 7-segment 3D bodies, chemotactic pheromone navigation, foraging, drinking, basking, courtship, and senescence.
+//  - Diploid Sexual Reproduction via Simulated Binary Crossover (SBX) + Polynomial Mutation across all 108 genes, producing
 //    physical 3D Bioluminescent Eggs (`eggs`) whose incubation speed depends on microclimate/vent warmth, hatching into
 //    neonates (`egg -> neonate -> juvenile -> adult -> elder`) and recording a live multi-generational `lineageTree`.
-//  - Mutualistic/Prey Photonic Bio-Mites (`mites`) that pollinate fruiting flora and provide mobile high-protein prey.
+//  - Mutualistic/Prey Photonic Bio-Mites (`mites`) coupled to the > 1.4M Saprotrophic/Phytoplankton Microbial Continuum.
 //  - Shadow-Leviathan Apex Predators (`predators`) that patrol the biosphere perimeter, testing alarm calls, Schreckstoff
 //    pheromone cascades, crystal-spire sheltering, chromatophore camouflage, and defensive curling.
 import { mulberry, clamp, gauss } from './util.js';
-import { FULL_GENES } from './genome.js';
+import { FULL_GENES, evalHoxGRN } from './genome.js';
 import { STARTER } from './starter_genome.js';
 import { WORLD, SITES } from './world.js';
 
 export const LIFE_STAGES = ['neonate', 'juvenile', 'adult', 'elder'];
 
-/** Diploid Simulated Binary Crossover (SBX) + bounded polynomial mutation over all 92 developmental genes */
+/** Diploid Simulated Binary Crossover (SBX) + bounded polynomial mutation over all 108 developmental & Hox GRN genes */
 export function crossoverGenomes(genA, genB, r, mutRate = 0.14, etaC = 4.0) {
   const child = {};
   for (let i = 0; i < FULL_GENES.length; i++) {
@@ -53,6 +54,8 @@ export function mutateStarterGenome(r, spread = 0.16) {
     if (nm === 'pigmentHue') u = r();
     else if (nm === 'crestFin' || nm === 'tailFluke') u = clamp(0.15 + 0.75 * r(), 0.05, 0.95);
     else if (nm === 'bodyLen' || nm === 'bodyGirth' || nm === 'foreLimb' || nm === 'hindLimb') u = clamp(0.5 + 0.55 * (r() - 0.5), 0.1, 0.9);
+    else if (nm === 'limbTopo') u = clamp(0.06 + 0.88 * r(), 0.04, 0.96); // wild 4/6/8-limb clade radiation!
+    else if (nm === 'osteoderm' || nm === 'gillFronds') u = clamp(0.15 + 0.75 * r(), 0.05, 0.95);
     g[nm] = +(lo + clamp(u, 0.03, 0.97) * (hi - lo)).toFixed(4);
   }
   return g;
@@ -66,9 +69,9 @@ export class Ecosystem {
     this.t = 0;
     this.nextId = 1;
 
-    this.maxPeers = opts.maxPeers ?? 12;
-    const initPeers = opts.peers ?? 5;
-    const initMites = opts.mites ?? 28;
+    this.maxPeers = opts.maxPeers ?? 32;
+    const initPeers = opts.peers ?? 8;
+    const initMites = opts.mites ?? 36;
     const initPreds = opts.predators ?? 1;
 
     this.peers = [];
@@ -76,7 +79,7 @@ export class Ecosystem {
     this.mites = [];
     this.predators = [];
     this.lineageTree = [
-      { id: 0, parentA: -1, parentB: -1, gen: 0, t: 0, hue: 0.75, crestFin: 1.0, bodyLen: 1.0, label: 'Focal-0' },
+      { id: 0, parentA: -1, parentB: -1, gen: 0, t: 0, hue: 0.75, crestFin: 1.0, bodyLen: 1.0, limbPairs: 3, label: 'Focal-0' },
     ];
     this.stats = {
       births: 0,
@@ -134,9 +137,12 @@ export class Ecosystem {
       segY[s] = W.height(segX[s], segZ[s]) + 0.26 * scale;
     }
 
+    const hox = evalHoxGRN(g);
     const peer = {
       id,
       gen: g,
+      hox,
+      limbPairs: hox.limbPairs,
       generation,
       parentA: meta.parentA ?? -1,
       parentB: meta.parentB ?? -1,
@@ -172,15 +178,16 @@ export class Ecosystem {
       hue: g.pigmentHue ?? 0.5,
       crestFin: g.crestFin ?? 1.0,
       bodyLen: g.bodyLen ?? 1.0,
+      limbPairs: hox.limbPairs,
       isFocalChild: peer.parentA === 0 || peer.parentB === 0,
     });
-    if (this.lineageTree.length > 64) this.lineageTree.shift();
+    if (this.lineageTree.length > 96) this.lineageTree.shift();
     if (generation > this.stats.maxGen) this.stats.maxGen = generation;
     return peer;
   }
 
   layEgg(x, z, genA, genB, idA, idB, genNum, focalInvolved = false) {
-    if (this.eggs.length >= 14) return null;
+    if (this.eggs.length >= 24) return null;
     const W = this.world;
     const childGen = crossoverGenomes(genA, genB, this.r, 0.15);
     const egg = {
@@ -205,7 +212,7 @@ export class Ecosystem {
   }
 
   spawnMite(pos = null) {
-    if (this.mites.length >= 64) return null;
+    if (this.mites.length >= 80) return null;
     const r = this.r, W = this.world;
     const a = r() * Math.PI * 2, d = 2 + r() * 16;
     const x = pos ? pos[0] : Math.cos(a) * d;
@@ -244,13 +251,13 @@ export class Ecosystem {
 
   setPopulationTargets({ peers, mites, predators }) {
     if (peers !== undefined) {
-      const tgt = clamp(Math.round(peers), 0, 16);
-      this.maxPeers = Math.max(this.maxPeers, tgt + 4);
+      const tgt = clamp(Math.round(peers), 0, 32);
+      this.maxPeers = Math.max(this.maxPeers, Math.min(32, tgt + 4));
       while (this.peers.length < tgt) this.spawnPeer(null, null, true);
       while (this.peers.length > tgt) this.peers.pop();
     }
     if (mites !== undefined) {
-      const tgt = clamp(Math.round(mites), 0, 64);
+      const tgt = clamp(Math.round(mites), 0, 80);
       while (this.mites.length < tgt) this.spawnMite();
       while (this.mites.length > tgt) this.mites.pop();
     }
@@ -489,7 +496,7 @@ export class Ecosystem {
               focalCreature.outcome(null, 0.95);
               focalCreature.vocalFreq = 0.5 * (p.vocalFreq + 440);
               focalCreature.vocalAmp = 0.75;
-              focalCreature.ev('courtship', `courted conspecific #${p.id} — diploid 92-gene egg laid!`);
+              focalCreature.ev('courtship', `courted conspecific #${p.id} (${p.limbPairs * 2}L) — diploid 108-gene Hox egg laid!`);
             } else if (mateRef && mateRef.id > p.id) {
               this.stats.courtships++;
               p.mateCooldown = 38;

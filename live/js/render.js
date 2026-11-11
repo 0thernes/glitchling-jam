@@ -1,6 +1,6 @@
-// Wild Three.js + p5.js HDR16F / 4K UHD Biosphere Renderer (pass 17)
-// Rendering strictly READS simulation state: 336-tet FEM particles, 4-comp HH spikes, 256 WCSPH blood parcels,
-// 92-gene Evo-Devo morphology, p5.js Voronoi dermal & pheromone/mycelial textures, and the multi-agent ecosystem.
+// Next-Gen Three.js + p5.js HDR16F / PMREM Sky IBL / 4K UHD Bio-Observatory Renderer (Pass 18)
+// Strictly READS live simulation state: 336/348-tet FEM + Huxley sarcomeres, 8-comp HH+NMDA+SK / 14.16M GIGA spikes,
+// 512 WCSPH + D3Q19 LBM blood parcels, 108-gene Hox 4/6/8-limb topologies, 1.4M+ microbial continuum, and 32-peer biosphere.
 
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -14,14 +14,18 @@ import { REGIONS, R0, NNEU } from './sim/brain.js';
 import { SW, SH } from './sim/skin.js';
 import { WORLD } from './sim/world.js';
 
-const HUES = [0x39ff9e, 0xff3df0, 0x3df7ff, 0xffb02e];
-const RING_M = 36, RING_S = 72;
-const GRASS_COUNT = 2400;
-const MAX_PEER_MESHES = 16;
-const MAX_EGG_MESHES = 18;
-const LEVIATHAN_SEGS = 12;
+const HUES = [0x34f5a6, 0xff44d8, 0x38e8ff, 0xffb838];
+const RING_M = 48, RING_S = 96;
+const LIMB_RINGS = 14, LIMB_SIDES = 12;
+const STALK_RINGS = 10, STALK_SIDES = 10;
+const ANT_RINGS = 10, ANT_SIDES = 8;
+const PEER_RINGS = 20, PEER_SIDES = 10;
+const GRASS_COUNT = 3200;
+const MAX_PEER_MESHES = 32;
+const MAX_EGG_MESHES = 24;
+const LEVIATHAN_SEGS = 24;
 
-// Depth-Buffer Screen-Space Contact & Horizon Ambient Occlusion + Crepuscular Scattering Shader
+// 12-Tap Spiral Interleaved-Gradient-Noise GTAO + 8-Step Volumetric Crepuscular Sunbeams (HDR16F safe)
 const ContactAOScatterShader = {
   uniforms: {
     tDiffuse: { value: null },
@@ -29,9 +33,9 @@ const ContactAOScatterShader = {
     uRes: { value: new THREE.Vector2(1280, 720) },
     uNear: { value: 0.05 },
     uFar: { value: 320.0 },
-    uStrength: { value: 0.42 },
+    uStrength: { value: 0.48 },
     uSunScreen: { value: new THREE.Vector2(0.5, 0.75) },
-    uGodRay: { value: 0.18 },
+    uGodRay: { value: 0.20 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -63,35 +67,38 @@ const ContactAOScatterShader = {
       float occ = 0.0;
       if (uStrength > 0.001) {
         float dC = linDepth(vUv);
-        if (dC < uFar * 0.85) {
+        if (dC < uFar * 0.86) {
           vec2 texel = 1.0 / max(vec2(1.0), uRes);
-          float rad = clamp(4.5 / max(0.6, dC), 1.0, 6.0);
-          for (int i = 0; i < 8; i++) {
-            float a = float(i) * 0.785398 + fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5453) * 0.7;
-            vec2 off = vec2(cos(a), sin(a)) * texel * rad * (1.0 + 0.5 * float(i & 1));
+          float rad = clamp(5.2 / max(0.55, dC), 1.1, 7.2);
+          float ign = fract(52.9829189 * fract(dot(vUv * uRes, vec2(0.06711056, 0.00583715))));
+          for (int i = 0; i < 12; i++) {
+            float fi = (float(i) + 0.5) / 12.0;
+            float a = float(i) * 2.399963 + ign * 6.283185;
+            vec2 off = vec2(cos(a), sin(a)) * texel * rad * (0.35 + 0.95 * sqrt(fi));
             float dS = linDepth(clamp(vUv + off, 0.001, 0.999));
             float diff = dC - dS;
-            if (diff > 0.015 && diff < 1.35) {
-              occ += (1.0 - diff / 1.35);
+            if (diff > 0.012 && diff < 1.45) {
+              occ += (1.0 - diff / 1.45) * (1.15 - 0.35 * fi);
             }
           }
-          occ = clamp((occ / 8.0) * uStrength * 2.1, 0.0, 0.58);
+          occ = clamp((occ / 12.0) * uStrength * 2.25, 0.0, 0.56);
         }
       }
-      vec3 col = safeCol * (1.0 - occ);
+      // Tint ambient occlusion subtly cool-indigo instead of muddy black
+      vec3 aoTint = mix(vec3(1.0), vec3(0.08, 0.12, 0.24), occ);
+      vec3 col = safeCol * mix(vec3(1.0 - occ), aoTint, 0.25);
 
-      // Subtle crepuscular sky-scatter toward sun screen projection
       vec2 toSun = uSunScreen - vUv;
       float sunDist = length(toSun);
-      if (uGodRay > 0.01 && uStrength > 0.001 && sunDist < 0.85) {
-        vec2 stepUv = toSun * 0.045;
+      if (uGodRay > 0.01 && uStrength > 0.001 && sunDist < 0.92) {
+        vec2 stepUv = toSun * 0.036;
         vec2 suv = vUv;
         float skyVis = 0.0;
-        for (int s = 0; s < 5; s++) {
+        for (int s = 0; s < 8; s++) {
           suv = clamp(suv + stepUv, 0.002, 0.998);
-          skyVis += step(uFar * 0.75, linDepth(suv));
+          skyVis += step(uFar * 0.72, linDepth(suv)) * (1.0 - float(s) * 0.08);
         }
-        col += vec3(1.0, 0.78, 0.58) * (skyVis / 5.0) * uGodRay * smoothstep(0.85, 0.0, sunDist);
+        col += vec3(1.0, 0.82, 0.62) * (skyVis / 6.0) * uGodRay * smoothstep(0.92, 0.0, sunDist);
       }
       col.r = (col.r >= 0.0 && col.r <= 48.0) ? col.r : 0.0;
       col.g = (col.g >= 0.0 && col.g <= 48.0) ? col.g : 0.0;
@@ -101,17 +108,203 @@ const ContactAOScatterShader = {
   `,
 };
 
+// FidelityFX-Inspired Contrast-Adaptive Sharpening (CAS) + Subtle Optical Natural Vignette
+const CinematicLensCASShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uRes: { value: new THREE.Vector2(1280, 720) },
+    uSharpness: { value: 0.42 },
+    uVignette: { value: 0.16 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform vec2 uRes;
+    uniform float uSharpness, uVignette;
+    varying vec2 vUv;
+
+    vec3 safeFetch(vec2 uv) {
+      vec3 c = texture2D(tDiffuse, clamp(uv, 0.0005, 0.9995)).rgb;
+      c.r = (c.r >= 0.0 && c.r <= 48.0) ? c.r : 0.0;
+      c.g = (c.g >= 0.0 && c.g <= 48.0) ? c.g : 0.0;
+      c.b = (c.b >= 0.0 && c.b <= 48.0) ? c.b : 0.0;
+      return c;
+    }
+
+    void main() {
+      vec2 px = 1.0 / max(vec2(1.0), uRes);
+      vec3 e = safeFetch(vUv);
+      if (uSharpness > 0.01) {
+        vec3 b = safeFetch(vUv + vec2(0.0, -px.y));
+        vec3 d = safeFetch(vUv + vec2(-px.x, 0.0));
+        vec3 f = safeFetch(vUv + vec2(px.x, 0.0));
+        vec3 h = safeFetch(vUv + vec2(0.0, px.y));
+        vec3 mnRGB = min(min(min(d, e), min(f, b)), h);
+        vec3 mxRGB = max(max(max(d, e), max(f, b)), h);
+        vec3 amp = clamp(min(mnRGB, 2.0 - mxRGB) / max(vec3(1e-4), mxRGB), 0.0, 1.0);
+        vec3 w = -sqrt(amp) * (0.125 * uSharpness);
+        e = max(vec3(0.0), (b * w + d * w + f * w + h * w + e) / (4.0 * w + 1.0));
+      }
+      vec2 dv = vUv - 0.5;
+      float vig = 1.0 - uVignette * dot(dv, dv) * 1.65;
+      vec3 outCol = clamp(e * vig, 0.0, 48.0);
+      gl_FragColor = vec4(outCol, 1.0);
+    }
+  `,
+};
+
 function makeHDRTarget(w, h) {
   const depthTex = new THREE.DepthTexture(Math.max(1, w), Math.max(1, h));
   depthTex.type = THREE.UnsignedIntType;
-  const rt = new THREE.WebGLRenderTarget(Math.max(1, w), Math.max(1, h), {
+  return new THREE.WebGLRenderTarget(Math.max(1, w), Math.max(1, h), {
     type: THREE.HalfFloatType,
     minFilter: THREE.LinearFilter,
     magFilter: THREE.LinearFilter,
     depthBuffer: true,
     depthTexture: depthTex,
   });
-  return rt;
+}
+
+function makeTubeGeometry(rings, sides) {
+  const n = rings * (sides + 1);
+  const pos = new Float32Array(n * 3);
+  const nor = new Float32Array(n * 3);
+  const uv = new Float32Array(n * 2);
+  const idx = [];
+  for (let r = 0; r < rings; r++) {
+    for (let s = 0; s <= sides; s++) {
+      const i = r * (sides + 1) + s;
+      nor[3 * i + 1] = 1;
+      uv[2 * i] = r / Math.max(1, rings - 1);
+      uv[2 * i + 1] = s / sides;
+      if (r < rings - 1 && s < sides) {
+        const a = i, b = i + sides + 1;
+        idx.push(a, b, a + 1, b, b + 1, a + 1);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+
+/** Update a continuous Catmull-Rom tubular mesh along control points `pts` with per-control-point radii `radii` */
+function writeCatmullTube(geo, rings, sides, pts, radii, upHint = [0, 1, 0]) {
+  const pos = geo.attributes.position.array;
+  const nor = geo.attributes.normal.array;
+  const K = pts.length;
+  const getP = (i) => pts[Math.max(0, Math.min(K - 1, i))];
+  const getR = (i) => radii[Math.max(0, Math.min(K - 1, i))];
+  const center = [0, 0, 0], tang = [0, 0, 1], side = [1, 0, 0], up = [0, 1, 0];
+
+  for (let r = 0; r < rings; r++) {
+    const u = r / (rings - 1);
+    const f = u * (K - 1);
+    const i = Math.min(K - 2, Math.floor(f));
+    const tt = f - i;
+    const p0 = getP(i - 1), p1 = getP(i), p2 = getP(i + 1), p3 = getP(i + 2);
+    for (let c = 0; c < 3; c++) {
+      const a = p0[c], b = p1[c], d = p2[c], e = p3[c];
+      center[c] = 0.5 * (2 * b + (-a + d) * tt + (2 * a - 5 * b + 4 * d - e) * tt * tt + (-a + 3 * b - 3 * d + e) * tt * tt * tt);
+      tang[c] = 0.5 * ((-a + d) + 2 * (2 * a - 5 * b + 4 * d - e) * tt + 3 * (-a + 3 * b - 3 * d + e) * tt * tt);
+    }
+    let tn = Math.hypot(tang[0], tang[1], tang[2]);
+    if (tn < 1e-5) { tang[0] = 0; tang[1] = 0; tang[2] = 1; tn = 1; }
+    tang[0] /= tn; tang[1] /= tn; tang[2] /= tn;
+
+    // Orthonormal Bishop-like frame from upHint x tang
+    side[0] = upHint[1] * tang[2] - upHint[2] * tang[1];
+    side[1] = upHint[2] * tang[0] - upHint[0] * tang[2];
+    side[2] = upHint[0] * tang[1] - upHint[1] * tang[0];
+    let sn = Math.hypot(side[0], side[1], side[2]);
+    if (sn < 1e-4) {
+      side[0] = 1; side[1] = 0; side[2] = 0;
+      sn = 1;
+    }
+    side[0] /= sn; side[1] /= sn; side[2] /= sn;
+    up[0] = tang[1] * side[2] - tang[2] * side[1];
+    up[1] = tang[2] * side[0] - tang[0] * side[2];
+    up[2] = tang[0] * side[1] - tang[1] * side[0];
+
+    const rad = getR(i) * (1 - tt) + getR(i + 1) * tt;
+    // Hemispherical end-cap rounding at very tip
+    const capTaper = r === rings - 1 ? 0.12 : r === 0 ? 0.88 : 1.0;
+    const rr = Math.max(0.0015, rad * capTaper);
+
+    for (let s = 0; s <= sides; s++) {
+      const th = (s / sides) * Math.PI * 2;
+      const ct = Math.cos(th), st = Math.sin(th);
+      const nx = st * side[0] + ct * up[0];
+      const ny = st * side[1] + ct * up[1];
+      const nz = st * side[2] + ct * up[2];
+      const o = 3 * (r * (sides + 1) + s);
+      pos[o] = center[0] + nx * rr;
+      pos[o + 1] = center[1] + ny * rr;
+      pos[o + 2] = center[2] + nz * rr;
+      nor[o] = nx; nor[o + 1] = ny; nor[o + 2] = nz;
+    }
+  }
+  geo.attributes.position.needsUpdate = true;
+  geo.attributes.normal.needsUpdate = true;
+}
+
+/** Build a curved parabolic keratin talon geometry extending along +Z and curving ventrally (-Y) */
+function buildCurvedTalonGeo() {
+  const rings = 7, sides = 8;
+  const geo = makeTubeGeometry(rings, sides);
+  const pts = [], radii = [];
+  for (let r = 0; r < rings; r++) {
+    const u = r / (rings - 1);
+    pts.push([0, -0.042 * u * u, 0.115 * u]);
+    radii.push(0.019 * (1 - 0.86 * Math.pow(u, 0.85)));
+  }
+  writeCatmullTube(geo, rings, sides, pts, radii, [0, 1, 0]);
+  return geo;
+}
+
+/** Soft radial Gaussian glowing sprite ShaderMaterial (eliminates boxy square WebGL point sprites) */
+function makeSoftSpriteMaterial(baseSize = 0.14, opacity = 0.85, additive = true) {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    uniforms: {
+      uSize: { value: baseSize },
+      uScale: { value: 420.0 },
+      uOpacity: { value: opacity },
+    },
+    vertexShader: `
+      attribute vec3 color;
+      varying vec3 vCol;
+      uniform float uSize, uScale;
+      void main() {
+        vCol = color;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = clamp(uSize * uScale / max(0.35, -mv.z), 1.5, 42.0);
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vCol;
+      uniform float uOpacity;
+      void main() {
+        vec2 p = gl_PointCoord - 0.5;
+        float r2 = dot(p, p) * 4.0;
+        if (r2 > 1.0) discard;
+        float w = exp(-r2 * 2.8) * (1.0 - r2);
+        gl_FragColor = vec4(vCol * (0.85 + 0.9 * w), uOpacity * w);
+      }
+    `,
+  });
 }
 
 export class View {
@@ -128,9 +321,8 @@ export class View {
       preserveDrawingBuffer: false,
     }));
     R.toneMapping = THREE.ACESFilmicToneMapping;
-    R.toneMappingExposure = 1.06;
+    R.toneMappingExposure = 1.12;
 
-    // Enable Display-P3 wide color gamut when supported by browser + display, fallback sRGB
     const p3Ok = !!(THREE.DisplayP3ColorSpace && typeof window !== 'undefined' && window.matchMedia?.('(color-gamut: p3)')?.matches);
     try {
       R.outputColorSpace = p3Ok ? THREE.DisplayP3ColorSpace : THREE.SRGBColorSpace;
@@ -139,53 +331,62 @@ export class View {
       R.outputColorSpace = THREE.SRGBColorSpace;
       this.colorGamut = 'sRGB';
     }
-    this.hdrPipeline = 'HDR16F + SSAO + Bloom';
+    this.hdrPipeline = 'HDR16F + Sky IBL + GTAO + CAS';
     R.shadowMap.enabled = false;
     R.shadowMap.type = THREE.PCFSoftShadowMap;
 
     const S = (this.scene = new THREE.Scene());
-    S.fog = new THREE.FogExp2(0x060510, 0.017);
+    // Crisp deep atmospheric perspective (no washed-out grey FogExp2 soup!)
+    S.fog = new THREE.FogExp2(0x060b18, 0.0068);
+    S.environmentIntensity = 0.88;
 
-    const cam = (this.camera = new THREE.PerspectiveCamera(52, 1, 0.05, 320));
-    cam.position.set(3.4, 2.5, 4.0);
+    const cam = (this.camera = new THREE.PerspectiveCamera(50, 1, 0.05, 320));
+    cam.position.set(3.2, 2.25, 3.8);
 
     this.controls = new OrbitControls(cam, canvas);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.07;
     this.controls.maxPolarAngle = Math.PI * 0.492;
-    this.controls.minDistance = 1.1;
+    this.controls.minDistance = 0.95;
     this.controls.maxDistance = 58;
     this.follow = true;
-    this.cameraMode = opts.cameraMode || 'orbit'; // 'orbit' | 'pov' | 'director' | 'overhead'
+    this.cameraMode = opts.cameraMode || 'orbit';
     this._dirAngle = 0.5;
     this._povLook = new THREE.Vector3(0, 0.5, 1);
 
-    // Lighting rig: Hemisphere + Shadowed Sun + Neural Rim + Geothermal Vent Warmth
-    this.hemi = new THREE.HemisphereLight(0x9fd8ff, 0x221218, 0.95);
+    // Multi-point studio + biosphere lighting rig
+    this.hemi = new THREE.HemisphereLight(0xa8e0ff, 0x1a1424, 1.05);
     S.add(this.hemi);
-    this.sun = new THREE.DirectionalLight(0xfff0dd, 2.35);
+    this.sun = new THREE.DirectionalLight(0xfff2e0, 2.65);
     this.sun.position.set(12, 20, 8);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.bias = -0.00035;
     const sc = this.sun.shadow.camera;
-    sc.left = sc.bottom = -15;
-    sc.right = sc.top = 15;
+    sc.left = sc.bottom = -16;
+    sc.right = sc.top = 16;
     sc.near = 1;
-    sc.far = 55;
+    sc.far = 58;
     S.add(this.sun);
     S.add(this.sun.target);
 
-    this.rim = new THREE.PointLight(0xff40ff, 5.5, 9.5, 1.5);
+    this.rim = new THREE.PointLight(0x48e8ff, 4.8, 11.0, 1.45);
     S.add(this.rim);
 
-    // Build all 3D layers
     this._upVec = new THREE.Vector3(0, 1, 0);
     this._tmpV1 = new THREE.Vector3();
     this._tmpV2 = new THREE.Vector3();
     this._tmpQ = new THREE.Quaternion();
     this._tmpM = new THREE.Matrix4();
 
+    // PMREM HDR Sky Environment Probe for realistic wet skin, cornea, water & crystal reflections
+    this.pmrem = new THREE.PMREMGenerator(R);
+    this.pmrem.compileEquirectangularShader();
+    this._envRT = null;
+    this._lastEnvDay = -999;
+
     this.buildSky();
+    this.bakeSkyEnvironment(cr.light ?? 1);
     this.buildTerrain();
     this.buildGrass();
     this.buildProps();
@@ -193,7 +394,6 @@ export class View {
     this.buildCreature();
     this.buildWeather();
 
-    // HalfFloatType (HDR16F) EffectComposer with independent DepthTextures on both ping-pong targets
     const initRt = makeHDRTarget(512, 512);
     this.composer = new EffectComposer(R, initRt);
     this.composer.renderTarget2.dispose();
@@ -204,7 +404,6 @@ export class View {
     this.renderPass = new RenderPass(S, cam);
     this.composer.addPass(this.renderPass);
 
-    // Custom SSAO + crepuscular scatter pass binding readBuffer.depthTexture dynamically
     this.aoPass = new ShaderPass(ContactAOScatterShader);
     const origAORender = this.aoPass.render.bind(this.aoPass);
     this.aoPass.render = (renderer, writeBuffer, readBuffer, deltaTime, maskActive) => {
@@ -213,14 +412,32 @@ export class View {
     };
     this.composer.addPass(this.aoPass);
 
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.72, 0.52, 0.84);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.54, 0.48, 0.90);
     this.composer.addPass(this.bloom);
+
+    this.casPass = new ShaderPass(CinematicLensCASShader);
+    this.composer.addPass(this.casPass);
     this.composer.addPass(new OutputPass());
 
-    this.quality = 2;
-    this.setQuality(opts.quality ?? 2);
+    this.quality = opts.quality ?? 3;
+    this.setQuality(this.quality);
     this.clock = 0;
     this.heartPh = 0;
+  }
+
+  dispose() {
+    if (this._envRT) { this._envRT.dispose(); this._envRT = null; }
+    if (this.pmrem) { this.pmrem.dispose(); this.pmrem = null; }
+  }
+
+  bakeSkyEnvironment(dayVal) {
+    if (!this.pmrem || !this.envScene) return;
+    this._lastEnvDay = dayVal;
+    this.skyU.day.value = dayVal;
+    const nextRT = this.pmrem.fromScene(this.envScene, 0.035);
+    if (this._envRT) this._envRT.dispose();
+    this._envRT = nextRT;
+    this.scene.environment = nextRT.texture;
   }
 
   setCameraMode(mode) {
@@ -228,14 +445,14 @@ export class View {
     this.controls.enabled = mode === 'orbit' || mode === 'overhead';
     if (mode === 'overhead') {
       this.controls.target.set(0, 0, 0);
-      this.camera.position.set(0, 31, 17);
-      this.camera.fov = 54;
+      this.camera.position.set(0, 30, 16);
+      this.camera.fov = 52;
       this.camera.updateProjectionMatrix();
     } else if (mode === 'pov') {
       this.camera.fov = 76;
       this.camera.updateProjectionMatrix();
     } else {
-      this.camera.fov = 52;
+      this.camera.fov = 50;
       this.camera.updateProjectionMatrix();
     }
     if (this.cg) this.cg.visible = true;
@@ -245,19 +462,20 @@ export class View {
     this.quality = q;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     if (q === 4) {
-      // Fixed 4K UHD (3840x2160) HDR16F master mode
       this.pr = 1;
     } else {
-      this.pr = [0.55, 0.85, 1, dpr][q] ?? 1;
+      this.pr = [0.65, 0.85, 1.0, dpr][q] ?? dpr;
     }
     this.aoPass.enabled = q >= 1;
-    this.aoPass.uniforms.uStrength.value = q >= 2 ? 0.55 : 0.0;
+    this.aoPass.uniforms.uStrength.value = q >= 2 ? 0.52 : 0.0;
     this.bloom.enabled = q >= 1;
+    this.casPass.enabled = q >= 2;
+    this.casPass.uniforms.uSharpness.value = q >= 3 ? 0.45 : 0.30;
     this.renderer.shadowMap.enabled = q >= 3;
     this.sun.castShadow = q >= 3;
-    this.rainN = [160, 480, 950, 1500, 1800][q] ?? 950;
+    this.rainN = [240, 600, 1100, 1600, 1800][q] ?? 1400;
     if (this.grassMesh) {
-      this.grassMesh.count = [450, 1100, 1800, GRASS_COUNT, GRASS_COUNT][q] ?? 1800;
+      this.grassMesh.count = [700, 1400, 2400, GRASS_COUNT, GRASS_COUNT][q] ?? 2400;
     }
     this.resize();
   }
@@ -280,7 +498,6 @@ export class View {
       bufH = Math.max(1, Math.round(cssH * this.pr));
     }
 
-    // Resize both HalfFloatType + DepthTexture targets cleanly
     this.composer.renderTarget1.setSize(bufW, bufH);
     if (this.composer.renderTarget1.depthTexture) {
       this.composer.renderTarget1.depthTexture.image.width = bufW;
@@ -296,6 +513,12 @@ export class View {
     this.composer.setPixelRatio(1);
     this.composer.setSize(bufW, bufH);
     this.aoPass.uniforms.uRes.value.set(bufW, bufH);
+    this.casPass.uniforms.uRes.value.set(bufW, bufH);
+
+    const spriteScale = bufH * 0.58;
+    for (const sm of [this.ventSpriteMat, this.miteSpriteMat, this.bloodSpriteMat, this.sporeSpriteMat, this.brainSpriteMat]) {
+      if (sm?.uniforms?.uScale) sm.uniforms.uScale.value = spriteScale;
+    }
 
     this.camera.aspect = cssW / cssH;
     this.camera.updateProjectionMatrix();
@@ -303,7 +526,6 @@ export class View {
     this.bufferHeight = bufH;
   }
 
-  /** Render an exact 3840x2160 4K UHD HDR16F frame and download as a PNG */
   capture4KPNG() {
     const prevQ = this.quality;
     this.setQuality(4);
@@ -320,9 +542,9 @@ export class View {
     else this.resize();
   }
 
-  // ------------------------------------------------------------------ Sky: Twin Alien Moons, FBM Nebula, Aurora & Sun Corona
+  // ------------------------------------------------------------------ Sky Dome + PMREM Environment Source
   buildSky() {
-    const g = new THREE.SphereGeometry(175, 40, 24);
+    const g = new THREE.SphereGeometry(185, 48, 32);
     this.skyU = {
       day: { value: 1 },
       t: { value: 0 },
@@ -360,50 +582,49 @@ export class View {
         void main() {
           vec3 dir = normalize(vP);
           float y = dir.y;
-          vec3 nightZen = vec3(0.012, 0.008, 0.038);
-          vec3 nightHor = vec3(0.055, 0.018, 0.105);
-          vec3 dayZen = mix(vec3(0.14, 0.30, 0.62), vec3(0.24, 0.22, 0.52), 0.35 * sin(season * 6.283));
-          vec3 dayHor = mix(vec3(0.82, 0.52, 0.68), vec3(0.95, 0.66, 0.48), 0.5 + 0.5 * cos(season * 6.283));
+          vec3 nightZen = vec3(0.010, 0.016, 0.048);
+          vec3 nightHor = vec3(0.038, 0.055, 0.125);
+          vec3 dayZen = mix(vec3(0.09, 0.26, 0.58), vec3(0.16, 0.22, 0.52), 0.35 * sin(season * 6.283));
+          vec3 dayHor = mix(vec3(0.58, 0.76, 0.88), vec3(0.92, 0.68, 0.52), 0.45 + 0.45 * cos(season * 6.283));
 
           vec3 c = mix(
             mix(nightHor, nightZen, smoothstep(-0.08, 0.65, y)),
-            mix(dayHor, dayZen, smoothstep(-0.08, 0.58, y)),
+            mix(dayHor, dayZen, smoothstep(-0.08, 0.62, y)),
             day
           );
 
-          // Deep-space bioluminescent FBM nebula
-          float neb = noise(dir * 3.5 + vec3(t * 0.008, 0.0, -t * 0.006)) * 0.65
-                    + noise(dir * 7.5 - vec3(0.0, t * 0.01, 0.0)) * 0.35;
-          c += mix(vec3(0.28, 0.05, 0.45), vec3(0.05, 0.42, 0.52), neb) * smoothstep(0.42, 0.85, neb) * (1.0 - 0.72 * day) * smoothstep(-0.05, 0.35, y);
+          // Bioluminescent deep-space FBM nebula
+          float neb = noise(dir * 3.4 + vec3(t * 0.006, 0.0, -t * 0.005)) * 0.65
+                    + noise(dir * 7.8 - vec3(0.0, t * 0.008, 0.0)) * 0.35;
+          c += mix(vec3(0.22, 0.06, 0.42), vec3(0.04, 0.44, 0.54), neb) * smoothstep(0.42, 0.86, neb) * (1.0 - 0.76 * day) * smoothstep(-0.05, 0.35, y);
 
-          // Multi-curtain Magnetospheric Aurora
-          float aurWave = sin(dir.x * 8.5 + t * 0.28 + sin(dir.z * 6.5 + t * 0.19) * 2.3);
-          float aur = smoothstep(0.08, 0.55, y) * smoothstep(0.95, 0.35, y) * pow(0.5 + 0.5 * aurWave, 2.2);
-          c += mix(vec3(0.08, 0.95, 0.62), vec3(0.65, 0.22, 0.98), 0.5 + 0.5 * sin(dir.z * 4.0 + t * 0.12)) * aur * 0.36 * (1.0 - day * 0.72);
+          // Magnetospheric Aurora Curtains
+          float aurWave = sin(dir.x * 8.2 + t * 0.24 + sin(dir.z * 6.2 + t * 0.17) * 2.2);
+          float aur = smoothstep(0.08, 0.56, y) * smoothstep(0.95, 0.34, y) * pow(0.5 + 0.5 * aurWave, 2.3);
+          c += mix(vec3(0.08, 0.96, 0.68), vec3(0.52, 0.26, 0.98), 0.5 + 0.5 * sin(dir.z * 4.0 + t * 0.12)) * aur * 0.38 * (1.0 - day * 0.75);
 
-          // Solar disc & atmospheric Mie halo
+          // Solar disc & Rayleigh-Mie atmospheric scatter
           float sunCos = clamp(dot(dir, normalize(sunDir)), 0.0, 1.0);
-          c += vec3(1.0, 0.82, 0.58) * pow(sunCos, 12.0) * 0.45 * day;
-          c += vec3(1.4, 1.25, 1.05) * smoothstep(0.9965, 0.9992, sunCos) * (0.4 + 1.4 * day);
+          c += vec3(1.0, 0.84, 0.62) * pow(sunCos, 10.0) * 0.42 * day;
+          c += vec3(1.5, 1.35, 1.12) * smoothstep(0.9965, 0.9993, sunCos) * (0.4 + 1.5 * day);
 
-          // Twin Alien Moons (Selene-Prime & Cyan-Minor)
+          // Twin Alien Moons (Selene-Prime ringed gas giant & Cyan-Minor)
           vec3 m1Dir = normalize(vec3(-0.52, 0.58, -0.62));
           vec3 m2Dir = normalize(vec3(-0.24, 0.44, -0.86));
           float m1 = dot(dir, m1Dir);
-          if (m1 > 0.994) {
-            float crater = noise(dir * 95.0);
-            vec3 mc = vec3(0.85, 0.80, 0.96) * (0.72 + 0.35 * crater);
-            c = mix(c, mc, (1.0 - 0.45 * day) * smoothstep(0.994, 0.9952, m1));
+          if (m1 > 0.9935) {
+            float band = 0.5 + 0.5 * sin(dir.y * 140.0 + noise(dir * 60.0) * 3.0);
+            vec3 mc = mix(vec3(0.76, 0.82, 0.96), vec3(0.48, 0.74, 0.92), band);
+            c = mix(c, mc, (1.0 - 0.38 * day) * smoothstep(0.9935, 0.9950, m1));
           }
           float m2 = dot(dir, m2Dir);
           if (m2 > 0.9982) {
-            c = mix(c, vec3(0.48, 0.92, 1.0), (1.0 - 0.5 * day) * smoothstep(0.9982, 0.9988, m2));
+            c = mix(c, vec3(0.48, 0.94, 1.0), (1.0 - 0.45 * day) * smoothstep(0.9982, 0.9989, m2));
           }
 
-          // Crisp high-altitude starfield
-          vec3 q = floor(dir * 260.0);
-          float s = step(0.9968, h(q)) * (1.0 - day * 0.88) * smoothstep(0.0, 0.28, y);
-          c += vec3(0.85, 0.92, 1.0) * s * (1.8 + 0.8 * sin(t * 2.5 + q.x));
+          vec3 q = floor(dir * 270.0);
+          float s = step(0.9970, h(q)) * (1.0 - day * 0.88) * smoothstep(0.0, 0.26, y);
+          c += vec3(0.86, 0.93, 1.0) * s * (1.7 + 0.7 * sin(t * 2.4 + q.x));
 
           gl_FragColor = vec4(c, 1.0);
         }
@@ -411,16 +632,26 @@ export class View {
     });
     this.sky = new THREE.Mesh(g, m);
     this.scene.add(this.sky);
+
+    // Separate lightweight sky dome for PMREM HDR reflection cubemap baking
+    this.envScene = new THREE.Scene();
+    this.envScene.add(new THREE.Mesh(new THREE.SphereGeometry(40, 24, 16), m));
   }
 
-  // ------------------------------------------------------------------ Terrain + p5.js Mycelial & Pheromone Biosphere Overlay
+  // ------------------------------------------------------------------ 224x224 Micro-Normal PBR Terrain + Wet Shorelines + Microbial Veins
   buildTerrain() {
-    const N = 176;
+    const N = 224;
     const g = new THREE.PlaneGeometry(46, 46, N, N);
     g.rotateX(-Math.PI / 2);
     const col = new Float32Array(g.attributes.position.count * 3);
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     this.tGeo = g;
+
+    const W = this.cr.world;
+    const poolVecs = [0, 1, 2].map((i) => {
+      const p = W.pools[i] || { x: 999, z: 999, r: 2.2 };
+      return new THREE.Vector3(p.x, p.z, p.r);
+    });
 
     const bioTex = this.p5Layer ? this.p5Layer.bioTex : null;
     this.terrainU = {
@@ -428,32 +659,72 @@ export class View {
       uBioTex: { value: bioTex },
       uHasBio: { value: bioTex ? 1.0 : 0.0 },
       uWorldSpan: { value: 2 * WORLD },
+      uRain: { value: 0 },
+      uPool0: { value: poolVecs[0] },
+      uPool1: { value: poolVecs[1] },
+      uPool2: { value: poolVecs[2] },
     };
 
     const mat = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: 0.82,
-      metalness: 0.08,
+      roughness: 0.78,
+      metalness: 0.06,
     });
     mat.onBeforeCompile = (sh) => {
-      sh.uniforms.uT = this.terrainU.uT;
-      sh.uniforms.uBioTex = this.terrainU.uBioTex;
-      sh.uniforms.uHasBio = this.terrainU.uHasBio;
-      sh.uniforms.uWorldSpan = this.terrainU.uWorldSpan;
+      Object.assign(sh.uniforms, this.terrainU);
       sh.vertexShader = 'varying vec3 vW;\n' + sh.vertexShader.replace(
         '#include <worldpos_vertex>',
         '#include <worldpos_vertex>\n vW = (modelMatrix * vec4(transformed, 1.0)).xyz;'
       );
-      sh.fragmentShader = 'uniform float uT, uHasBio, uWorldSpan; uniform sampler2D uBioTex; varying vec3 vW;\n' +
-        sh.fragmentShader.replace(
+      sh.fragmentShader = `
+        uniform float uT, uHasBio, uWorldSpan, uRain;
+        uniform vec3 uPool0, uPool1, uPool2;
+        uniform sampler2D uBioTex;
+        varying vec3 vW;
+        float tHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float tNoise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(tHash(i), tHash(i + vec2(1,0)), f.x), mix(tHash(i + vec2(0,1)), tHash(i + vec2(1,1)), f.x), f.y);
+        }
+        float tFbm(vec2 p) {
+          return 0.55 * tNoise(p) + 0.30 * tNoise(p * 2.13 + 3.1) + 0.15 * tNoise(p * 4.37 - 1.7);
+        }
+      ` + sh.fragmentShader
+        .replace(
+          '#include <roughnessmap_fragment>',
+          `#include <roughnessmap_fragment>
+          float dP0 = length(vW.xz - uPool0.xy) - uPool0.z;
+          float dP1 = length(vW.xz - uPool1.xy) - uPool1.z;
+          float dP2 = length(vW.xz - uPool2.xy) - uPool2.z;
+          float shoreWet = smoothstep(1.35, -0.15, min(dP0, min(dP1, dP2)));
+          float microDetail = tFbm(vW.xz * 3.8);
+          diffuseColor.rgb *= (0.84 + 0.34 * microDetail) * (1.0 - 0.28 * shoreWet);
+          roughnessFactor = clamp(roughnessFactor * (0.88 + 0.24 * microDetail) - 0.58 * shoreWet - 0.28 * uRain, 0.12, 0.95);`
+        )
+        .replace(
+          '#include <normal_fragment_maps>',
+          `#include <normal_fragment_maps>
+          float hMicro = tFbm(vW.xz * 6.5) + 0.35 * tNoise(vW.xz * 18.0);
+          vec3 dPdx = dFdx(vW);
+          vec3 dPdy = dFdy(vW);
+          float dHdx = dFdx(hMicro);
+          float dHdy = dFdy(hMicro);
+          vec3 surfGrad = (dHdx * cross(normal, dPdy) + dHdy * cross(dPdx, normal));
+          float gradLen = length(surfGrad);
+          if (gradLen > 1e-6) {
+            normal = normalize(normal - (surfGrad / max(0.02, gradLen)) * min(0.28, gradLen * 2.4));
+          }`
+        )
+        .replace(
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>
-          float vein = smoothstep(0.91, 1.0, sin(vW.x * 1.35 + sin(vW.z * 0.92 + uT * 0.22) * 2.0) * sin(vW.z * 1.15 + uT * 0.16));
-          totalEmissiveRadiance += vec3(0.08, 0.78, 1.05) * vein * (0.32 + 0.24 * sin(uT * 1.5 + vW.x));
+          float vein = smoothstep(0.925, 1.0, sin(vW.x * 1.45 + sin(vW.z * 0.95 + uT * 0.20) * 2.1) * sin(vW.z * 1.2 + uT * 0.14));
+          totalEmissiveRadiance += vec3(0.06, 0.72, 0.95) * vein * (0.24 + 0.18 * sin(uT * 1.4 + vW.x));
           if (uHasBio > 0.5) {
             vec2 bioUv = clamp((vW.xz / uWorldSpan) + 0.5, 0.0, 1.0);
             vec4 bio = texture2D(uBioTex, bioUv);
-            totalEmissiveRadiance += bio.rgb * bio.a * 0.75;
+            totalEmissiveRadiance += bio.rgb * bio.a * 0.62;
           }`
         );
     };
@@ -468,23 +739,22 @@ export class View {
     const p = this.tGeo.attributes.position;
     const c = this.tGeo.attributes.color;
     const season = W.season || 'spring';
-    const sTint = season === 'winter' ? [0.08, 0.11, 0.18]
-      : season === 'autumn' ? [0.12, 0.05, 0.04]
-      : season === 'summer' ? [0.03, 0.09, 0.04]
+    const sTint = season === 'winter' ? [0.06, 0.10, 0.16]
+      : season === 'autumn' ? [0.10, 0.05, 0.03]
+      : season === 'summer' ? [0.02, 0.08, 0.04]
       : [0.02, 0.07, 0.06];
 
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), z = p.getZ(i);
       const h = W.height(x, z);
       p.setY(i, h);
-      const t = Math.max(0, Math.min(1, (h + 1.5) / 3.5));
-      const moss = 0.5 + 0.5 * Math.sin(x * 0.55 + Math.cos(z * 0.5) * 1.6);
-      c.setXYZ(
-        i,
-        0.04 + 0.21 * t + 0.05 * moss + sTint[0],
-        0.05 + 0.14 * (1 - t) + 0.09 * moss + sTint[1],
-        0.11 + 0.18 * (1 - t) + sTint[2]
-      );
+      const t = Math.max(0, Math.min(1, (h + 1.5) / 3.6));
+      const moss = 0.5 + 0.5 * Math.sin(x * 0.52 + Math.cos(z * 0.48) * 1.7);
+      // Richer natural volcanic-loam + bioluminescent moss + basalt ridge palette
+      const rCol = 0.045 + 0.18 * t + 0.035 * moss + sTint[0];
+      const gCol = 0.065 + 0.15 * (1 - t * 0.65) + 0.11 * moss + sTint[1];
+      const bCol = 0.095 + 0.14 * (1 - t) + 0.04 * moss + sTint[2];
+      c.setXYZ(i, rCol, gCol, bCol);
     }
     p.needsUpdate = true;
     c.needsUpdate = true;
@@ -492,22 +762,20 @@ export class View {
     if (this._grassBaseXZ) this._syncGrassHeights();
   }
 
-  // ------------------------------------------------------------------ 2,400 GPU-Instanced Wind-Swaying Bioluminescent Grass Blades
+  // ------------------------------------------------------------------ 3,200 GPU-Instanced Wind-Swaying Bioluminescent Grass & Reeds
   buildGrass() {
-    // Tapered 4-segment curved blade geometry
-    const segs = 4;
+    const segs = 5;
     const pos = [], nor = [], col = [], idx = [];
     for (let s = 0; s <= segs; s++) {
       const v = s / segs;
-      const w = 0.036 * (1 - v * 0.88);
-      const y = v * 0.52;
-      const zCurve = v * v * 0.09;
+      const w = 0.032 * (1 - v * 0.90);
+      const y = v * 0.54;
+      const zCurve = v * v * 0.11;
       pos.push(-w, y, zCurve, w, y, zCurve);
-      nor.push(0, 0.25, 0.97, 0, 0.25, 0.97);
-      // Root deep emerald -> tip glowing cyan-lime
-      const r = 0.05 + 0.22 * v * v;
-      const g = 0.22 + 0.72 * v;
-      const b = 0.18 + 0.65 * v * v;
+      nor.push(0, 0.28, 0.96, 0, 0.28, 0.96);
+      const r = 0.04 + 0.18 * v * v;
+      const g = 0.20 + 0.72 * v;
+      const b = 0.16 + 0.68 * v * v;
       col.push(r, g, b, r, g, b);
       if (s < segs) {
         const a = s * 2;
@@ -528,8 +796,8 @@ export class View {
 
     const grassMat = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: 0.55,
-      metalness: 0.05,
+      roughness: 0.48,
+      metalness: 0.04,
       side: THREE.DoubleSide,
     });
     grassMat.onBeforeCompile = (sh) => {
@@ -540,40 +808,40 @@ export class View {
         sh.vertexShader.replace(
           '#include <begin_vertex>',
           `#include <begin_vertex>
-          vTip = clamp(position.y / 0.52, 0.0, 1.0);
+          vTip = clamp(position.y / 0.54, 0.0, 1.0);
           vec3 iPos = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
-          float gust = sin(uTime * 2.3 + iPos.x * 0.45 + iPos.z * 0.38) + 0.5 * cos(uTime * 4.1 - iPos.z * 0.7);
+          float gust = sin(uTime * 2.2 + iPos.x * 0.42 + iPos.z * 0.36) + 0.5 * cos(uTime * 3.9 - iPos.z * 0.65);
           float bend = vTip * vTip;
-          transformed.x += (uWind.x * 0.16 + 0.09 * gust) * bend;
+          transformed.x += (uWind.x * 0.16 + 0.085 * gust) * bend;
           transformed.z += (uWind.y * 0.16 + 0.07 * gust) * bend;`
         );
       sh.fragmentShader = 'uniform float uNightGlow; varying float vTip;\n' +
         sh.fragmentShader.replace(
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>
-          totalEmissiveRadiance += diffuseColor.rgb * pow(vTip, 2.2) * (0.28 + 0.85 * uNightGlow);`
+          totalEmissiveRadiance += diffuseColor.rgb * pow(vTip, 2.4) * (0.22 + 0.78 * uNightGlow);`
         );
     };
 
     this.grassMesh = new THREE.InstancedMesh(bladeGeo, grassMat, GRASS_COUNT);
     this.grassMesh.frustumCulled = false;
-    this._grassBaseXZ = new Float32Array(GRASS_COUNT * 4); // x, z, rotY, scale
+    this._grassBaseXZ = new Float32Array(GRASS_COUNT * 4);
 
     const W = this.cr.world;
     let gs = 424242;
     const grnd = () => { gs = (gs * 1664525 + 1013904223) >>> 0; return gs / 4294967296; };
     let placed = 0, guard = 0;
     while (placed < GRASS_COUNT && guard++ < GRASS_COUNT * 6) {
-      const r = 1.8 + Math.sqrt(grnd()) * (WORLD - 2.2);
+      const r = 1.6 + Math.sqrt(grnd()) * (WORLD - 2.0);
       const a = grnd() * Math.PI * 2;
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
       let inPool = false;
-      for (const P of W.pools) if (Math.hypot(x - P.x, z - P.z) < P.r + 0.25) inPool = true;
+      for (const P of W.pools) if (Math.hypot(x - P.x, z - P.z) < P.r + 0.22) inPool = true;
       if (inPool) continue;
       this._grassBaseXZ[placed * 4] = x;
       this._grassBaseXZ[placed * 4 + 1] = z;
       this._grassBaseXZ[placed * 4 + 2] = grnd() * Math.PI * 2;
-      this._grassBaseXZ[placed * 4 + 3] = 0.65 + grnd() * 0.95;
+      this._grassBaseXZ[placed * 4 + 3] = 0.62 + grnd() * 0.98;
       placed++;
     }
     this._syncGrassHeights();
@@ -598,20 +866,23 @@ export class View {
     this.grassMesh.instanceMatrix.needsUpdate = true;
   }
 
-  // ------------------------------------------------------------------ L-System Flora, Vents, Crystal Shelters, Caustics Pools
+  // ------------------------------------------------------------------ Curved Tube Canopy Flora, Basalt-Geode Rocks, Fresnel Pools & Vents
   buildProps() {
     const S = this.scene, W = this.cr.world;
     this.props = new THREE.Group();
     S.add(this.props);
 
+    // Smooth high-subdivision wet volcanic basalt-geode boulder material (ZERO flatShading facets!)
     this.rockMat = new THREE.MeshPhysicalMaterial({
-      color: 0x2b2544,
-      roughness: 0.48,
-      metalness: 0.22,
-      iridescence: 1,
-      iridescenceIOR: 1.65,
-      iridescenceThicknessRange: [180, 880],
-      flatShading: true,
+      vertexColors: true,
+      roughness: 0.38,
+      metalness: 0.18,
+      clearcoat: 0.68,
+      clearcoatRoughness: 0.18,
+      iridescence: 0.72,
+      iridescenceIOR: 1.62,
+      iridescenceThicknessRange: [180, 760],
+      flatShading: false,
     });
     this.rockMeshes = [];
     this.springMeshes = [];
@@ -621,71 +892,108 @@ export class View {
     this.snackMeshes = new Map();
     this.wasteMeshes = [];
 
-    // Multi-branching L-system alien flora
+    // Sculpted Curved-Tube Bioluminescent Canopy Flora
     const shapes = [
-      new THREE.SphereGeometry(0.27, 20, 14),
-      new THREE.BoxGeometry(0.38, 0.38, 0.38),
-      new THREE.ConeGeometry(0.28, 0.56, 18),
-      new THREE.OctahedronGeometry(0.34, 0),
+      new THREE.SphereGeometry(0.26, 24, 18),
+      new THREE.DodecahedronGeometry(0.26, 1),
+      new THREE.ConeGeometry(0.26, 0.54, 22),
+      new THREE.OctahedronGeometry(0.32, 1),
     ];
-    const stemMat = new THREE.MeshStandardMaterial({ color: 0x183d2e, emissive: 0x061b14, roughness: 0.65 });
-    const leafGeo = new THREE.ConeGeometry(0.14, 0.48, 6);
+    const stemMat = new THREE.MeshPhysicalMaterial({
+      color: 0x16382b,
+      emissive: 0x051812,
+      roughness: 0.52,
+      clearcoat: 0.35,
+    });
+
+    // Organic curved leaf-frond ribbon geometry
+    const frondShape = new THREE.Shape();
+    frondShape.moveTo(0, 0);
+    frondShape.quadraticCurveTo(0.14, 0.22, 0.02, 0.56);
+    frondShape.quadraticCurveTo(-0.12, 0.22, 0, 0);
+    const frondGeo = new THREE.ShapeGeometry(frondShape, 10);
 
     for (let idx = 0; idx < W.plants.length; idx++) {
       const P = W.plants[idx];
       const g = new THREE.Group();
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.095, 1.18, 8), stemMat);
-      trunk.position.y = 0.59;
+
+      // Swept S-curve organic trunk via CatmullRomCurve3 + TubeGeometry + 3 buttress roots
+      const leanX = Math.cos(idx * 1.7) * 0.12, leanZ = Math.sin(idx * 2.3) * 0.12;
+      const trunkCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, -0.04, 0),
+        new THREE.Vector3(leanX * 0.5, 0.42, leanZ * 0.5),
+        new THREE.Vector3(-leanX * 0.35, 0.84, -leanZ * 0.35),
+        new THREE.Vector3(0, 1.22, 0),
+      ]);
+      const trunk = new THREE.Mesh(new THREE.TubeGeometry(trunkCurve, 14, 0.062, 10, false), stemMat);
+      trunk.castShadow = true;
       g.add(trunk);
 
-      // 3 L-system secondary branches + glowing canopy fronds
-      const crown = new THREE.Group();
-      crown.position.y = 1.15;
-      for (let b = 0; b < 3; b++) {
-        const ang = (b / 3) * Math.PI * 2 + idx * 0.7;
-        const br = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.04, 0.48, 6), stemMat);
-        br.position.set(Math.cos(ang) * 0.16, 0.16, Math.sin(ang) * 0.16);
-        br.rotation.z = -Math.cos(ang) * 0.55;
-        br.rotation.x = Math.sin(ang) * 0.55;
-        crown.add(br);
+      for (let r = 0; r < 3; r++) {
+        const ra = (r / 3) * Math.PI * 2 + idx;
+        const rootCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(Math.cos(ra) * 0.24, -0.03, Math.sin(ra) * 0.24),
+          new THREE.Vector3(Math.cos(ra) * 0.10, 0.14, Math.sin(ra) * 0.10),
+          new THREE.Vector3(0, 0.34, 0),
+        ]);
+        g.add(new THREE.Mesh(new THREE.TubeGeometry(rootCurve, 7, 0.032, 7, false), stemMat));
+      }
 
-        const frond = new THREE.Mesh(
-          leafGeo,
-          new THREE.MeshStandardMaterial({ color: HUES[P.c], emissive: HUES[P.c], emissiveIntensity: 0.45, roughness: 0.45 })
-        );
-        frond.position.set(Math.cos(ang) * 0.34, 0.28, Math.sin(ang) * 0.34);
-        frond.rotation.z = -Math.cos(ang) * 1.05;
-        frond.rotation.x = Math.sin(ang) * 1.05;
+      const crown = new THREE.Group();
+      crown.position.y = 1.20;
+      const frondMat = new THREE.MeshPhysicalMaterial({
+        color: HUES[P.c],
+        emissive: HUES[P.c],
+        emissiveIntensity: 0.42,
+        roughness: 0.32,
+        transmission: 0.28,
+        side: THREE.DoubleSide,
+      });
+
+      for (let b = 0; b < 4; b++) {
+        const ang = (b / 4) * Math.PI * 2 + idx * 0.7;
+        const brCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(Math.cos(ang) * 0.20, 0.18, Math.sin(ang) * 0.20),
+          new THREE.Vector3(Math.cos(ang) * 0.42, 0.24, Math.sin(ang) * 0.42),
+        ]);
+        crown.add(new THREE.Mesh(new THREE.TubeGeometry(brCurve, 8, 0.024, 7, false), stemMat));
+
+        const frond = new THREE.Mesh(frondGeo, frondMat);
+        frond.position.set(Math.cos(ang) * 0.28, 0.20, Math.sin(ang) * 0.28);
+        frond.rotation.y = -ang + Math.PI * 0.5;
+        frond.rotation.x = 0.85;
         crown.add(frond);
       }
 
-      const fm = new THREE.MeshStandardMaterial({
+      const fm = new THREE.MeshPhysicalMaterial({
         color: HUES[P.c],
         emissive: HUES[P.c],
-        emissiveIntensity: 1.6,
-        roughness: 0.26,
+        emissiveIntensity: 1.35,
+        roughness: 0.18,
+        clearcoat: 0.85,
+        transmission: 0.25,
       });
       const fruit = new THREE.Mesh(shapes[P.s], fm);
-      fruit.position.y = 0.26;
+      fruit.position.y = 0.28;
       crown.add(fruit);
 
       if (P.s === 3) {
+        const thornGeo = buildCurvedTalonGeo();
+        const thornMat = new THREE.MeshStandardMaterial({ color: 0xff2244, emissive: 0x660018, roughness: 0.25 });
         for (let k = 0; k < 6; k++) {
-          const th = new THREE.Mesh(
-            new THREE.ConeGeometry(0.04, 0.32, 5),
-            new THREE.MeshStandardMaterial({ color: 0xff2233, emissive: 0x660011 })
-          );
-          th.position.set(Math.cos(k) * 0.26, 0.26 + Math.sin(k * 2) * 0.18, Math.sin(k) * 0.26);
-          th.lookAt(0, 0.26, 0);
-          th.rotateX(-Math.PI / 2);
+          const th = new THREE.Mesh(thornGeo, thornMat);
+          const ta = (k / 6) * Math.PI * 2;
+          th.position.set(Math.cos(ta) * 0.18, 0.24, Math.sin(ta) * 0.18);
+          th.lookAt(Math.cos(ta) * 0.6, 0.28, Math.sin(ta) * 0.6);
           crown.add(th);
         }
       }
       g.add(crown);
 
       const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(0.56, 0.025, 6, 40),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
+        new THREE.TorusGeometry(0.58, 0.022, 8, 48),
+        new THREE.MeshBasicMaterial({ color: 0x38e8ff, transparent: true, opacity: 0 })
       );
       ring.rotation.x = Math.PI / 2;
       ring.position.y = 0.05;
@@ -696,28 +1004,30 @@ export class View {
       this.plantMeshes.push({ g, crown, fruit, fm, ring });
     }
 
-    // Crystal Spire Shelters (4 translucent amethyst-cyan crystal clusters)
+    // Crystal Spire Shelters (hexagonal prismatic quartz-amethyst refraction spires)
     const crystalMat = new THREE.MeshPhysicalMaterial({
-      color: 0x66e0ff,
-      emissive: 0x163860,
-      emissiveIntensity: 0.75,
-      roughness: 0.12,
-      metalness: 0.1,
-      transmission: 0.65,
-      thickness: 0.8,
+      color: 0x70e8ff,
+      emissive: 0x143862,
+      emissiveIntensity: 0.68,
+      roughness: 0.08,
+      metalness: 0.08,
+      transmission: 0.72,
+      thickness: 1.1,
+      ior: 1.56,
+      clearcoat: 1.0,
       iridescence: 1.0,
       iridescenceIOR: 1.9,
-      flatShading: true,
     });
     for (const sh of W.shelters || []) {
       const grp = new THREE.Group();
-      for (let k = 0; k < 5; k++) {
-        const h = (0.9 + (k % 3) * 0.45) * (sh.tall || 1);
-        const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.18 + 0.04 * (k % 2), h, 6), crystalMat);
-        const a = (k / 5) * Math.PI * 2;
-        spire.position.set(Math.cos(a) * 0.28, h * 0.45, Math.sin(a) * 0.28);
+      for (let k = 0; k < 6; k++) {
+        const h = (0.95 + (k % 3) * 0.48) * (sh.h ? sh.h / 2.2 : 1);
+        const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.17 + 0.04 * (k % 2), h, 6), crystalMat);
+        const a = (k / 6) * Math.PI * 2;
+        spire.position.set(Math.cos(a) * 0.28, h * 0.46, Math.sin(a) * 0.28);
         spire.rotation.z = -Math.cos(a) * 0.22;
         spire.rotation.x = Math.sin(a) * 0.22;
+        spire.castShadow = true;
         grp.add(spire);
       }
       grp.position.set(sh.x, sh.y, sh.z);
@@ -725,74 +1035,105 @@ export class View {
       this.shelterMeshes.push(grp);
     }
 
-    // Geothermal Steam/Ember Plume Particle Pool (180 buoyant particles across vents)
-    this.ventPlumeN = 180;
+    // Soft Gaussian Volumetric Hydrothermal Steam/Ember Plume Sprites (220 particles)
+    this.ventPlumeN = 220;
     const vpGeo = new THREE.BufferGeometry();
     const vpPos = new Float32Array(this.ventPlumeN * 3);
     const vpCol = new Float32Array(this.ventPlumeN * 3);
     this._ventLife = new Float32Array(this.ventPlumeN);
     for (let i = 0; i < this.ventPlumeN; i++) {
-      this._ventLife[i] = Math.random();
-      vpCol[3 * i] = 1.0;
-      vpCol[3 * i + 1] = 0.45 + 0.4 * Math.random();
-      vpCol[3 * i + 2] = 0.2 + 0.5 * Math.random();
+      this._ventLife[i] = (i * 0.6180339) % 1;
+      const ember = i % 4 === 0;
+      vpCol[3 * i] = ember ? 1.0 : 0.55;
+      vpCol[3 * i + 1] = ember ? 0.52 : 0.78;
+      vpCol[3 * i + 2] = ember ? 0.18 : 0.92;
     }
     vpGeo.setAttribute('position', new THREE.BufferAttribute(vpPos, 3));
     vpGeo.setAttribute('color', new THREE.BufferAttribute(vpCol, 3));
-    this.ventPlumes = new THREE.Points(
-      vpGeo,
-      new THREE.PointsMaterial({
-        vertexColors: true,
-        size: 0.14,
-        transparent: true,
-        opacity: 0.68,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      })
-    );
+    this.ventSpriteMat = makeSoftSpriteMaterial(0.28, 0.55, true);
+    this.ventPlumes = new THREE.Points(vpGeo, this.ventSpriteMat);
     this.ventPlumes.frustumCulled = false;
     S.add(this.ventPlumes);
 
-    const coil = new THREE.TorusKnotGeometry(0.7, 0.07, 100, 8, 2, 7);
-    this.springGeo = coil;
-    this.springMat = new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0x553300, metalness: 0.8, roughness: 0.25 });
+    this.springGeo = new THREE.TorusKnotGeometry(0.7, 0.065, 112, 12, 2, 7);
+    this.springMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffd23f,
+      emissive: 0x442800,
+      metalness: 0.85,
+      roughness: 0.18,
+      clearcoat: 0.6,
+    });
 
-    // Shimmering Voronoi-Caustics Water Pools
-    this.poolU = { t: { value: 0 } };
+    // Refractive Fresnel + Gerstner Ripple + Voronoi Caustics + Bioluminescent Phytoplankton Water Pools
+    this.poolU = {
+      t: { value: 0 },
+      uSunDir: { value: new THREE.Vector3(0.4, 0.8, 0.3) },
+      uDay: { value: 1.0 },
+      uPlankton: { value: 0.65 },
+    };
     this.poolMeshes = W.pools.map((P) => {
       const m = new THREE.Mesh(
-        new THREE.CircleGeometry(P.r, 56),
+        new THREE.CircleGeometry(P.r * 1.04, 72),
         new THREE.ShaderMaterial({
           uniforms: this.poolU,
           transparent: true,
           depthWrite: false,
           vertexShader: `
             varying vec2 vP;
+            varying vec3 vW;
             void main() {
               vP = position.xy;
-              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              vec4 wp = modelMatrix * vec4(position, 1.0);
+              vW = wp.xyz;
+              gl_Position = projectionMatrix * viewMatrix * wp;
             }
           `,
           fragmentShader: `
-            uniform float t;
+            uniform float t, uDay, uPlankton;
+            uniform vec3 uSunDir;
             varying vec2 vP;
+            varying vec3 vW;
+
             float caustic(vec2 uv) {
-              vec2 p = uv * 3.4;
-              float a = sin(p.x * 2.1 + t * 1.9 + cos(p.y * 2.4 - t * 1.4));
-              float b = cos(p.y * 2.7 - t * 1.6 + sin(p.x * 1.9 + t * 2.1));
-              return pow(0.5 + 0.5 * a * b, 3.0);
+              vec2 p = uv * 3.6;
+              float a = sin(p.x * 2.2 + t * 1.8 + cos(p.y * 2.5 - t * 1.3));
+              float b = cos(p.y * 2.8 - t * 1.5 + sin(p.x * 2.0 + t * 2.0));
+              return pow(0.5 + 0.5 * a * b, 3.4);
             }
+
             void main() {
               float r = length(vP);
-              float c1 = caustic(vP);
-              float c2 = caustic(vP * 1.45 + vec2(0.7, -0.4));
-              float ripple = 0.5 + 0.5 * sin(r * 15.0 - t * 3.2);
-              float edge = smoothstep(${P.r.toFixed(2)}, ${(P.r * 0.76).toFixed(2)}, r);
-              float foam = smoothstep(${(P.r * 0.78).toFixed(2)}, ${(P.r * 0.95).toFixed(2)}, r) * edge;
-              vec3 deep = vec3(0.03, 0.19, 0.38);
-              vec3 glow = vec3(0.32, 0.92, 1.0);
-              vec3 col = mix(deep, glow, clamp(c1 * 0.65 + c2 * 0.45 + ripple * 0.18 + foam * 0.55, 0.0, 1.0));
-              gl_FragColor = vec4(col, 0.82 * edge);
+              float maxR = ${(P.r * 1.04).toFixed(3)};
+              float edge = smoothstep(maxR, ${(P.r * 0.72).toFixed(3)}, r);
+              if (edge <= 0.002) discard;
+
+              // Analytical capillary wave normal for crisp solar specular glints & Fresnel sky reflection
+              float wx = cos(vP.x * 9.5 + t * 2.8) * 0.045 + cos((vP.x + vP.y) * 14.0 - t * 3.6) * 0.03;
+              float wz = sin(vP.y * 9.2 - t * 2.5) * 0.045 + sin((vP.x - vP.y) * 13.5 + t * 3.2) * 0.03;
+              vec3 N = normalize(vec3(-wx, 1.0, -wz));
+              vec3 V = normalize(cameraPosition - vW);
+              vec3 L = normalize(uSunDir);
+              float fres = 0.04 + 0.96 * pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 4.2);
+
+              float c1 = caustic(vP + N.xz * 0.4);
+              float c2 = caustic(vP * 1.55 + vec2(0.7, -0.4));
+              float depthFrac = clamp(1.0 - (r / maxR), 0.0, 1.0);
+
+              vec3 deepAbsorb = vec3(0.015, 0.13, 0.26);
+              vec3 shallowTeal = vec3(0.06, 0.42, 0.54);
+              vec3 waterBody = mix(shallowTeal, deepAbsorb, smoothstep(0.0, 0.75, depthFrac));
+
+              // Bioluminescent aquatic phytoplankton bloom
+              vec3 bioGlow = vec3(0.08, 0.95, 0.85) * uPlankton * (0.28 + 0.55 * c2) * (1.15 - 0.65 * uDay);
+              vec3 skyRefl = mix(vec3(0.06, 0.18, 0.34), vec3(0.55, 0.80, 0.98), uDay);
+
+              vec3 H = normalize(L + V);
+              float spec = pow(max(dot(N, H), 0.0), 180.0) * (0.6 + 2.4 * uDay);
+              float foam = smoothstep(${(P.r * 0.80).toFixed(3)}, ${(P.r * 0.98).toFixed(3)}, r) * edge * (0.55 + 0.45 * sin(r * 22.0 - t * 3.5));
+
+              vec3 col = mix(waterBody + vec3(0.22, 0.78, 0.92) * (c1 * 0.42 + c2 * 0.25) + bioGlow, skyRefl, fres * 0.72);
+              col += vec3(1.0, 0.94, 0.84) * spec + vec3(0.65, 0.92, 0.98) * foam * 0.42;
+              gl_FragColor = vec4(col, clamp(0.88 * edge + fres * 0.12, 0.0, 0.95));
             }
           `,
         })
@@ -802,8 +1143,8 @@ export class View {
       return m;
     });
 
-    this.snackGeo = new THREE.IcosahedronGeometry(0.16, 1);
-    this.wasteGeo = new THREE.SphereGeometry(0.12, 8, 6);
+    this.snackGeo = new THREE.IcosahedronGeometry(0.16, 2);
+    this.wasteGeo = new THREE.SphereGeometry(0.12, 12, 10);
     this.syncProps();
   }
 
@@ -811,19 +1152,39 @@ export class View {
     const W = this.cr.world;
     if (this.poolMeshes) {
       W.pools.forEach((P, i) => {
-        this.poolMeshes[i].position.set(P.x, W.height(P.x, P.z) + 0.045, P.z);
+        this.poolMeshes[i].position.set(P.x, W.height(P.x, P.z) + 0.048, P.z);
       });
     }
-    if (this.poolU) this.poolU.t.value = W.t;
+    if (this.poolU) {
+      this.poolU.t.value = W.t;
+      this.poolU.uPlankton.value = W.planktonBloom ?? 0.65;
+    }
 
+    // High-Subdivision Smooth Indexed Multifractal Basalt-Geode Boulders (SphereGeometry 56x40 = smooth vertex-averaged normals, zero facets!)
     while (this.rockMeshes.length < W.rocks.length) {
-      const g = new THREE.IcosahedronGeometry(1, 2);
+      const seedOff = this.rockMeshes.length * 3.71;
+      const g = new THREE.SphereGeometry(1, 56, 40);
       const p = g.attributes.position;
+      const col = new Float32Array(p.count * 3);
+      const v = new THREE.Vector3();
       for (let i = 0; i < p.count; i++) {
-        const v = new THREE.Vector3().fromBufferAttribute(p, i);
-        v.multiplyScalar(0.85 + 0.25 * Math.sin(v.x * 5 + v.y * 3) * Math.cos(v.z * 4));
+        v.fromBufferAttribute(p, i);
+        const ridge1 = 1.0 - Math.abs(Math.sin(v.x * 3.4 + seedOff) * Math.cos(v.y * 2.9 - seedOff) + 0.5 * Math.sin(v.z * 4.1));
+        const strata = Math.sin(v.y * 9.5 + v.x * 2.2) * 0.045;
+        const micro = Math.sin(v.x * 11.0 + v.z * 9.0) * 0.025;
+        const disp = 0.82 + 0.22 * ridge1 + strata + micro;
+        v.y *= 0.84; // natural settled boulder silhouette
+        v.multiplyScalar(disp);
         p.setXYZ(i, v.x, v.y, v.z);
+
+        // Glowing cyan-amethyst crystal geode seam along deep fissures + mossy top patina
+        const seam = Math.max(0, 1.0 - Math.abs(Math.sin(v.x * 4.2 + v.y * 3.1 + seedOff)) * 6.5);
+        const topMoss = Math.max(0, v.y * 0.55);
+        col[3 * i] = 0.11 + 0.06 * ridge1 + 0.28 * seam;
+        col[3 * i + 1] = 0.12 + 0.14 * topMoss + 0.65 * seam;
+        col[3 * i + 2] = 0.17 + 0.08 * ridge1 + 0.85 * seam;
       }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
       g.computeVertexNormals();
       const m = new THREE.Mesh(g, this.rockMat);
       m.castShadow = m.receiveShadow = true;
@@ -841,14 +1202,13 @@ export class View {
     while (this.springMeshes.length < W.springs.length) {
       const g = new THREE.Group();
       const pad = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.3, 1.3, 0.12, 32),
-        new THREE.MeshStandardMaterial({ color: 0x40ffd0, emissive: 0x0a6050, roughness: 0.3 })
+        new THREE.CylinderGeometry(1.3, 1.35, 0.12, 36),
+        new THREE.MeshPhysicalMaterial({ color: 0x38f5d0, emissive: 0x0a5848, roughness: 0.22, clearcoat: 0.8 })
       );
       const c = new THREE.Mesh(this.springGeo, this.springMat);
       c.rotation.x = Math.PI / 2;
       c.scale.set(1, 1, 0.5);
-      g.add(c);
-      g.add(pad);
+      g.add(c, pad);
       g.userData = { pad, coil: c };
       this.props.add(g);
       this.springMeshes.push(g);
@@ -863,23 +1223,32 @@ export class View {
       g.userData.coil.scale.z = Math.max(0.1, h);
     });
 
-    // Geothermal Hydrothermal Vents (volcanic chimney cone + glowing caldera + warm point light)
+    // Sculpted Fluted Geothermal Hydrothermal Chimneys + Glowing Mineral Caldera
     const vents = W.vents || [];
     while (this.ventMeshes.length < vents.length) {
       const g = new THREE.Group();
+      const coneGeo = new THREE.CylinderGeometry(0.30, 1.02, 0.84, 24, 6, true);
+      const cp = coneGeo.attributes.position;
+      for (let k = 0; k < cp.count; k++) {
+        const vx = cp.getX(k), vy = cp.getY(k), vz = cp.getZ(k);
+        const ang = Math.atan2(vz, vx);
+        const flute = 1.0 + 0.12 * Math.sin(ang * 7.0 + vy * 3.0);
+        cp.setXYZ(k, vx * flute, vy, vz * flute);
+      }
+      coneGeo.computeVertexNormals();
       const cone = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.32, 0.95, 0.78, 12, 1, true),
-        new THREE.MeshStandardMaterial({ color: 0x261c24, emissive: 0x3a1205, roughness: 0.85, side: THREE.DoubleSide })
+        coneGeo,
+        new THREE.MeshPhysicalMaterial({ color: 0x221920, emissive: 0x381206, roughness: 0.72, clearcoat: 0.35, side: THREE.DoubleSide })
       );
-      cone.position.y = 0.36;
+      cone.position.y = 0.38;
       const throat = new THREE.Mesh(
-        new THREE.CircleGeometry(0.3, 16),
-        new THREE.MeshBasicMaterial({ color: 0xff6a1a })
+        new THREE.CircleGeometry(0.29, 24),
+        new THREE.MeshBasicMaterial({ color: 0xff7722 })
       );
       throat.rotation.x = -Math.PI / 2;
-      throat.position.y = 0.72;
-      const light = new THREE.PointLight(0xff6622, 3.2, 7.5, 1.6);
-      light.position.y = 0.95;
+      throat.position.y = 0.76;
+      const light = new THREE.PointLight(0xff6a24, 3.0, 8.0, 1.6);
+      light.position.y = 0.98;
       g.add(cone, throat, light);
       g.userData = { throat, light };
       this.props.add(g);
@@ -889,7 +1258,7 @@ export class View {
       const g = this.ventMeshes[i];
       g.visible = true;
       g.position.set(v.x, v.y, v.z);
-      const pulse = 0.8 + 0.35 * Math.sin(v.phase || 0);
+      const pulse = 0.82 + 0.32 * Math.sin(v.phase || 0);
       g.userData.light.intensity = 2.6 * v.heat * pulse;
     });
     for (let i = vents.length; i < this.ventMeshes.length; i++) this.ventMeshes[i].visible = false;
@@ -901,144 +1270,213 @@ export class View {
     }
   }
 
-  // ------------------------------------------------------------------ 3D Multi-Agent Ecosystem (Conspecifics, Eggs, Bio-Mites, Shadow-Leviathan)
+  // ------------------------------------------------------------------ 32-Peer Skinned Biosphere, Translucent Eggs, Bio-Mites & Shadow-Leviathans
   buildEcosystem() {
+    const S = this.scene;
     this.ecoGroup = new THREE.Group();
-    this.scene.add(this.ecoGroup);
+    S.add(this.ecoGroup);
 
-    // 1) Articulated 7-segment 3D Conspecific Glitchlings
+    // 1) Conspecific Peer Pool (up to 32 continuous Catmull-Rom skinned creatures with 4/6/8 Hox limbs)
     this.peerPool = [];
-    const segGeo = new THREE.SphereGeometry(0.16, 14, 10);
-    const eyeGeo = new THREE.SphereGeometry(0.055, 10, 8);
-    const finGeo = new THREE.ConeGeometry(0.06, 0.26, 5);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xe8ffff });
+    const peerEyeGeo = new THREE.SphereGeometry(0.048, 16, 12);
+    const peerPupilMat = new THREE.MeshStandardMaterial({ color: 0x05070e, roughness: 0.08, metalness: 0.2 });
+    const peerLimbGeo = makeTubeGeometry(6, 7);
+    {
+      const lPts = [[0, 0, 0], [0, -0.05, 0.11], [0, -0.15, 0.20], [0, -0.22, 0.24]];
+      const lRad = [0.038, 0.044, 0.028, 0.018];
+      writeCatmullTube(peerLimbGeo, 6, 7, lPts, lRad, [0, 1, 0]);
+    }
+    const auraGeo = new THREE.RingGeometry(0.36, 0.44, 32);
+    auraGeo.rotateX(-Math.PI / 2);
 
     for (let i = 0; i < MAX_PEER_MESHES; i++) {
       const grp = new THREE.Group();
       grp.visible = false;
-      const mat = new THREE.MeshPhysicalMaterial({
-        color: 0x55ccff,
-        emissive: 0x113355,
-        emissiveIntensity: 0.9,
+
+      const bodyGeo = makeTubeGeometry(PEER_RINGS, PEER_SIDES);
+      const bodyMat = new THREE.MeshPhysicalMaterial({
+        color: 0x38d8c0,
+        emissive: 0x0b3038,
+        emissiveIntensity: 0.55,
         roughness: 0.28,
-        iridescence: 0.9,
-        transparent: true,
-        opacity: 0.92,
+        metalness: 0.06,
+        clearcoat: 0.78,
+        clearcoatRoughness: 0.16,
+        iridescence: 0.75,
+        iridescenceIOR: 1.65,
       });
-      const segs = [];
-      const fins = [];
-      for (let s = 0; s < 7; s++) {
-        const sm = new THREE.Mesh(segGeo, mat);
-        grp.add(sm);
-        segs.push(sm);
-        if (s >= 1 && s <= 5) {
-          const fm = new THREE.Mesh(finGeo, mat);
-          grp.add(fm);
-          fins.push({ mesh: fm, seg: s });
-        }
+      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+      bodyMesh.castShadow = true;
+      bodyMesh.frustumCulled = false;
+      grp.add(bodyMesh);
+
+      // Dorsal bioluminescent crest ribbon along the 7 peer spine segments
+      const crestPos = new Float32Array(14 * 3);
+      const crestIdx = [];
+      for (let s = 0; s < 6; s++) {
+        const a = s * 2;
+        crestIdx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
       }
-      const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-      const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
-      grp.add(eyeL, eyeR);
+      const crestGeo = new THREE.BufferGeometry();
+      crestGeo.setAttribute('position', new THREE.BufferAttribute(crestPos, 3));
+      crestGeo.setIndex(crestIdx);
+      const crestMat = new THREE.MeshPhysicalMaterial({
+        color: 0x58f5ff,
+        emissive: 0x24b8d8,
+        emissiveIntensity: 0.95,
+        roughness: 0.22,
+        transparent: true,
+        opacity: 0.78,
+        side: THREE.DoubleSide,
+      });
+      const crestMesh = new THREE.Mesh(crestGeo, crestMat);
+      crestMesh.frustumCulled = false;
+      grp.add(crestMesh);
+
+      // Bilateral stalked eyes on rostral segment
+      const eyes = [];
+      for (let side = -1; side <= 1; side += 2) {
+        const eg = new THREE.Group();
+        const iris = new THREE.Mesh(peerEyeGeo, new THREE.MeshPhysicalMaterial({
+          color: 0xffe498, emissive: 0x443008, roughness: 0.1, clearcoat: 1.0,
+        }));
+        const pup = new THREE.Mesh(peerEyeGeo, peerPupilMat);
+        pup.scale.set(0.55, 0.55, 0.55);
+        pup.position.z = 0.026;
+        eg.add(iris, pup);
+        grp.add(eg);
+        eyes.push(eg);
+      }
+
+      // Up to 8 lateral muscular limbs (pairs 0..3 -> 4L, 6L, or 8L Hox clade!)
+      const limbs = [];
+      for (let k = 0; k < 8; k++) {
+        const lm = new THREE.Mesh(peerLimbGeo, bodyMat);
+        grp.add(lm);
+        limbs.push(lm);
+      }
+
+      const auraMat = new THREE.MeshBasicMaterial({
+        color: 0xff62e8,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const aura = new THREE.Mesh(auraGeo, auraMat);
+      grp.add(aura);
+
       this.ecoGroup.add(grp);
-      this.peerPool.push({ grp, mat, segs, fins, eyeL, eyeR });
+      this.peerPool.push({
+        grp, bodyGeo, bodyMat, crestGeo, crestMat, eyes, limbs, aura, auraMat,
+        pts: Array.from({ length: 7 }, () => [0, 0, 0]),
+        radii: new Float32Array(7),
+      });
     }
 
-    // 2) Translucent Pulsing 3D Bioluminescent Eggs
+    // 2) Translucent Chorion Eggs with Pulsing Curled Embryo Cores
     this.eggPool = [];
-    const shellGeo = new THREE.SphereGeometry(0.18, 16, 12);
-    shellGeo.scale(1, 1.28, 1);
-    const coreGeo = new THREE.SphereGeometry(0.09, 12, 10);
+    const shellGeo = new THREE.SphereGeometry(0.155, 24, 18);
+    shellGeo.scale(1.0, 1.24, 1.0);
+    const embryoGeo = new THREE.TorusKnotGeometry(0.052, 0.020, 32, 8, 2, 3);
     for (let i = 0; i < MAX_EGG_MESHES; i++) {
       const grp = new THREE.Group();
       grp.visible = false;
       const shellMat = new THREE.MeshPhysicalMaterial({
-        color: 0xaaffee,
-        emissive: 0x226655,
-        emissiveIntensity: 0.7,
-        transmission: 0.65,
-        roughness: 0.15,
-        transparent: true,
-        opacity: 0.82,
-      });
-      const coreMat = new THREE.MeshStandardMaterial({
-        color: 0xffdd66,
-        emissive: 0xffaa22,
-        emissiveIntensity: 2.2,
+        color: 0x9ef8ff,
+        emissive: 0x104050,
+        emissiveIntensity: 0.45,
+        roughness: 0.08,
+        transmission: 0.72,
+        thickness: 0.45,
+        ior: 1.44,
+        clearcoat: 1.0,
+        iridescence: 0.85,
       });
       const shell = new THREE.Mesh(shellGeo, shellMat);
-      const core = new THREE.Mesh(coreGeo, coreMat);
-      grp.add(shell, core);
+      const embMat = new THREE.MeshStandardMaterial({
+        color: 0xff70d8,
+        emissive: 0xff44b8,
+        emissiveIntensity: 1.4,
+        roughness: 0.3,
+      });
+      const embryo = new THREE.Mesh(embryoGeo, embMat);
+      grp.add(shell, embryo);
       this.ecoGroup.add(grp);
-      this.eggPool.push({ grp, shell, core, coreMat, shellMat });
+      this.eggPool.push({ grp, shellMat, embMat, embryo });
     }
 
-    // 3) Photonic Bio-Mites (up to 64 glowing golden-cyan point sprites)
-    this.maxMites = 64;
+    // 3) 80 Soft Radial-Glow Photonic Bio-Mite Pollinators
+    this.maxMites = 80;
     const mGeo = new THREE.BufferGeometry();
-    mGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.maxMites * 3), 3));
+    const mPos = new Float32Array(this.maxMites * 3);
     const mCol = new Float32Array(this.maxMites * 3);
-    for (let i = 0; i < this.maxMites; i++) {
-      mCol[3 * i] = 0.55 + 0.45 * (i & 1);
-      mCol[3 * i + 1] = 0.95;
-      mCol[3 * i + 2] = 0.45 + 0.55 * ((i + 1) & 1);
-    }
+    mGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3));
     mGeo.setAttribute('color', new THREE.BufferAttribute(mCol, 3));
-    this.mitePts = new THREE.Points(
-      mGeo,
-      new THREE.PointsMaterial({
-        vertexColors: true,
-        size: 0.15,
-        transparent: true,
-        opacity: 0.95,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      })
-    );
+    this.miteSpriteMat = makeSoftSpriteMaterial(0.20, 0.95, true);
+    this.mitePts = new THREE.Points(mGeo, this.miteSpriteMat);
     this.mitePts.frustumCulled = false;
     this.ecoGroup.add(this.mitePts);
 
-    // 4) Shadow-Leviathan Apex Predators (up to 3 multi-segment armored serpentine leviathans)
+    // 4) 3 Sculpted Armored Shadow-Leviathan Apex Predators (continuous wyrm tube + mandibles + dorsal spines)
     this.predPool = [];
-    const levSegGeo = new THREE.IcosahedronGeometry(0.36, 1);
-    const levSpineGeo = new THREE.ConeGeometry(0.08, 0.48, 5);
-    const levMat = new THREE.MeshStandardMaterial({
-      color: 0x12081a,
-      emissive: 0x660824,
-      emissiveIntensity: 1.35,
-      roughness: 0.35,
-      metalness: 0.65,
-      flatShading: true,
-    });
-    const levEyeMat = new THREE.MeshBasicMaterial({ color: 0xff2244 });
-    for (let p = 0; p < 3; p++) {
+    const mandibleGeo = buildCurvedTalonGeo();
+    const spineGeo = new THREE.ConeGeometry(0.032, 0.22, 6);
+    for (let i = 0; i < 3; i++) {
       const grp = new THREE.Group();
       grp.visible = false;
-      const segs = [];
-      for (let s = 0; s < LEVIATHAN_SEGS; s++) {
-        const holder = new THREE.Group();
-        const bodyM = new THREE.Mesh(levSegGeo, levMat);
-        const taper = (1 - (s / LEVIATHAN_SEGS) * 0.72) * (s === 0 ? 1.18 : 1.0);
-        bodyM.scale.set(taper * 1.1, taper * 0.85, taper * 1.25);
-        holder.add(bodyM);
-        if (s < LEVIATHAN_SEGS - 2) {
-          const sp = new THREE.Mesh(levSpineGeo, levMat);
-          sp.position.y = 0.32 * taper;
-          sp.rotation.x = -0.35;
-          holder.add(sp);
-        }
-        if (s === 0) {
-          for (const sx of [-0.22, 0.22]) {
-            const ey = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), levEyeMat);
-            ey.position.set(sx, 0.12, 0.26);
-            holder.add(ey);
-          }
-        }
-        grp.add(holder);
-        segs.push(holder);
+      const wGeo = makeTubeGeometry(LEVIATHAN_SEGS, 12);
+      const wMat = new THREE.MeshPhysicalMaterial({
+        color: 0x140b1e,
+        emissive: 0x3b081e,
+        emissiveIntensity: 0.75,
+        roughness: 0.24,
+        metalness: 0.38,
+        clearcoat: 0.88,
+        iridescence: 0.92,
+        iridescenceIOR: 2.0,
+      });
+      const wyrm = new THREE.Mesh(wGeo, wMat);
+      wyrm.castShadow = true;
+      wyrm.frustumCulled = false;
+      grp.add(wyrm);
+
+      const headGrp = new THREE.Group();
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2048 });
+      const eyeSphere = new THREE.SphereGeometry(0.042, 12, 10);
+      for (let e = 0; e < 4; e++) {
+        const sgn = e < 2 ? -1 : 1;
+        const row = e % 2;
+        const em = new THREE.Mesh(eyeSphere, eyeMat);
+        em.position.set(sgn * (0.11 + row * 0.045), 0.05 - row * 0.03, 0.14 - row * 0.06);
+        headGrp.add(em);
       }
+      const jaws = [];
+      const jawMat = new THREE.MeshStandardMaterial({ color: 0x2b1024, emissive: 0x680a22, roughness: 0.2, metalness: 0.5 });
+      for (let sgn = -1; sgn <= 1; sgn += 2) {
+        const jw = new THREE.Mesh(mandibleGeo, jawMat);
+        jw.scale.set(2.2, 2.2, 2.6);
+        jw.position.set(sgn * 0.12, -0.04, 0.16);
+        jw.rotation.z = sgn * 1.25;
+        headGrp.add(jw);
+        jaws.push(jw);
+      }
+      grp.add(headGrp);
+
+      const spines = [];
+      const spMat = new THREE.MeshStandardMaterial({ color: 0xff2858, emissive: 0x880828, roughness: 0.28 });
+      for (let s = 0; s < 8; s++) {
+        const sp = new THREE.Mesh(spineGeo, spMat);
+        grp.add(sp);
+        spines.push(sp);
+      }
+
       this.ecoGroup.add(grp);
-      this.predPool.push({ grp, segs });
+      this.predPool.push({
+        grp, wGeo, headGrp, jaws, spines,
+        pts: Array.from({ length: 9 }, () => [0, 0, 0]),
+        radii: [0.04, 0.09, 0.14, 0.19, 0.22, 0.23, 0.21, 0.19, 0.14],
+      });
     }
   }
 
@@ -1050,1010 +1488,1316 @@ export class View {
     }
     this.ecoGroup.visible = true;
 
-    // 1) Conspecifics
+    // 1) Sync up to 32 embodied conspecifics
     const peers = eco.peers;
+    const nP = Math.min(peers.length, MAX_PEER_MESHES);
+    const prof = [0.58, 0.86, 1.0, 1.05, 0.98, 0.88, 0.72];
     for (let i = 0; i < MAX_PEER_MESHES; i++) {
       const slot = this.peerPool[i];
-      const p = peers[i];
-      if (!p) {
+      if (i >= nP) {
         slot.grp.visible = false;
         continue;
       }
+      const p = peers[i];
       slot.grp.visible = true;
       const hue = p.gen.pigmentHue ?? 0.55;
-      const camo = p.camo || 0;
-      slot.mat.color.setHSL(hue, 0.78 - 0.45 * camo, 0.48 - 0.22 * camo);
-      slot.mat.emissive.setHSL((hue + 0.08) % 1, 0.88, (0.18 + 0.22 * (p.courtship || 0)) * (1 - 0.6 * camo));
+      const girth = (p.gen.bodyGirth ?? 1.0) * p.scale;
+      const crestH = 0.15 * (p.gen.crestFin ?? 1.0) * p.scale;
+      slot.bodyMat.color.setHSL(hue, 0.74 - 0.35 * p.camo, 0.42 + 0.10 * p.courtship);
+      slot.bodyMat.emissive.setHSL((hue + 0.08) % 1, 0.88, 0.12 + 0.22 * p.courtship + 0.12 * p.vocalAmp);
+      slot.crestMat.color.setHSL((hue + 0.14) % 1, 0.92, 0.58);
+      slot.crestMat.emissive.setHSL((hue + 0.14) % 1, 0.95, 0.32 + 0.28 * p.courtship);
 
-      const bGirth = (p.gen.bodyGirth ?? 1.0) * p.scale;
+      const cPos = slot.crestGeo.attributes.position.array;
       for (let s = 0; s < 7; s++) {
-        const sm = slot.segs[s];
-        sm.position.set(p.segX[s], p.segY[s], p.segZ[s]);
-        const prof = Math.sin(((s + 0.6) / 7.6) * Math.PI);
-        sm.scale.setScalar((0.55 + 0.65 * prof) * bGirth);
+        const sx = p.segX[s], sy = p.segY[s], sz = p.segZ[s];
+        slot.pts[s][0] = sx;
+        slot.pts[s][1] = sy;
+        slot.pts[s][2] = sz;
+        const rSeg = 0.165 * prof[s] * girth;
+        slot.radii[s] = rSeg;
+        const arch = Math.sin(((s + 0.5) / 7) * Math.PI);
+        cPos[6 * s] = sx;
+        cPos[6 * s + 1] = sy + rSeg * 0.85;
+        cPos[6 * s + 2] = sz;
+        cPos[6 * s + 3] = sx;
+        cPos[6 * s + 4] = sy + rSeg * 0.85 + crestH * arch;
+        cPos[6 * s + 5] = sz;
       }
-      const finScale = (p.gen.crestFin ?? 0.5) * p.scale;
-      for (const f of slot.fins) {
-        const s = f.seg;
-        f.mesh.position.set(p.segX[s], p.segY[s] + 0.18 * bGirth, p.segZ[s]);
-        f.mesh.scale.set(0.8 * p.scale, Math.max(0.15, 1.3 * finScale), 1.1 * p.scale);
-      }
+      slot.crestGeo.attributes.position.needsUpdate = true;
+      slot.crestGeo.computeVertexNormals();
+      writeCatmullTube(slot.bodyGeo, PEER_RINGS, PEER_SIDES, slot.pts, slot.radii, [0, 1, 0]);
+
+      // Head orientation & stalked eyes at segment 6
       const hx = p.segX[6], hy = p.segY[6], hz = p.segZ[6];
-      const cf = Math.cos(p.hdg), sf = Math.sin(p.hdg);
-      slot.eyeL.position.set(hx + cf * 0.14 - sf * 0.11 * p.scale, hy + 0.12 * p.scale, hz + sf * 0.14 + cf * 0.11 * p.scale);
-      slot.eyeR.position.set(hx + cf * 0.14 + sf * 0.11 * p.scale, hy + 0.12 * p.scale, hz + sf * 0.14 - cf * 0.11 * p.scale);
-      slot.eyeL.scale.setScalar(p.scale);
-      slot.eyeR.scale.setScalar(p.scale);
+      const fx = Math.cos(p.hdg), fz = Math.sin(p.hdg);
+      const rx = -fz, rz = fx;
+      const stalkL = 0.17 * (p.gen.eyeStalk ?? 1.0) * p.scale;
+      for (let e = 0; e < 2; e++) {
+        const sgn = e === 0 ? -1 : 1;
+        const eg = slot.eyes[e];
+        eg.position.set(
+          hx + fx * 0.08 * p.scale + rx * sgn * 0.11 * p.scale,
+          hy + stalkL,
+          hz + fz * 0.08 * p.scale + rz * sgn * 0.11 * p.scale
+        );
+        eg.scale.setScalar(p.scale);
+        eg.lookAt(eg.position.x + fx, eg.position.y, eg.position.z + fz);
+      }
+
+      // Hox 4 / 6 / 8 lateral limbs
+      const limbSegs = [1, 5, 3, 2]; // pair 0=hind, pair 1=fore, pair 2=mid(6L), pair 3=extra(8L)
+      const activePairs = p.limbPairs ?? 3;
+      for (let pair = 0; pair < 4; pair++) {
+        const segIdx = limbSegs[pair];
+        const show = pair < activePairs;
+        for (let side = 0; side < 2; side++) {
+          const k = pair * 2 + side;
+          const lm = slot.limbs[k];
+          lm.visible = show;
+          if (!show) continue;
+          const sgn = side === 0 ? -1 : 1;
+          const bx = p.segX[segIdx], by = p.segY[segIdx], bz = p.segZ[segIdx];
+          const rAttach = slot.radii[segIdx] * 0.82;
+          lm.position.set(bx + rx * sgn * rAttach, by - 0.02 * p.scale, bz + rz * sgn * rAttach);
+          const swing = Math.sin(p.gaitPh + pair * 1.65 + side * Math.PI) * 0.42;
+          lm.rotation.set(0, -p.hdg + (sgn > 0 ? 0 : Math.PI) + swing * sgn, 0);
+          lm.scale.setScalar(p.scale * (pair === 1 ? (p.gen.foreLimb ?? 1) : (p.gen.hindLimb ?? 1)));
+        }
+      }
+
+      const glow = Math.max(p.courtship, p.vocalAmp * 0.8);
+      if (glow > 0.06) {
+        slot.aura.visible = true;
+        slot.aura.position.set(p.x, this.cr.world.height(p.x, p.z) + 0.04, p.z);
+        const sAura = p.scale * (0.9 + 0.35 * Math.sin(t * 5.0 + p.id));
+        slot.aura.scale.setScalar(sAura);
+        slot.auraMat.opacity = Math.min(0.65, glow * 0.55);
+      } else {
+        slot.aura.visible = false;
+      }
     }
 
-    // 2) Eggs
+    // 2) Sync Chorion Eggs
     const eggs = eco.eggs;
     for (let i = 0; i < MAX_EGG_MESHES; i++) {
       const slot = this.eggPool[i];
-      const eg = eggs[i];
-      if (!eg) {
+      if (i >= eggs.length) {
         slot.grp.visible = false;
         continue;
       }
+      const eg = eggs[i];
       slot.grp.visible = true;
-      const pulse = 1 + 0.12 * Math.sin(t * (3 + 8 * eg.progress) + eg.id);
       slot.grp.position.set(eg.x, eg.y, eg.z);
-      slot.grp.scale.setScalar(pulse);
-      slot.core.scale.setScalar(0.55 + 0.65 * eg.progress);
-      slot.coreMat.emissive.setHSL(eg.gen?.pigmentHue ?? 0.14, 0.95, 0.5);
-      slot.coreMat.emissiveIntensity = 1.4 + 2.2 * eg.progress;
+      const beat = 1.0 + 0.06 * Math.sin(t * 4.5 + eg.pulse);
+      slot.grp.scale.setScalar((0.85 + 0.35 * eg.progress) * beat);
+      slot.shellMat.color.setHSL(eg.hue, 0.72, 0.68);
+      slot.embMat.color.setHSL((eg.hue + 0.08) % 1, 0.92, 0.55);
+      slot.embMat.emissive.setHSL((eg.hue + 0.08) % 1, 0.95, 0.35 + 0.25 * eg.progress);
+      slot.embryo.rotation.set(t * 0.9 + eg.pulse, t * 1.3, 0);
+      slot.embryo.scale.setScalar(0.55 + 0.55 * eg.progress);
     }
 
-    // 3) Photonic Bio-Mites
+    // 3) Sync Photonic Bio-Mites
     const mites = eco.mites;
-    const mp = this.mitePts.geometry.attributes.position.array;
-    const nM = Math.min(this.maxMites, mites.length);
+    const mPos = this.mitePts.geometry.attributes.position.array;
+    const mCol = this.mitePts.geometry.attributes.color.array;
+    const nM = Math.min(mites.length, this.maxMites);
+    const tmpC = new THREE.Color();
     for (let i = 0; i < nM; i++) {
-      mp[3 * i] = mites[i].x;
-      mp[3 * i + 1] = mites[i].y;
-      mp[3 * i + 2] = mites[i].z;
+      const m = mites[i];
+      mPos[3 * i] = m.x;
+      mPos[3 * i + 1] = m.y + 0.08 * Math.sin(t * 6.0 + m.ph);
+      mPos[3 * i + 2] = m.z;
+      tmpC.setHSL(m.hue, 0.95, 0.62 + 0.18 * m.pollen);
+      mCol[3 * i] = tmpC.r;
+      mCol[3 * i + 1] = tmpC.g;
+      mCol[3 * i + 2] = tmpC.b;
     }
     this.mitePts.geometry.setDrawRange(0, nM);
     this.mitePts.geometry.attributes.position.needsUpdate = true;
+    this.mitePts.geometry.attributes.color.needsUpdate = true;
 
-    // 4) Shadow-Leviathans
+    // 4) Sync Shadow-Leviathans
     const preds = eco.predators;
-    const W = this.cr.world;
-    for (let p = 0; p < this.predPool.length; p++) {
-      const slot = this.predPool[p];
-      const lv = preds[p];
-      if (!lv) {
+    for (let i = 0; i < 3; i++) {
+      const slot = this.predPool[i];
+      if (i >= preds.length) {
         slot.grp.visible = false;
         continue;
       }
+      const pr = preds[i];
       slot.grp.visible = true;
-      const cf = Math.cos(lv.hdg), sf = Math.sin(lv.hdg);
-      for (let s = 0; s < LEVIATHAN_SEGS; s++) {
-        const holder = slot.segs[s];
-        const lag = s * 0.48;
-        const sway = 0.36 * Math.sin(t * 4.2 - s * 0.65);
-        const sx = lv.x - cf * lag - sf * sway;
-        const sz = lv.z - sf * lag + cf * sway;
-        const sy = W.height(sx, sz) + 0.55 + 0.14 * Math.sin(t * 3.1 + s * 0.5);
-        holder.position.set(sx, sy, sz);
-        holder.rotation.y = Math.atan2(cf, sf);
+      const fx = Math.cos(pr.hdg), fz = Math.sin(pr.hdg);
+      const rx = -fz, rz = fx;
+      for (let k = 0; k < 9; k++) {
+        const u = k / 8; // 0 = tail tip, 1 = head
+        const distBack = (1 - u) * 2.85;
+        const slither = Math.sin(t * 5.2 - (1 - u) * 5.4 + pr.ph) * 0.28 * (1.15 - 0.65 * u);
+        const archY = Math.sin(u * Math.PI) * 0.18 - pr.swoop * 0.35 * u;
+        const wx = pr.x - fx * distBack + rx * slither;
+        const wz = pr.z - fz * distBack + rz * slither;
+        const wy = Math.max(this.cr.world.height(wx, wz) + 0.22, pr.y + archY);
+        slot.pts[k][0] = wx;
+        slot.pts[k][1] = wy;
+        slot.pts[k][2] = wz;
+        if (k < 8) {
+          const sp = slot.spines[k];
+          sp.position.set(wx, wy + slot.radii[k] * 0.95, wz);
+          sp.rotation.set(-0.35, -pr.hdg, 0);
+        }
       }
+      writeCatmullTube(slot.wGeo, LEVIATHAN_SEGS, 12, slot.pts, slot.radii, [0, 1, 0]);
+      const headP = slot.pts[8];
+      slot.headGrp.position.set(headP[0], headP[1], headP[2]);
+      slot.headGrp.lookAt(headP[0] + fx, headP[1] - pr.swoop * 0.25, headP[2] + fz);
+      const snap = 0.25 + 0.45 * pr.swoop + 0.15 * Math.sin(t * 7.5 + pr.ph);
+      slot.jaws[0].rotation.y = snap;
+      slot.jaws[1].rotation.y = -snap;
     }
   }
 
-  // ------------------------------------------------------------------ Sculpted Evo-Devo Focal Glitchling
+  // ------------------------------------------------------------------ Next-Gen Organic Focal Creature (96x48 Dermal Spline + 4/6/8 Muscular Limbs + Wet Corneas)
   buildCreature() {
-    const S = this.scene;
+    const S = this.scene, B = this.cr.body;
     this.cg = new THREE.Group();
     S.add(this.cg);
 
-    // 1) High-Resolution 72x36 Catmull-Rom Dermal Tube + p5.js Voronoi Biomaterial Shader
-    const n = RING_S * (RING_M + 1);
-    const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uv = new Float32Array(n * 2), idx = [];
-    for (let s = 0; s < RING_S; s++) {
-      for (let m = 0; m <= RING_M; m++) {
-        const i = s * (RING_M + 1) + m;
-        uv[2 * i] = s / (RING_S - 1);
-        uv[2 * i + 1] = m / RING_M;
-        if (s < RING_S - 1 && m < RING_M) {
-          const a = i, b = i + RING_M + 1;
-          idx.push(a, b, a + 1, b, b + 1, a + 1);
-        }
-      }
-    }
-    const g = (this.skinGeo = new THREE.BufferGeometry());
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    g.setIndex(idx);
+    // 1) 96x48 Continuous Dermal Body Tube with Osteoderm Scute Relief, Subsurface Scattering, Wet Clearcoat & Iridescence
+    this.skinGeo = makeTubeGeometry(RING_M, RING_S);
+    this.skinTex = new THREE.DataTexture(this.cr.skin.rgba, SW, SH, THREE.RGBAFormat);
+    this.skinTex.wrapS = this.skinTex.wrapT = THREE.RepeatWrapping;
+    this.skinTex.magFilter = this.skinTex.minFilter = THREE.LinearFilter;
+    this.skinTex.needsUpdate = true;
 
-    this.chromaTex = new THREE.DataTexture(this.cr.skin.rgba, SW, SH, THREE.RGBAFormat);
-    this.chromaTex.wrapS = THREE.RepeatWrapping;
-    this.chromaTex.wrapT = THREE.RepeatWrapping;
-    this.chromaTex.magFilter = THREE.LinearFilter;
-    this.chromaTex.needsUpdate = true;
-
-    const p5Dermal = this.p5Layer ? this.p5Layer.dermalTex : this.chromaTex;
+    const dermalTex = this.p5Layer ? this.p5Layer.dermalTex : null;
     this.skinU = {
-      chroma: { value: this.chromaTex },
-      dermal: { value: p5Dermal },
       t: { value: 0 },
-      ne: { value: 0.3 },
-      da: { value: 0.3 },
-      sleep: { value: 0 },
       glitch: { value: 0 },
+      sleep: { value: 0 },
       camo: { value: 0 },
-      geneHue: { value: this.cr.gen.pigmentHue ?? 0.72 },
-      sunDir: { value: new THREE.Vector3(0.4, 0.8, 0.3) },
-      sunI: { value: 1 },
-      beat: { value: 0 },
-      perf: { value: 0.5 },
+      uHue: { value: this.cr.gen.pigmentHue ?? 0.72 },
+      uOsteo: { value: B.hox?.osteoderm ?? 0.5 },
+      uSkinTex: { value: this.skinTex },
+      uDermalTex: { value: dermalTex },
+      uHasDermal: { value: dermalTex ? 1.0 : 0.0 },
     };
 
-    this.skinMat = new THREE.ShaderMaterial({
-      uniforms: this.skinU,
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      vertexShader: `
-        varying vec2 vUv;
-        varying vec3 vN, vV, vW;
-        void main() {
-          vUv = uv;
-          vec4 w = modelMatrix * vec4(position, 1.0);
-          vW = w.xyz;
-          vN = normalize(mat3(modelMatrix) * normal);
-          vV = normalize(cameraPosition - w.xyz);
-          gl_Position = projectionMatrix * viewMatrix * w;
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D chroma, dermal;
-        uniform float t, ne, da, sleep, glitch, camo, geneHue, sunI, beat, perf;
-        uniform vec3 sunDir;
-        varying vec2 vUv;
-        varying vec3 vN, vV, vW;
-
-        vec3 hue(float h) { return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
-        float hsh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        float vn(vec2 p) {
-          vec2 i = floor(p), f = fract(p);
-          f = f * f * (3.0 - 2.0 * f);
-          return mix(mix(hsh(i), hsh(i + vec2(1,0)), f.x), mix(hsh(i + vec2(0,1)), hsh(i + vec2(1,1)), f.x), f.y);
-        }
-        vec3 thinFilm(float d, float cosI) {
-          float n = 1.83;
-          float sinT = sqrt(max(0.0, 1.0 - cosI * cosI)) * 1.33 / n;
-          float cosT = sqrt(max(0.0, 1.0 - sinT * sinT));
-          float opd = 2.0 * n * d * cosT;
-          vec3 lam = vec3(650.0, 532.0, 450.0);
-          return 0.5 - 0.5 * cos(6.2831853 * opd / lam + 3.14159265);
-        }
-
-        void main() {
-          vec2 uv = vUv;
-          vec4 c = texture2D(chroma, uv);
-          vec4 p5c = texture2D(dermal, uv * vec2(3.0, 2.0));
-          vec3 N = normalize(length(vN) > 1e-4 ? vN : vec3(0.0, 1.0, 0.0));
-          if (!gl_FrontFacing) N = -N;
-          vec3 V = normalize(length(vV) > 1e-4 ? vV : vec3(0.0, 0.0, 1.0));
-          float nv = clamp(dot(N, V), 0.0, 1.0);
-          vec3 L = normalize(length(sunDir) > 1e-4 ? sunDir : vec3(0.0, 1.0, 0.0));
-
-          vec2 g = fract(uv * vec2(150.0, 68.0)) - 0.5;
-          float sac = smoothstep(0.18 + 0.32 * c.r, 0.05, length(g));
-          vec3 baseTint = hue(fract(geneHue + 0.12 * c.g));
-          vec3 pigment = mix(baseTint * 0.95, vec3(0.65, 0.08, 0.18), c.r) * sac;
-
-          float d = 130.0 + 260.0 * c.g + 32.0 * sin(vW.y * 3.0 + t * 0.45);
-          vec3 irid = thinFilm(d, nv);
-          float fres = 0.05 + 0.95 * pow(max(0.0, 1.0 - nv), 4.5);
-
-          float vein = 1.0 - abs(vn(uv * vec2(38.0, 16.0)) * 2.0 - 1.0);
-          vein = smoothstep(0.85, 0.98, vein) * (0.28 + 0.72 * beat) * perf;
-
-          vec3 lv = L + V;
-          vec3 H = length(lv) > 1e-4 ? normalize(lv) : N;
-          float nh = max(dot(N, H), 0.0);
-          float a2 = 0.0042;
-          float D = a2 / (3.14159 * pow(nh * nh * (a2 - 1.0) + 1.0, 2.0));
-          float spec = D * fres * 0.26 * sunI;
-          float trans = pow(clamp(dot(V, -L + N * 0.35), 0.0, 1.0), 3.0) * sunI;
-
-          float band = 0.78 + 0.22 * smoothstep(0.32, 0.5, abs(fract(uv.x * 7.0) - 0.5));
-          vec3 col = (pigment * 0.72 + p5c.rgb * 0.55 + irid * (0.22 + 0.68 * fres) + baseTint * fres * 0.45 * (0.5 + ne) + hue(fract(uv.x * 1.5 - t * 0.05)) * c.a * 0.32) * band;
-          col += vec3(0.95, 0.12, 0.22) * vein * 0.58 + vec3(1.0, 0.48, 0.65) * trans * 0.34 + vec3(spec);
-          col = mix(col, vec3(0.06, 0.09, 0.08), 0.68 * camo);
-          col *= 1.0 - 0.52 * sleep;
-          col += vec3(1.0, 0.1, 0.1) * glitch * step(0.5, fract(uv.x * 20.0 + t * 9.0));
-
-          float alpha = clamp(0.32 + 0.48 * fres + 0.28 * sac * c.r + 0.22 * vein + min(spec, 0.38), 0.0, 0.93);
-          gl_FragColor = vec4(col, alpha);
-        }
-      `,
-    });
-    this.skin = new THREE.Mesh(g, this.skinMat);
-    this.skin.renderOrder = 10;
-    this.skin.frustumCulled = false;
-    this.cg.add(this.skin);
-
-    // 2) Evo-Devo Bioluminescent Dorsal Crest-Fin Ribbon (48 stations along spine)
-    this.crestN = 48;
-    const cPos = new Float32Array(this.crestN * 2 * 3);
-    const cCol = new Float32Array(this.crestN * 2 * 3);
-    const cIdx = [];
-    for (let i = 0; i < this.crestN; i++) {
-      const u = i / (this.crestN - 1);
-      cCol[6 * i] = 0.25; cCol[6 * i + 1] = 0.55; cCol[6 * i + 2] = 0.95;
-      cCol[6 * i + 3] = 0.35 + 0.65 * Math.sin(u * Math.PI);
-      cCol[6 * i + 4] = 0.95;
-      cCol[6 * i + 5] = 0.85;
-      if (i < this.crestN - 1) {
-        const a = 2 * i;
-        cIdx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-      }
-    }
-    this.crestGeo = new THREE.BufferGeometry();
-    const cNor = new Float32Array(this.crestN * 2 * 3);
-    for (let i = 0; i < this.crestN * 2; i++) cNor[3 * i + 2] = 1;
-    this.crestGeo.setAttribute('position', new THREE.BufferAttribute(cPos, 3));
-    this.crestGeo.setAttribute('normal', new THREE.BufferAttribute(cNor, 3));
-    this.crestGeo.setAttribute('color', new THREE.BufferAttribute(cCol, 3));
-    this.crestGeo.setIndex(cIdx);
-    this.crestMat = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      emissive: 0x22ccff,
-      emissiveIntensity: 1.35,
-      transparent: true,
-      opacity: 0.78,
-      roughness: 0.25,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    this.crestMesh = new THREE.Mesh(this.crestGeo, this.crestMat);
-    this.crestMesh.frustumCulled = false;
-    this.crestMesh.renderOrder = 11;
-    this.cg.add(this.crestMesh);
-
-    // 3) Caudal Tail Fluke Fan (bilateral bioluminescent paddle at segment 0)
-    const flukeShape = new THREE.Shape();
-    flukeShape.moveTo(0, 0);
-    flukeShape.quadraticCurveTo(0.28, 0.14, 0.16, -0.34);
-    flukeShape.quadraticCurveTo(0, -0.18, -0.16, -0.34);
-    flukeShape.quadraticCurveTo(-0.28, 0.14, 0, 0);
-    const flukeGeo = new THREE.ShapeGeometry(flukeShape, 12);
-    flukeGeo.rotateX(Math.PI / 2);
-    this.flukeMat = new THREE.MeshStandardMaterial({
-      color: 0x66ccff,
-      emissive: 0x22ccff,
-      emissiveIntensity: 1.15,
-      transparent: true,
-      opacity: 0.78,
-      roughness: 0.28,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    this.flukeMesh = new THREE.Mesh(flukeGeo, this.flukeMat);
-    this.flukeMesh.renderOrder = 11;
-    this.cg.add(this.flukeMesh);
-
-    // 4) Bilateral Feathered Chemotactic Antennae (left & right 8-node sensory plumes)
-    this.antNodes = 8;
-    this.antennae = [0, 1].map(() => {
-      const ag = new THREE.BufferGeometry();
-      ag.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.antNodes * 3), 3));
-      const am = new THREE.LineBasicMaterial({ color: 0x55ffdd, transparent: true, opacity: 0.9 });
-      const ln = new THREE.Line(ag, am);
-      ln.frustumCulled = false;
-      const tip = new THREE.Mesh(
-        new THREE.SphereGeometry(0.028, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0x66ffee })
-      );
-      this.cg.add(ln, tip);
-      return { ln, ag, am, tip };
-    });
-
-    // 5) Internal Organs (Heart, Dual Breathing Lungs, Liver, Bladder, Fat, Colon, Peristaltic ENS Gut)
-    const glow = (c, i = 2) => new THREE.MeshStandardMaterial({
-      color: c, emissive: c, emissiveIntensity: i, roughness: 0.35, transparent: true, opacity: 0.88,
-    });
-    this.heart = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), glow(0xff1144, 3));
-    this.lungL = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), glow(0x44ccff, 1.3));
-    this.lungR = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), glow(0x44ccff, 1.3));
-    this.liver = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), glow(0x8a2be2, 1.5));
-    this.bladder = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), glow(0xffee55, 1.2));
-    this.fatM = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), glow(0xffe0a0, 0.6));
-    this.colonM = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), glow(0x7a4a20, 0.6));
-    for (const m of [this.heart, this.lungL, this.lungR, this.liver, this.bladder, this.fatM, this.colonM]) this.cg.add(m);
-
-    this.gutBalls = [];
-    for (let i = 0; i < 10; i++) {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.048, 10, 8), glow(0x33ff99, 1.2));
-      this.cg.add(m);
-      this.gutBalls.push(m);
-    }
-
-    // 6) Stratified 3D Spiking Brain Cloud (works seamlessly from S=436 up to MEGA=1,048,644!)
-    const visIdx = [];
-    if (NNEU <= 12000) {
-      for (let i = 0; i < NNEU; i++) visIdx.push(i);
-    } else {
-      let fixed = 0, sheetTot = 0;
-      for (const [, cnt] of REGIONS) { if (cnt <= 256) fixed += cnt; else sheetTot += cnt; }
-      const budget = Math.max(1024, 12000 - fixed);
-      for (const [name, cnt] of REGIONS) {
-        const r0 = R0[name];
-        if (cnt <= 256) {
-          for (let k = 0; k < cnt; k++) visIdx.push(r0 + k);
-        } else {
-          const take = Math.max(64, Math.round((cnt / sheetTot) * budget));
-          for (let k = 0; k < take; k++) visIdx.push(r0 + Math.min(cnt - 1, Math.floor(((k + 0.5) * cnt) / take)));
-        }
-      }
-    }
-    this.visNeuIdx = Uint32Array.from(visIdx);
-    const NV = (this.visNeuCount = this.visNeuIdx.length);
-    const bp = new Float32Array(NV * 3), bc = new Float32Array(NV * 3), bs = new Float32Array(NV);
-    this.brainLocal = bp;
-    const rc = new THREE.Color();
-    for (let v = 0; v < NV; v++) {
-      const ni = this.visNeuIdx[v];
-      let ri = 0;
-      for (let r = 0; r < REGIONS.length; r++) {
-        const nm = REGIONS[r][0];
-        if (ni >= R0[nm] && ni < R0[nm] + REGIONS[r][1]) { ri = r; break; }
-      }
-      rc.setHSL(ri / REGIONS.length, 0.9, 0.6);
-      const a = (ri / REGIONS.length) * Math.PI * 2;
-      const rr = 0.05 + 0.05 * Math.random(), th = a + (Math.random() - 0.5) * 0.7, ph = (Math.random() - 0.5) * 2.4;
-      bp[3 * v] = 0.09 * Math.cos(ph) + (Math.random() - 0.5) * 0.04;
-      bp[3 * v + 1] = Math.sin(ph) * rr + Math.cos(th) * 0.03;
-      bp[3 * v + 2] = Math.sin(th) * rr;
-      bc[3 * v] = rc.r; bc[3 * v + 1] = rc.g; bc[3 * v + 2] = rc.b;
-    }
-    const bg = new THREE.BufferGeometry();
-    bg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NV * 3), 3));
-    bg.setAttribute('color', new THREE.BufferAttribute(bc, 3));
-    bg.setAttribute('spk', new THREE.BufferAttribute(bs, 1));
-    this.brainGeo = bg;
-    this.brainPts = new THREE.Points(
-      bg,
-      new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        uniforms: { px: { value: 1 } },
-        vertexShader: `
-          attribute float spk;
-          attribute vec3 color;
-          varying vec3 vC;
-          varying float vS;
-          uniform float px;
-          void main() {
-            vC = color;
-            vS = spk;
-            vec4 mv = modelViewMatrix * vec4(position, 1.0);
-            gl_PointSize = px * (2.0 + 9.0 * spk) * (3.0 / max(0.25, -mv.z));
-            gl_Position = projectionMatrix * mv;
-          }
-        `,
-        fragmentShader: `
-          varying vec3 vC;
-          varying float vS;
-          void main() {
-            float d = length(gl_PointCoord - 0.5);
-            if (d > 0.5) discard;
-            gl_FragColor = vec4(vC * (0.42 + 4.0 * vS) * (1.0 - 2.0 * d), 1.0);
-          }
-        `,
-      })
-    );
-    this.brainPts.frustumCulled = false;
-    this.brainPts.renderOrder = 5;
-    this.cg.add(this.brainPts);
-
-    // 7) 256 3D WCSPH Blood Parcels
-    this.bloodN = this.cr.fluid ? this.cr.fluid.px.length : 256;
-    const fg = new THREE.BufferGeometry();
-    fg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.bloodN * 3), 3));
-    const bCols = new Float32Array(this.bloodN * 3);
-    for (let i = 0; i < this.bloodN; i++) { bCols[3 * i] = 1; bCols[3 * i + 1] = 0.22; bCols[3 * i + 2] = 0.35; }
-    fg.setAttribute('color', new THREE.BufferAttribute(bCols, 3));
-    this.bloodMat = new THREE.PointsMaterial({
-      vertexColors: true,
-      size: 0.036,
-      transparent: true,
-      opacity: 0.92,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    this.blood = new THREE.Points(fg, this.bloodMat);
-    this.blood.frustumCulled = false;
-    this.cg.add(this.blood);
-
-    // 8) Articulated Iridescent Limbs + 3-Clawed Glowing Digits (18 claws) + Stalked Compound-Foveated Eyes
-    const limbMat = new THREE.MeshPhysicalMaterial({
-      color: 0x9a6bff,
+    this.skinMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
       roughness: 0.24,
-      metalness: 0.12,
-      iridescence: 1,
-      iridescenceIOR: 1.85,
-      transmission: 0.32,
-      thickness: 0.22,
-      emissive: 0x220833,
+      metalness: 0.04,
+      clearcoat: 0.92,
+      clearcoatRoughness: 0.11,
+      iridescence: 0.86,
+      iridescenceIOR: 1.72,
+      iridescenceThicknessRange: [160, 680],
+      sheen: 0.55,
+      sheenRoughness: 0.35,
+      sheenColor: new THREE.Color(0x52f2ff),
       transparent: true,
       opacity: 0.88,
     });
-    this.bones = [];
-    const cap = new THREE.CapsuleGeometry(1, 1, 4, 10);
-    for (let i = 0; i < 16; i++) {
-      const m = new THREE.Mesh(cap, limbMat);
-      m.castShadow = true;
-      this.cg.add(m);
-      this.bones.push(m);
+    this.skinMat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, this.skinU);
+      sh.vertexShader = 'varying vec2 vSkinUv; varying vec3 vWPos;\n' + sh.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vSkinUv = uv;`
+      ).replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+        vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
+      );
+      sh.fragmentShader = `
+        uniform float t, glitch, sleep, camo, uHue, uOsteo, uHasDermal;
+        uniform sampler2D uSkinTex, uDermalTex;
+        varying vec2 vSkinUv;
+        varying vec3 vWPos;
+
+        vec3 hsl2rgb(float h, float s, float l) {
+          vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+          return l + s * (rgb - 0.5) * (1.0 - abs(2.0 * l - 1.0));
+        }
+
+        float hexScute(vec2 p) {
+          vec2 q = vec2(p.x * 1.1547, p.y + p.x * 0.57735);
+          vec2 i = floor(q), f = fract(q);
+          float v = mod(i.x + i.y, 3.0);
+          float ca = step(1.0, v), cb = step(2.0, v);
+          vec2 ma = step(f.xy, f.yx);
+          vec2 d = min(f, 1.0 - f);
+          return clamp(min(d.x, d.y) * 3.2 + 0.08 * (ca - cb + ma.x * 0.02), 0.0, 1.0);
+        }
+      ` + sh.fragmentShader
+        .replace(
+          '#include <color_fragment>',
+          `#include <color_fragment>
+          vec4 chro = texture2D(uSkinTex, vec2(vSkinUv.x * 1.5, vSkinUv.y * 2.0));
+          vec4 derm = uHasDermal > 0.5 ? texture2D(uDermalTex, vec2(vSkinUv.x * 2.2, vSkinUv.y * 2.2)) : vec4(0.3, 0.7, 0.8, 1.0);
+          float dorsalMask = pow(max(0.0, cos((vSkinUv.y - 0.0) * 6.283185)), 1.35);
+          float bellyMask = pow(max(0.0, -cos(vSkinUv.y * 6.283185)), 1.4);
+          float scute = hexScute(vSkinUv * vec2(34.0, 20.0));
+          float osteoPlate = smoothstep(0.18, 0.72, scute) * dorsalMask * uOsteo;
+
+          vec3 basePigment = hsl2rgb(fract(uHue + 0.09 * (chro.g - 0.5)), 0.76 - 0.38 * camo, 0.26 + 0.16 * chro.r);
+          vec3 counterShade = mix(basePigment, hsl2rgb(fract(uHue + 0.05), 0.42, 0.58), bellyMask * 0.68);
+          vec3 plateTint = hsl2rgb(fract(uHue - 0.06), 0.62, 0.18 + 0.14 * scute);
+          diffuseColor.rgb = mix(counterShade, plateTint, osteoPlate * 0.58) * (0.76 + 0.52 * derm.rgb);`
+        )
+        .replace(
+          '#include <roughnessmap_fragment>',
+          `#include <roughnessmap_fragment>
+          float scuteR = hexScute(vSkinUv * vec2(34.0, 20.0));
+          roughnessFactor = clamp(0.16 + 0.26 * (1.0 - scuteR) + 0.18 * uOsteo * scuteR, 0.08, 0.68);`
+        )
+        .replace(
+          '#include <normal_fragment_maps>',
+          `#include <normal_fragment_maps>
+          float bumpH = hexScute(vSkinUv * vec2(34.0, 20.0)) * (0.35 + 0.65 * uOsteo)
+                      + 0.22 * sin(vSkinUv.x * 150.0) * cos(vSkinUv.y * 110.0);
+          vec3 dPdxS = dFdx(vWPos);
+          vec3 dPdyS = dFdy(vWPos);
+          vec3 gradS = dFdx(bumpH) * cross(normal, dPdyS) + dFdy(bumpH) * cross(dPdxS, normal);
+          float gLenS = length(gradS);
+          if (gLenS > 1e-6) {
+            normal = normalize(normal - (gradS / max(0.015, gLenS)) * min(0.32, gLenS * 2.2));
+          }`
+        )
+        .replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+          vec4 chroE = texture2D(uSkinTex, vec2(vSkinUv.x * 1.5, vSkinUv.y * 2.0));
+          vec4 dermE = uHasDermal > 0.5 ? texture2D(uDermalTex, vec2(vSkinUv.x * 2.2, vSkinUv.y * 2.2)) : vec4(0.2, 0.7, 0.9, 1.0);
+          vec3 viewDirW = normalize(cameraPosition - vWPos);
+          float sssRim = pow(1.0 - abs(dot(normal, viewDirW)), 2.6);
+          vec3 bioWave = hsl2rgb(fract(uHue + 0.15 + 0.12 * chroE.g), 0.95, 0.54);
+          totalEmissiveRadiance += bioWave * (0.18 + 0.65 * chroE.a + 0.38 * sssRim) * (1.0 - 0.45 * sleep) * (1.0 - 0.55 * camo);
+          totalEmissiveRadiance += dermE.rgb * 0.22 * chroE.b;
+          if (glitch > 0.01) {
+            float scan = step(0.65, fract(vSkinUv.x * 18.0 - t * 12.0));
+            totalEmissiveRadiance += vec3(0.35, 1.0, 0.95) * glitch * scan * 1.3;
+          }`
+        );
+    };
+
+    this.skinMesh = new THREE.Mesh(this.skinGeo, this.skinMat);
+    this.skinMesh.castShadow = this.skinMesh.receiveShadow = true;
+    this.skinMesh.frustumCulled = false;
+    this.cg.add(this.skinMesh);
+
+    // Shared organic muscle & dermal material for seamless limbs, eye stalks, mandible & antennae
+    this.appendageMat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color().setHSL(this.cr.gen.pigmentHue ?? 0.72, 0.68, 0.34),
+      emissive: new THREE.Color().setHSL(((this.cr.gen.pigmentHue ?? 0.72) + 0.10) % 1, 0.85, 0.11),
+      roughness: 0.26,
+      metalness: 0.05,
+      clearcoat: 0.86,
+      clearcoatRoughness: 0.14,
+      iridescence: 0.72,
+      iridescenceIOR: 1.65,
+      sheen: 0.45,
+      sheenColor: new THREE.Color(0x48e8ff),
+    });
+
+    // 2) 48-Station Bioluminescent Dorsal Crest-Fin Membrane + Caudal Tail Fluke
+    const crestPos = new Float32Array(RING_M * 2 * 3);
+    const crestUv = new Float32Array(RING_M * 2 * 2);
+    const crestIdx = [];
+    for (let i = 0; i < RING_M; i++) {
+      crestUv[4 * i] = i / (RING_M - 1); crestUv[4 * i + 1] = 0;
+      crestUv[4 * i + 2] = i / (RING_M - 1); crestUv[4 * i + 3] = 1;
+      if (i < RING_M - 1) {
+        const a = i * 2;
+        crestIdx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+    }
+    this.crestGeo = new THREE.BufferGeometry();
+    this.crestGeo.setAttribute('position', new THREE.BufferAttribute(crestPos, 3));
+    this.crestGeo.setAttribute('uv', new THREE.BufferAttribute(crestUv, 2));
+    this.crestGeo.setIndex(crestIdx);
+    this.crestMat = new THREE.MeshPhysicalMaterial({
+      color: 0x48f5ff,
+      emissive: 0x1aa8d8,
+      emissiveIntensity: 0.92,
+      roughness: 0.18,
+      transmission: 0.48,
+      transparent: true,
+      opacity: 0.82,
+      iridescence: 0.95,
+      side: THREE.DoubleSide,
+    });
+    this.crestMesh = new THREE.Mesh(this.crestGeo, this.crestMat);
+    this.crestMesh.frustumCulled = false;
+    this.cg.add(this.crestMesh);
+
+    const FLUKE_RAYS = 13;
+    const fPos = new Float32Array((FLUKE_RAYS + 1) * 3);
+    const fIdx = [];
+    for (let k = 1; k < FLUKE_RAYS; k++) fIdx.push(0, k, k + 1);
+    this.flukeGeo = new THREE.BufferGeometry();
+    this.flukeGeo.setAttribute('position', new THREE.BufferAttribute(fPos, 3));
+    this.flukeGeo.setIndex(fIdx);
+    this.flukeMesh = new THREE.Mesh(this.flukeGeo, this.crestMat);
+    this.flukeMesh.frustumCulled = false;
+    this.cg.add(this.flukeMesh);
+
+    // 3) Articulated Ventral Cranial Mandible (driven by B.jawOpen during feeding/vocalization)
+    const jawGeo = makeTubeGeometry(8, 10);
+    {
+      const jPts = [[-0.12, 0, -0.02], [-0.08, -0.02, 0.10], [0.0, -0.025, 0.15], [0.08, -0.02, 0.10], [0.12, 0, -0.02]];
+      const jRad = [0.022, 0.032, 0.036, 0.032, 0.022];
+      writeCatmullTube(jawGeo, 8, 10, jPts, jRad, [0, 1, 0]);
+    }
+    this.mandibleMesh = new THREE.Mesh(jawGeo, this.appendageMat);
+    this.cg.add(this.mandibleMesh);
+
+    // 4) Bilateral Curved Tapered 3D Antennal Rachis Tubes + 10 Pairs of Bioluminescent Gill/Chemotactic Barbules
+    this.antennae = [];
+    const barbGeo = buildCurvedTalonGeo();
+    this.barbuleMat = new THREE.MeshPhysicalMaterial({
+      color: 0x62f8ff,
+      emissive: 0x1ed8e8,
+      emissiveIntensity: 1.15,
+      roughness: 0.2,
+      transparent: true,
+      opacity: 0.88,
+    });
+    for (let s = 0; s < 2; s++) {
+      const aGeo = makeTubeGeometry(ANT_RINGS, ANT_SIDES);
+      const aMesh = new THREE.Mesh(aGeo, this.appendageMat);
+      aMesh.frustumCulled = false;
+      this.cg.add(aMesh);
+      const barbs = [];
+      for (let b = 0; b < 5; b++) {
+        const bm = new THREE.Mesh(barbGeo, this.barbuleMat);
+        this.cg.add(bm);
+        barbs.push(bm);
+      }
+      this.antennae.push({
+        geo: aGeo,
+        mesh: aMesh,
+        barbs,
+        pts: Array.from({ length: 5 }, () => [0, 0, 0]),
+        radii: [0.026, 0.020, 0.015, 0.010, 0.005],
+      });
     }
 
+    // 5) 8 Continuous Skinned Muscular Catmull-Rom Limb Tubes + 8 Webbed Autopod Pads + 8x3 Curved Keratin Talons
+    this.limbTubes = [];
     this.feet = [];
     this.claws = [];
-    const clawGeo = new THREE.ConeGeometry(0.022, 0.11, 5);
-    clawGeo.rotateX(Math.PI / 2);
-    const clawMat = new THREE.MeshStandardMaterial({ color: 0xaaffee, emissive: 0x22ddcc, emissiveIntensity: 0.9, roughness: 0.2 });
-    for (let i = 0; i < 6; i++) {
-      const m = new THREE.Mesh(
-        new THREE.SphereGeometry(1, 14, 10),
-        new THREE.MeshStandardMaterial({ color: 0x40ffe0, emissive: 0x40ffe0, emissiveIntensity: 0.5, roughness: 0.3 })
-      );
-      this.cg.add(m);
-      this.feet.push(m);
-      const digitSet = [];
-      for (let d = -1; d <= 1; d++) {
-        const cm = new THREE.Mesh(clawGeo, clawMat);
-        this.cg.add(cm);
-        digitSet.push(cm);
-      }
-      this.claws.push(digitSet);
-    }
-
-    this.eyeU = { t: { value: 0 }, sleep: { value: 0 } };
-    const eyeMat = (k) => new THREE.ShaderMaterial({
-      uniforms: { ...this.eyeU, k: { value: k }, dil: { value: 0.5 } },
-      vertexShader: `
-        varying vec3 vP, vN, vV;
-        void main() {
-          vP = position;
-          vec4 w = modelMatrix * vec4(position, 1.0);
-          vN = normalize(mat3(modelMatrix) * normal);
-          vV = normalize(cameraPosition - w.xyz);
-          gl_Position = projectionMatrix * viewMatrix * w;
-        }
-      `,
-      fragmentShader: `
-        uniform float t, sleep, k, dil;
-        varying vec3 vP, vN, vV;
-        vec3 hue(float h) { return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
-        void main() {
-          vec3 p = normalize(vP);
-          float r = acos(clamp(p.z, -1.0, 1.0));
-          float a = atan(p.y, p.x);
-          vec3 sclera = vec3(0.95, 0.92, 1.0) * 0.62 + hue(fract(r * 0.8 + t * 0.03 + k * 0.3)) * 0.25;
-          float iris = smoothstep(0.96, 0.84, r);
-          float rays = 0.5 + 0.5 * sin(a * 17.0 + r * 34.0 - t * 2.0 * (k + 0.5));
-          vec3 irisC = hue(fract(0.55 + 0.2 * k + 0.15 * rays + r * 0.5)) * (0.85 + 1.65 * rays);
-          float pup = 0.0;
-          for (int i = 0; i < 3; i++) {
-            float aa = a + float(i) * 2.094 + t * 0.2 * (k + 1.0);
-            vec2 q = vec2(cos(aa), sin(aa)) * r;
-            pup = max(pup, smoothstep(0.08 + 0.12 * dil, 0.035, abs(q.x)) * step(r, 0.14 + 0.48 * dil));
-          }
-          // High-acuity foveal gold ring
-          float fovRing = smoothstep(0.04, 0.0, abs(r - (0.18 + 0.35 * dil)));
-          vec3 col = mix(sclera, irisC + vec3(1.0, 0.85, 0.3) * fovRing * 0.6, iris);
-          col = mix(col, vec3(0.01, 0.0, 0.03), pup);
-          float lid = smoothstep(0.0, 0.2, abs(p.y) - (1.0 - sleep) * 1.2 + 0.2);
-          col = mix(col, vec3(0.22, 0.06, 0.28), sleep * lid);
-          float fres = pow(1.0 - clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0), 2.5);
-          col += vec3(0.65, 0.92, 1.0) * fres * 0.85;
-          gl_FragColor = vec4(col * 1.3, 1.0);
-        }
-      `,
+    const footPadGeo = new THREE.SphereGeometry(0.072, 20, 14);
+    footPadGeo.scale(1.18, 0.44, 1.38);
+    const talonGeo = buildCurvedTalonGeo();
+    this.talonMat = new THREE.MeshPhysicalMaterial({
+      color: 0xebe4d8,
+      emissive: 0x181410,
+      roughness: 0.18,
+      metalness: 0.12,
+      clearcoat: 0.95,
+      clearcoatRoughness: 0.08,
     });
-    const eyeSz = this.cr.gen.eyeSize ?? 1.0;
-    this.eyes = [];
-    for (let e = 0; e < 3; e++) {
-      const m = new THREE.Mesh(new THREE.SphereGeometry((e === 2 ? 0.07 : 0.105) * eyeSz, 32, 24), eyeMat(e));
-      this.cg.add(m);
-      this.eyes.push(m);
-    }
 
-    this.goalMark = new THREE.Mesh(
-      new THREE.RingGeometry(0.58, 0.72, 48),
-      new THREE.MeshBasicMaterial({ color: 0xff40ff, transparent: true, opacity: 0.75, side: THREE.DoubleSide })
-    );
-    this.goalMark.rotation.x = -Math.PI / 2;
-    S.add(this.goalMark);
-  }
+    for (let k = 0; k < 8; k++) {
+      const lGeo = makeTubeGeometry(LIMB_RINGS, LIMB_SIDES);
+      const lMesh = new THREE.Mesh(lGeo, this.appendageMat);
+      lMesh.castShadow = true;
+      lMesh.frustumCulled = false;
+      this.cg.add(lMesh);
+      this.limbTubes.push({
+        geo: lGeo,
+        mesh: lMesh,
+        pts: Array.from({ length: 5 }, () => [0, 0, 0]),
+        radii: new Float32Array(5),
+      });
 
-  buildWeather() {
-    const n = 1800;
-    const g = new THREE.BufferGeometry();
-    const p = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      p[3 * i] = (Math.random() - 0.5) * 44;
-      p[3 * i + 1] = Math.random() * 14;
-      p[3 * i + 2] = (Math.random() - 0.5) * 44;
-    }
-    g.setAttribute('position', new THREE.BufferAttribute(p, 3));
-    this.spores = new THREE.Points(
-      g,
-      new THREE.PointsMaterial({
-        color: 0x9fffe0,
-        size: 0.04,
-        transparent: true,
-        opacity: 0.65,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      })
-    );
-    this.scene.add(this.spores);
-  }
+      const fMat = new THREE.MeshPhysicalMaterial({
+        color: 0x2ce8c8,
+        emissive: 0x083834,
+        roughness: 0.28,
+        clearcoat: 0.85,
+      });
+      const foot = new THREE.Mesh(footPadGeo, fMat);
+      foot.castShadow = true;
+      this.cg.add(foot);
+      this.feet.push(foot);
 
-  // ------------------------------------------------------------------ Per-Frame Update
-  update(dtReal) {
-    const cr = this.cr, B = cr.body, W = cr.world, nm = cr.brain.nm;
-    this.clock += dtReal;
-    const t = this.clock;
-    const X = B.x, Y = B.y, Z = B.z;
-
-    if (Math.floor(W.t / 2) !== this._tt) {
-      this._tt = Math.floor(W.t / 2);
-      this.updateTerrain();
-    }
-    this.syncProps();
-    this.syncEcosystem(t);
-
-    if (this.terrainU) {
-      this.terrainU.uT.value = t;
-      if (this.p5Layer && !this.terrainU.uBioTex.value) {
-        this.terrainU.uBioTex.value = this.p5Layer.bioTex;
-        this.terrainU.uHasBio.value = 1.0;
+      const talonSet = [];
+      for (let c = 0; c < 3; c++) {
+        const tl = new THREE.Mesh(talonGeo, this.talonMat);
+        tl.castShadow = true;
+        this.cg.add(tl);
+        talonSet.push(tl);
       }
+      this.claws.push(talonSet);
     }
 
-    const day = cr.light;
+    // 6) 2 Curved Muscular Eye Peduncle Tubes + Orbital Calyx Cups + 3 Foveal Iris Eyeballs + Wet Refractive Cornea Domes
+    this.stalkTubes = [];
+    this.eyes = [];
+    const calyxGeo = new THREE.CylinderGeometry(0.095, 0.052, 0.068, 20, 1, true);
+    calyxGeo.rotateX(Math.PI / 2);
+    const irisGeo = new THREE.SphereGeometry(0.086, 32, 24);
+    const pupilGeo = new THREE.SphereGeometry(0.048, 24, 18);
+    pupilGeo.scale(0.75, 1.08, 0.55); // vertical amphibia/cephalopod slit-oval pupil!
+    const corneaGeo = new THREE.SphereGeometry(0.095, 32, 24);
+
+    const irisMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffcf58,
+      emissive: 0x583204,
+      emissiveIntensity: 0.65,
+      roughness: 0.16,
+      metalness: 0.15,
+      iridescence: 0.9,
+    });
+    const pupilMat = new THREE.MeshStandardMaterial({ color: 0x020308, roughness: 0.04, metalness: 0.1 });
+    const corneaMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      roughness: 0.03,
+      metalness: 0.0,
+      transmission: 0.92,
+      thickness: 0.22,
+      ior: 1.376, // physiological aqueous/corneal refractive index!
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.02,
+      reflectivity: 0.95,
+      transparent: true,
+      opacity: 0.96,
+    });
+
+    for (let s = 0; s < 2; s++) {
+      const stGeo = makeTubeGeometry(STALK_RINGS, STALK_SIDES);
+      const stMesh = new THREE.Mesh(stGeo, this.appendageMat);
+      stMesh.castShadow = true;
+      stMesh.frustumCulled = false;
+      this.cg.add(stMesh);
+      this.stalkTubes.push({
+        geo: stGeo,
+        mesh: stMesh,
+        pts: Array.from({ length: 4 }, () => [0, 0, 0]),
+        radii: [0.068, 0.052, 0.046, 0.062],
+      });
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const eg = new THREE.Group();
+      const sc = i === 2 ? 0.62 : 1.0; // i=2 is dorsal pineal/median ocellus
+      const calyx = new THREE.Mesh(calyxGeo, this.appendageMat);
+      calyx.position.z = -0.025;
+      const iris = new THREE.Mesh(irisGeo, irisMat);
+      const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+      pupil.position.z = 0.064;
+      const cornea = new THREE.Mesh(corneaGeo, corneaMat);
+      cornea.position.z = 0.008;
+      eg.add(calyx, iris, pupil, cornea);
+      eg.scale.setScalar(sc);
+      this.cg.add(eg);
+      this.eyes.push({ grp: eg, pupil });
+    }
+
+    // 7) Internal Translucent Bioluminescent Viscera (Heart, Dual Lungs, Liver, Adipose, Bladder, Colon & 10 Peristaltic Gut Boluses)
+    const organMat = (col, emi, op = 0.62) => new THREE.MeshPhysicalMaterial({
+      color: col,
+      emissive: emi,
+      emissiveIntensity: 0.85,
+      roughness: 0.25,
+      transmission: 0.45,
+      transparent: true,
+      opacity: op,
+    });
+    this.heartMat = organMat(0xff2e68, 0xc81048, 0.78);
+    this.heart = new THREE.Mesh(new THREE.SphereGeometry(0.11, 20, 16), this.heartMat);
+    this.cg.add(this.heart);
+
+    this.lungMat = organMat(0x52d8ff, 0x146898, 0.52);
+    this.lungs = [0, 1].map(() => {
+      const lg = new THREE.Mesh(new THREE.SphereGeometry(0.10, 16, 14), this.lungMat);
+      lg.scale.set(1.35, 0.82, 0.78);
+      this.cg.add(lg);
+      return lg;
+    });
+    this.liver = new THREE.Mesh(new THREE.SphereGeometry(0.095, 16, 12), organMat(0xb84830, 0x481408, 0.58));
+    this.bladderMesh = new THREE.Mesh(new THREE.SphereGeometry(0.068, 14, 12), organMat(0xf5d848, 0x685208, 0.56));
+    this.colonMesh = new THREE.Mesh(new THREE.SphereGeometry(0.072, 14, 12), organMat(0x886238, 0x301e0c, 0.56));
+    this.cg.add(this.liver, this.bladderMesh, this.colonMesh);
+
+    const bolusGeo = new THREE.SphereGeometry(0.038, 12, 10);
+    const bolusMat = organMat(0x48ff9a, 0x129852, 0.65);
+    this.boluses = Array.from({ length: 10 }, () => {
+      const bm = new THREE.Mesh(bolusGeo, bolusMat);
+      this.cg.add(bm);
+      return bm;
+    });
+
+    // 8) 12,000-Neuron Stratified 3D Spiking Brain Cloud (works smoothly from S=436 up to GIGA=14,156,048!)
+    const BRAIN_VIS = Math.min(NNEU, 12000);
+    this.brainVisN = BRAIN_VIS;
+    this.brainIdx = new Uint32Array(BRAIN_VIS);
+    this.brainLocal = new Float32Array(BRAIN_VIS * 3);
+    this.brainBaseCol = new Float32Array(BRAIN_VIS * 3);
+    this.brainGlow = new Float32Array(BRAIN_VIS);
+    const bPos = new Float32Array(BRAIN_VIS * 3);
+    const bCol = new Float32Array(BRAIN_VIS * 3);
+    const tmpCol = new THREE.Color();
+
+    for (let v = 0; v < BRAIN_VIS; v++) {
+      const ni = Math.min(NNEU - 1, Math.floor((v / BRAIN_VIS) * NNEU));
+      this.brainIdx[v] = ni;
+      let rIdx = 0;
+      for (let k = 0; k < REGIONS.length; k++) {
+        const [, a, nR] = REGIONS[k];
+        if (ni >= a && ni < a + nR) { rIdx = k; break; }
+      }
+      tmpCol.setHSL(rIdx / REGIONS.length, 0.92, 0.56);
+      this.brainBaseCol[3 * v] = tmpCol.r;
+      this.brainBaseCol[3 * v + 1] = tmpCol.g;
+      this.brainBaseCol[3 * v + 2] = tmpCol.b;
+
+      // Anatomical bilobed cerebral hemisphere layout inside cranial segments 5..6
+      const u = ((v * 0.6180339887) % 1) * 2 - 1;
+      const th = v * 2.39996323;
+      const rad = Math.cbrt(((v * 0.75487766) % 1)) * 0.16;
+      const lobe = (v & 1) ? 0.055 : -0.055;
+      const rr = Math.sqrt(Math.max(0, 1 - u * u));
+      this.brainLocal[3 * v] = u * rad * 1.25;
+      this.brainLocal[3 * v + 1] = Math.sin(th) * rr * rad * 0.82 + 0.02;
+      this.brainLocal[3 * v + 2] = Math.cos(th) * rr * rad * 0.85 + lobe;
+    }
+    const brainGeo = new THREE.BufferGeometry();
+    brainGeo.setAttribute('position', new THREE.BufferAttribute(bPos, 3));
+    brainGeo.setAttribute('color', new THREE.BufferAttribute(bCol, 3));
+    this.brainSpriteMat = makeSoftSpriteMaterial(0.036, 0.82, true);
+    this.brainPts = new THREE.Points(brainGeo, this.brainSpriteMat);
+    this.brainPts.frustumCulled = false;
+    this.cg.add(this.brainPts);
+
+    // 9) 512 Soft-Glow 3D WCSPH + D3Q19 Lattice-Boltzmann Vascular Blood Corpuscles
+    const nBlood = this.cr.fluid.px.length;
+    const blGeo = new THREE.BufferGeometry();
+    blGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(nBlood * 3), 3));
+    blGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nBlood * 3), 3));
+    this.bloodSpriteMat = makeSoftSpriteMaterial(0.048, 0.82, true);
+    this.bloodPts = new THREE.Points(blGeo, this.bloodSpriteMat);
+    this.bloodPts.frustumCulled = false;
+    this.cg.add(this.bloodPts);
+  }
+
+  // ------------------------------------------------------------------ Atmospheric Rain Streaks & Floating Bioluminescent Spore Motes
+  buildWeather() {
+    const S = this.scene;
+    const maxRain = 1800;
+    const rPos = new Float32Array(maxRain * 6);
+    this._rainSeeds = new Float32Array(maxRain * 3);
+    for (let i = 0; i < maxRain; i++) {
+      this._rainSeeds[3 * i] = (Math.random() - 0.5) * 38;
+      this._rainSeeds[3 * i + 1] = Math.random() * 18;
+      this._rainSeeds[3 * i + 2] = (Math.random() - 0.5) * 38;
+    }
+    const rGeo = new THREE.BufferGeometry();
+    rGeo.setAttribute('position', new THREE.BufferAttribute(rPos, 3));
+    this.rainLines = new THREE.LineSegments(
+      rGeo,
+      new THREE.LineBasicMaterial({ color: 0x7cd8ff, transparent: true, opacity: 0 })
+    );
+    this.rainLines.frustumCulled = false;
+    S.add(this.rainLines);
+
+    // 260 Soft Floating Bioluminescent Pollen / Spore Motes
+    this.sporeN = 260;
+    const spPos = new Float32Array(this.sporeN * 3);
+    const spCol = new Float32Array(this.sporeN * 3);
+    this._sporeSeeds = new Float32Array(this.sporeN * 4);
+    const cTmp = new THREE.Color();
+    for (let i = 0; i < this.sporeN; i++) {
+      this._sporeSeeds[4 * i] = (Math.random() - 0.5) * 36;
+      this._sporeSeeds[4 * i + 1] = 0.25 + Math.random() * 4.2;
+      this._sporeSeeds[4 * i + 2] = (Math.random() - 0.5) * 36;
+      this._sporeSeeds[4 * i + 3] = Math.random() * Math.PI * 2;
+      cTmp.setHSL(0.42 + 0.35 * Math.random(), 0.92, 0.65);
+      spCol[3 * i] = cTmp.r; spCol[3 * i + 1] = cTmp.g; spCol[3 * i + 2] = cTmp.b;
+    }
+    const spGeo = new THREE.BufferGeometry();
+    spGeo.setAttribute('position', new THREE.BufferAttribute(spPos, 3));
+    spGeo.setAttribute('color', new THREE.BufferAttribute(spCol, 3));
+    this.sporeSpriteMat = makeSoftSpriteMaterial(0.068, 0.58, true);
+    this.sporePts = new THREE.Points(spGeo, this.sporeSpriteMat);
+    this.sporePts.frustumCulled = false;
+    S.add(this.sporePts);
+  }
+
+  // ------------------------------------------------------------------ Per-Frame 60 FPS Live Simulation Readout & Render
+  update(dtReal = 1 / 60) {
+    const cr = this.cr, W = cr.world, B = cr.body;
+    const dt = Math.min(0.05, Math.max(0.001, dtReal));
+    this.clock += dt;
+    const t = this.clock;
+
+    // 1) Circadian Sky, Solar Ephemeris, Dynamic PMREM HDR Sky IBL & Crepuscular God-Ray Screen Projection
+    const day = cr.light ?? 1;
+    const sunAz = 0.8 + ((cr.hour ?? 12) / 24) * Math.PI * 2;
+    const sunEl = 0.14 + 0.92 * day;
+    const sdx = Math.cos(sunAz) * Math.cos(sunEl);
+    const sdy = Math.sin(sunEl);
+    const sdz = Math.sin(sunAz) * Math.cos(sunEl);
+
     this.skyU.day.value = day;
     this.skyU.t.value = t;
-    this.skyU.season.value = W.seasonPhase || 0;
-    this.hemi.intensity = 0.28 + 0.82 * day;
-    this.sun.intensity = 0.22 + 2.45 * day;
-    this.scene.fog.color.setRGB(0.02 + 0.05 * day, 0.02 + 0.05 * day, 0.05 + 0.09 * day);
+    this.skyU.sunDir.value.set(sdx, sdy, sdz).normalize();
+    this.skyU.season.value = W.seasonPhase ?? 0;
 
-    if (this.grassU) {
-      this.grassU.uTime.value = t;
-      this.grassU.uWind.value.set(W.wind.x, W.wind.z);
-      this.grassU.uNightGlow.value = 1 - day * 0.78;
+    if (Math.abs(day - this._lastEnvDay) > 0.14) {
+      this.bakeSkyEnvironment(day);
     }
 
-    // Update rising hydrothermal vent steam/ember plumes
-    if (this.ventPlumes && W.vents && W.vents.length > 0) {
-      const vp = this.ventPlumes.geometry.attributes.position.array;
-      for (let i = 0; i < this.ventPlumeN; i++) {
-        let lf = (this._ventLife[i] += dtReal * (0.28 + 0.14 * (i % 3)));
-        if (lf > 1) lf -= 1;
-        this._ventLife[i] = lf;
-        const v = W.vents[i % W.vents.length];
-        const swirl = t * 1.8 + i * 1.7;
-        const spread = 0.18 + lf * 0.95;
-        vp[3 * i] = v.x + Math.cos(swirl) * spread + W.wind.x * lf * 0.7;
-        vp[3 * i + 1] = v.y + 0.5 + lf * 4.4 * v.heat;
-        vp[3 * i + 2] = v.z + Math.sin(swirl) * spread + W.wind.z * lf * 0.7;
-      }
-      this.ventPlumes.geometry.attributes.position.needsUpdate = true;
+    const com = B.com();
+    this.sun.position.set(com[0] + sdx * 22, com[1] + Math.max(5, sdy * 24), com[2] + sdz * 22);
+    this.sun.target.position.set(com[0], com[1], com[2]);
+    this.sun.intensity = 0.55 + 2.35 * day;
+    this.sun.color.setHSL(0.08 + 0.04 * day, 0.55 - 0.30 * day, 0.68 + 0.24 * day);
+    this.hemi.intensity = 0.52 + 0.65 * day;
+    this.rim.position.set(com[0] - sdx * 2.6, com[1] + 1.85, com[2] - sdz * 2.6);
+    this.rim.intensity = 2.8 + 2.6 * (1 - day);
+    this.scene.fog.color.setHSL(0.61, 0.48, 0.03 + 0.09 * day);
+
+    // Project solar world direction to screen UV for ContactAOScatterShader crepuscular sunbeams
+    this._tmpV1.set(com[0] + sdx * 120, com[1] + sdy * 120, com[2] + sdz * 120).project(this.camera);
+    this.aoPass.uniforms.uSunScreen.value.set(this._tmpV1.x * 0.5 + 0.5, this._tmpV1.y * 0.5 + 0.5);
+    this.aoPass.uniforms.uGodRay.value = (this.reduced ? 0 : 0.22) * Math.max(0, day - 0.15) * (this._tmpV1.z < 1 ? 1 : 0);
+
+    // 2) Terrain, Grass, Water Pools, Hydrothermal Plumes & Fruiting Flora
+    if (W.morph !== this._lastMorph || W.season !== this._lastSeason) {
+      this._lastMorph = W.morph;
+      this._lastSeason = W.season;
+      this.updateTerrain();
+    }
+    const rainAmt = W.rain ?? 0;
+    this.terrainU.uT.value = t;
+    this.terrainU.uRain.value = rainAmt;
+    if (this.p5Layer?.bioTex) {
+      this.terrainU.uBioTex.value = this.p5Layer.bioTex;
+      this.terrainU.uHasBio.value = 1.0;
     }
 
-    // 1) Catmull-Rom 72x36 Dermal Tube + Dorsal Crest-Fin + Caudal Tail Fluke
-    const F = B.F;
-    const pos = this.skinGeo.attributes.position.array;
-    const nor = this.skinGeo.attributes.normal.array;
-    const cen = (i) => B.c[Math.max(0, Math.min(NS - 1, i))];
-    const P = (i) => [X[cen(i)], Y[cen(i)], Z[cen(i)]];
-    const tmp = [0, 0, 0];
-    const crestArr = this.crestGeo.attributes.position.array;
-    const crestH = 0.24 * (cr.gen.crestFin ?? 0.55);
+    this.grassU.uTime.value = t;
+    this.grassU.uWind.value.set(W.windX ?? 0.35, W.windZ ?? 0.2);
+    this.grassU.uNightGlow.value = 1.0 - 0.72 * day;
 
-    for (let s = 0; s < RING_S; s++) {
-      const f = (s / (RING_S - 1)) * (NS - 1 + 0.9) - 0.45;
-      const i = Math.max(0, Math.min(NS - 2, Math.floor(f)));
-      const tt = f - i;
-      const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
-      for (let k = 0; k < 3; k++) {
-        const a = p0[k], b = p1[k], c = p2[k], d = p3[k];
-        tmp[k] = 0.5 * (2 * b + (-a + c) * tt + (2 * a - 5 * b + 4 * c - d) * tt * tt + (-a + 3 * b - 3 * c + d) * tt * tt * tt);
-      }
-      const si = Math.max(0, Math.min(NS - 1, Math.round(f)));
-      const fr = F[si];
-      const rg = B.ring[si], c0 = B.c[si];
-      const rad = (j) => Math.hypot(X[rg[j]] - X[c0], Y[rg[j]] - Y[c0], Z[rg[j]] - Z[c0]);
-      const ru = (rad(0) + rad(2)) / 2, rs = (rad(1) + rad(3)) / 2;
-      const end = s / (RING_S - 1);
-      const taper = Math.sqrt(Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, end * 1.02))))) * (1 + 0.25 * Math.max(0, end - 0.75) * 4 * (1 - end) * 4);
+    this.poolU.t.value = t;
+    this.poolU.uSunDir.value.copy(this.skyU.sunDir.value);
+    this.poolU.uDay.value = day;
+    this.poolU.uPlankton.value = W.planktonBloom ?? 0.65;
 
-      for (let m = 0; m <= RING_M; m++) {
-        const th = (m / RING_M) * Math.PI * 2;
-        const ct = Math.cos(th), st = Math.sin(th);
-        const bump = 1 + 0.055 * Math.sin(th * 6 + s * 0.65 + t * 0.8) * (0.5 + nm.ACh) + 0.045 * Math.sin(s * 1.8 - t * 3 * (0.3 + nm.NE));
-        const nx = st * fr.s[0] + ct * fr.u[0], ny = st * fr.s[1] + ct * fr.u[1], nz = st * fr.s[2] + ct * fr.u[2];
-        const o = 3 * (s * (RING_M + 1) + m);
-        const r1 = taper * bump * 1.18;
-        pos[o] = tmp[0] + (st * rs * fr.s[0] + ct * ru * fr.u[0]) * r1;
-        pos[o + 1] = tmp[1] + (st * rs * fr.s[1] + ct * ru * fr.u[1]) * r1;
-        pos[o + 2] = tmp[2] + (st * rs * fr.s[2] + ct * ru * fr.u[2]) * r1;
-        nor[o] = nx; nor[o + 1] = ny; nor[o + 2] = nz;
-      }
-    }
+    this.syncProps();
 
-    // Update dorsal crest-fin ribbon along spine [0.10 .. 0.88]
-    for (let k = 0; k < this.crestN; k++) {
-      const u = k / (this.crestN - 1);
-      const sIdx = Math.min(RING_S - 1, Math.floor((0.08 + u * 0.80) * (RING_S - 1)));
-      const topVert = 3 * (sIdx * (RING_M + 1) + 0); // m=0 is dorsal (ct=1, st=0 -> +fr.u)
-      const si = Math.max(0, Math.min(NS - 1, Math.round(u * (NS - 1))));
-      const fr = F[si];
-      const prof = Math.sin(u * Math.PI) * (0.7 + 0.3 * Math.sin(u * 14 - t * 5));
-      const sway = 0.04 * Math.sin(t * 6.5 - u * 9.0) * crestH;
-      const bx = pos[topVert], by = pos[topVert + 1], bz = pos[topVert + 2];
-      crestArr[6 * k] = bx;
-      crestArr[6 * k + 1] = by;
-      crestArr[6 * k + 2] = bz;
-      crestArr[6 * k + 3] = bx + fr.u[0] * crestH * prof + fr.s[0] * sway;
-      crestArr[6 * k + 4] = by + fr.u[1] * crestH * prof + fr.s[1] * sway;
-      crestArr[6 * k + 5] = bz + fr.u[2] * crestH * prof + fr.s[2] * sway;
-    }
-    this.crestGeo.attributes.position.needsUpdate = true;
-    this.crestMat.emissive.setHSL(((cr.gen.pigmentHue ?? 0.72) + 0.16) % 1, 0.9, 0.45);
-    this.crestMat.emissiveIntensity = (0.9 + 1.4 * (cr.vocalAmp || 0) + 0.8 * nm.DA) * (1 - 0.65 * (cr.camoLevel || 0));
-    if (this.flukeMat) {
-      this.flukeMat.emissive.copy(this.crestMat.emissive);
-      this.flukeMat.emissiveIntensity = this.crestMat.emissiveIntensity * 0.9;
-    }
-
-    // Caudal tail fluke at segment 0
-    const t0 = B.c[0], tf0 = F[0];
-    this.flukeMesh.position.set(X[t0] - tf0.f[0] * 0.14, Y[t0] - tf0.f[1] * 0.14, Z[t0] - tf0.f[2] * 0.14);
-    const flukeScl = 0.45 + 1.15 * (cr.gen.tailFluke ?? 0.45);
-    this.flukeMesh.scale.set(flukeScl, flukeScl, flukeScl);
-    this.flukeMesh.lookAt(X[t0] + tf0.f[0], Y[t0] + tf0.f[1], Z[t0] + tf0.f[2]);
-
-    // Bilateral feathered chemotactic antennae on head (NS - 1)
-    const hc = B.c[NS - 1], hf = F[NS - 1];
-    for (let side = 0; side < 2; side++) {
-      const ant = this.antennae[side];
-      const sgn = side === 0 ? -1 : 1;
-      const arr = ant.ag.attributes.position.array;
-      for (let j = 0; j < this.antNodes; j++) {
-        const u = j / (this.antNodes - 1);
-        const sweep = 0.12 * Math.sin(t * 7.5 + side * 2.2 - u * 2.5);
-        const fwd = 0.18 + u * 0.42;
-        const lat = sgn * (0.09 + u * 0.24) + sweep * u;
-        const up = 0.11 + u * 0.18 - u * u * 0.08;
-        arr[3 * j] = X[hc] + hf.f[0] * fwd + hf.s[0] * lat + hf.u[0] * up;
-        arr[3 * j + 1] = Y[hc] + hf.f[1] * fwd + hf.s[1] * lat + hf.u[1] * up;
-        arr[3 * j + 2] = Z[hc] + hf.f[2] * fwd + hf.s[2] * lat + hf.u[2] * up;
-      }
-      ant.ag.attributes.position.needsUpdate = true;
-      const ti = (this.antNodes - 1) * 3;
-      ant.tip.position.set(arr[ti], arr[ti + 1], arr[ti + 2]);
-      if ((cr.pherAlarm || 0) > 0.15) ant.am.color.setHex(0xff3355);
-      else if ((cr.pherFood || 0) > 0.1) ant.am.color.setHex(0x44ff99);
-      else ant.am.color.setHex(0x55eeff);
-      ant.tip.material.color.copy(ant.am.color);
-    }
-
-    this.skinGeo.attributes.position.needsUpdate = true;
-    this.skinGeo.attributes.normal.needsUpdate = true;
-    this.chromaTex.needsUpdate = true;
-    const stg = cr.sleep.stage;
-    this.skinU.t.value = t;
-    this.skinU.ne.value = nm.NE;
-    this.skinU.da.value = nm.DA;
-    this.skinU.camo.value = cr.camoLevel || 0;
-    this.skinU.geneHue.value = cr.gen.pigmentHue ?? 0.72;
-    this.skinU.sleep.value = stg >= 2 ? 1 : stg === 1 ? 0.4 : 0;
-    this.skinU.glitch.value = Math.max(0, (this.skinU.glitch.value || 0) * 0.92);
-
-    // 2) Internal Organs + Dual Breathing Lungs
-    const M = cr.metab;
-    const at = (seg, du, ds, df, obj, sc) => {
-      const c = B.c[seg], fr = F[seg];
-      obj.position.set(
-        X[c] + fr.u[0] * du + fr.s[0] * ds + fr.f[0] * df,
-        Y[c] + fr.u[1] * du + fr.s[1] * ds + fr.f[1] * df,
-        Z[c] + fr.u[2] * du + fr.s[2] * ds + fr.f[2] * df
-      );
-      obj.scale.setScalar(sc);
-    };
-    this.heartPh += dtReal * (M.hr / 60) * (cr.speed || 1);
-    const beat = Math.pow(Math.max(0, Math.sin(this.heartPh * Math.PI * 2)), 6);
-    const breath = 0.5 + 0.5 * Math.sin(t * 2.2);
-    this.skinU.beat.value = beat;
-    const flPerf = cr.fluid ? Math.min(1, 0.25 + (cr.fluid.cardiacOutput / 38) * 0.45 + cr.fluid.meanO2 * 0.3) : 0.6;
-    this.skinU.perf.value = flPerf;
-    this.skinU.sunDir.value.copy(this.sun.position).sub(this.sun.target.position).normalize();
-    this.skinU.sunI.value = this.sun.intensity / 2.6;
-
-    at(4, 0.05, 0, 0, this.heart, 1 + 0.45 * beat);
-    this.heart.material.emissiveIntensity = 1.5 + 4 * beat;
-    at(4, 0.03, -0.075, 0.05, this.lungL, 0.75 + 0.32 * breath);
-    at(4, 0.03, 0.075, 0.05, this.lungR, 0.75 + 0.32 * breath);
-    at(3, -0.02, 0.06, 0, this.liver, 0.7 + M.liverGly / 40);
-    this.liver.material.emissive.setHSL(0.75 - 0.25 * Math.min(1, M.liverGly / 40), 0.9, 0.45);
-    at(1, -0.06, 0, -0.05, this.bladder, 0.6 + 1.6 * M.bladder);
-    at(0, 0, 0, 0.1, this.colonM, 0.5 + 1.2 * M.colon);
-    at(2, 0.06, -0.05, 0, this.fatM, 0.6 + M.fat / 400);
-
-    const gutFill = M.gut.glc + M.gut.fat + M.gut.prot;
-    const ensR = cr.brain.rate;
-    this.gutBalls.forEach((g, i) => {
-      const f = 1 + (i / 9) * 3.6;
-      const seg = Math.floor(f), tt2 = f - seg;
-      const ens = (ensR ? ensR[R0.ENS + i * 4] || 0 : 0) / 40;
-      const sc = 0.5 + 0.35 * Math.min(2, gutFill / 3) + 0.5 * ens;
-      at(seg, -0.05 + 0.03 * Math.sin(i + t * 2 * M.motility), 0, tt2 * 0.4, g, sc);
-      g.material.emissiveIntensity = 0.6 + 2.5 * ens;
-    });
-
-    // 3) Brain Cloud
-    const bp = this.brainGeo.attributes.position.array;
-    const spk = this.brainGeo.attributes.spk.array;
-    const L = this.brainLocal;
-    const tb = cr.brain.t;
-    const NV = this.visNeuCount, vIdx = this.visNeuIdx;
-    const hasSpk = cr.brain.lastSpike && cr.brain.lastSpike.length >= NNEU;
-    for (let v = 0; v < NV; v++) {
-      const ni = vIdx[v], a = L[3 * v], b = L[3 * v + 1], c = L[3 * v + 2];
-      bp[3 * v] = X[hc] + hf.f[0] * a + hf.u[0] * b + hf.s[0] * c;
-      bp[3 * v + 1] = Y[hc] + hf.f[1] * a + hf.u[1] * b + hf.s[1] * c;
-      bp[3 * v + 2] = Z[hc] + hf.f[2] * a + hf.u[2] * b + hf.s[2] * c;
-      const ls = hasSpk ? cr.brain.lastSpike[ni] : -1;
-      spk[v] = ls < 0 ? 0 : Math.exp(-(tb - ls) / 0.08);
-    }
-    this.brainGeo.attributes.position.needsUpdate = true;
-    this.brainGeo.attributes.spk.needsUpdate = true;
-    this.brainPts.material.uniforms.px.value = this.renderer.getPixelRatio() * (this.renderer.domElement.height / 800);
-
-    // 4) 256 3D WCSPH Blood Parcels
-    if (cr.fluid) {
-      const bpos = this.blood.geometry.attributes.position.array;
-      const bcol = this.blood.geometry.attributes.color.array;
-      const FL = cr.fluid, nB = Math.min(this.bloodN, FL.px.length);
-      for (let i = 0; i < nB; i++) {
-        bpos[3 * i] = FL.px[i]; bpos[3 * i + 1] = FL.py[i]; bpos[3 * i + 2] = FL.pz[i];
-        const o2 = Math.max(0, Math.min(1, (FL.pO2[i] - 0.55) / 0.43));
-        const gl = Math.max(0, Math.min(1.3, FL.pGlc[i]));
-        bcol[3 * i] = 0.42 + 0.58 * o2;
-        bcol[3 * i + 1] = 0.06 + 0.24 * o2 * gl;
-        bcol[3 * i + 2] = 0.72 - 0.46 * o2;
-      }
-      this.blood.geometry.attributes.position.needsUpdate = true;
-      this.blood.geometry.attributes.color.needsUpdate = true;
-    }
-
-    // 5) Limbs + 3-Clawed Glowing Digits + Eye Stalks
-    let bi = 0;
-    const bone = (a, b, r) => {
-      const m = this.bones[bi++];
-      m.visible = true;
-      const ax = X[a], ay = Y[a], az = Z[a], dx = X[b] - ax, dy = Y[b] - ay, dz = Z[b] - az;
-      const len = Math.hypot(dx, dy, dz) || 1e-3;
-      m.position.set(ax + dx / 2, ay + dy / 2, az + dz / 2);
-      m.scale.set(r, Math.max(0.001, len / 2 - r), r);
-      m.quaternion.setFromUnitVectors(this._upVec, this._tmpV1.set(dx / len, dy / len, dz / len));
-    };
-    B.limbs.forEach((Lb, k) => {
-      const r = Lb.kind === 'arm' ? 0.045 : 0.052;
-      bone(Lb.hip, Lb.knee, r);
-      bone(Lb.knee, Lb.foot, r * 0.8);
-      const f = this.feet[k];
-      const fx = X[Lb.foot], fy = Y[Lb.foot], fz = Z[Lb.foot];
-      f.position.set(fx, fy, fz);
-      const gp = B.gripP[Lb.foot] || 0;
-      f.scale.setScalar(0.058 + 0.028 * gp);
-      f.material.emissiveIntensity = 0.35 + 3.0 * gp;
-
-      // Orient 3 claws forward from knee->foot direction
-      const kx = X[Lb.knee], kz = Z[Lb.knee];
-      let dirX = fx - kx, dirZ = fz - kz;
-      const dn = Math.hypot(dirX, dirZ) || 1;
-      dirX /= dn; dirZ /= dn;
-      const latX = -dirZ, latZ = dirX;
-      const digitSet = this.claws[k];
-      for (let d = -1; d <= 1; d++) {
-        const cm = digitSet[d + 1];
-        const angOff = d * 0.42;
-        const cx = dirX * Math.cos(angOff) + latX * Math.sin(angOff);
-        const cz = dirZ * Math.cos(angOff) + latZ * Math.sin(angOff);
-        cm.position.set(fx + cx * 0.06, fy - 0.015 * gp, fz + cz * 0.06);
-        cm.lookAt(fx + cx * 0.3, fy - (0.04 + 0.12 * gp), fz + cz * 0.3);
-      }
-    });
-    for (const st of B.stalks) {
-      bone(st.base, st.mid, 0.025);
-      bone(st.mid, st.eye, 0.02);
-    }
-    while (bi < this.bones.length) this.bones[bi++].visible = false;
-
-    // 6) Eyes & Live Neural Gaze Vector
-    const gz = (e) => [B.u[CH.gaze + 2 * e], B.u[CH.gaze + 2 * e + 1]];
-    const dil = Math.min(1, 0.2 + 0.8 * nm.NE);
-    let mainGazeDir = null;
-    for (let e = 0; e < 3; e++) {
-      const m = this.eyes[e];
-      if (e < 2) {
-        const p = B.stalks[e].eye;
-        m.position.set(X[p], Y[p], Z[p]);
-      } else {
-        m.position.set(X[hc] + hf.f[0] * 0.33 + hf.u[0] * 0.08, Y[hc] + hf.f[1] * 0.33 + hf.u[1] * 0.08, Z[hc] + hf.f[2] * 0.33 + hf.u[2] * 0.08);
-      }
-      const [yw, pt] = gz(e);
-      const d = new THREE.Vector3(hf.f[0], hf.f[1], hf.f[2])
-        .applyAxisAngle(new THREE.Vector3(hf.u[0], hf.u[1], hf.u[2]), -yw * 1.2)
-        .applyAxisAngle(new THREE.Vector3(hf.s[0], hf.s[1], hf.s[2]), pt * 0.8)
-        .normalize();
-      if (e === 2) mainGazeDir = d;
-      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d);
-      m.material.uniforms.dil.value = dil;
-    }
-    this.eyeU.t.value = t;
-    this.eyeU.sleep.value = stg >= 2 ? 1 : stg === 1 ? 0.5 : 0;
-
-    // 7) World Flora, Snacks, Waste & Goal Ring
-    W.plants.forEach((Pl, i) => {
-      const pm = this.plantMeshes[i];
-      const cScale = Pl.crownScale ?? 1.0;
+    // Update fruiting canopy flora & navigation target halo
+    const goalSite = cr.nav?.goal?.type === 'site' ? cr.nav.goal.k : -1;
+    for (let i = 0; i < W.plants.length; i++) {
+      const P = W.plants[i], pm = this.plantMeshes[i];
+      if (!pm) continue;
+      pm.g.position.set(P.x, P.y, P.z);
+      const cScale = P.crownScale ?? 1.0;
       pm.crown.scale.setScalar(cScale);
-      pm.fruit.scale.setScalar(0.32 + 0.72 * Pl.fruit);
-      pm.fm.emissiveIntensity = 0.35 + 2.3 * Pl.fruit;
-      pm.fruit.rotation.y = t * 0.55 + i;
-      pm.g.position.y = Pl.y;
-      const gl = cr.goal && cr.goal.type === 'site' && cr.goal.k === i;
-      pm.ring.material.opacity = gl ? 0.92 : 0;
-    });
+      pm.crown.rotation.y = Math.sin(t * 1.1 + i) * 0.08;
+      const fScale = Math.max(0.001, P.fruit);
+      pm.fruit.visible = P.fruit > 0.03;
+      pm.fruit.scale.setScalar(0.35 + 0.65 * fScale);
+      pm.fruit.position.y = 0.26 + 0.04 * Math.sin(t * 2.2 + i);
+      pm.fm.emissiveIntensity = (0.45 + 1.15 * P.fruit) * (1.15 - 0.35 * day);
+      pm.ring.material.opacity = i === goalSite ? 0.55 + 0.3 * Math.sin(t * 5.0) : 0;
+    }
 
-    const live = new Set();
-    for (const s of W.snacks) {
-      live.add(s.id);
-      let m = this.snackMeshes.get(s.id);
+    // Sync dropped user snacks & metabolic waste boluses
+    const snacks = W.snacks || [];
+    const liveIds = new Set();
+    for (let i = 0; i < snacks.length; i++) {
+      const sn = snacks[i];
+      const key = sn.id ?? i;
+      liveIds.add(key);
+      let m = this.snackMeshes.get(key);
       if (!m) {
         m = new THREE.Mesh(
           this.snackGeo,
-          new THREE.MeshStandardMaterial({
-            color: s.kind === 'fat' ? 0xffcc66 : 0xff66cc,
-            emissive: s.kind === 'fat' ? 0xffaa33 : 0xff33aa,
-            emissiveIntensity: 2.5,
-          })
+          new THREE.MeshPhysicalMaterial({ color: 0xffb838, emissive: 0xd86808, emissiveIntensity: 1.2, roughness: 0.2, clearcoat: 0.9 })
         );
-        this.scene.add(m);
-        this.snackMeshes.set(s.id, m);
+        this.props.add(m);
+        this.snackMeshes.set(key, m);
       }
-      m.position.set(s.x, s.y, s.z);
-      m.rotation.y = t * 1.4;
+      m.position.set(sn.x, sn.y ?? W.height(sn.x, sn.z) + 0.16, sn.z);
+      m.rotation.y = t * 1.8;
     }
-    for (const [id, m] of this.snackMeshes) {
-      if (!live.has(id)) {
-        this.scene.remove(m);
-        this.snackMeshes.delete(id);
+    for (const [k, m] of this.snackMeshes) {
+      if (!liveIds.has(k)) {
+        this.props.remove(m);
+        this.snackMeshes.delete(k);
       }
     }
 
-    while (this.wasteMeshes.length < W.waste.length) {
-      const m = new THREE.Mesh(this.wasteGeo, new THREE.MeshStandardMaterial({ color: 0x553311, roughness: 0.9, transparent: true }));
-      this.scene.add(m);
-      this.wasteMeshes.push(m);
+    const wastes = W.wastes || [];
+    while (this.wasteMeshes.length < wastes.length) {
+      const wm = new THREE.Mesh(
+        this.wasteGeo,
+        new THREE.MeshStandardMaterial({ color: 0x5c4828, emissive: 0x1c2810, roughness: 0.78 })
+      );
+      this.props.add(wm);
+      this.wasteMeshes.push(wm);
     }
-    this.wasteMeshes.forEach((m, i) => {
-      const w = W.waste[i];
-      if (!w) { m.visible = false; return; }
-      m.visible = true;
-      m.position.set(w.x, W.height(w.x, w.z) + 0.03, w.z);
-      if (w.type === 'urine') {
-        m.material.color.set(0xddcc22);
-        m.scale.set(0.9 * w.amount, 0.05, 0.9 * w.amount);
-        m.material.opacity = 0.6 * (1 - w.age / 120);
-      } else {
-        m.material.color.set(0x553311);
-        m.scale.setScalar(0.7 + 0.3 * w.amount);
-        m.material.opacity = 1 - w.age / 120;
-      }
-    });
+    for (let i = 0; i < this.wasteMeshes.length; i++) {
+      const wm = this.wasteMeshes[i];
+      if (i >= wastes.length) { wm.visible = false; continue; }
+      const ws = wastes[i];
+      wm.visible = true;
+      wm.position.set(ws.x, W.height(ws.x, ws.z) + 0.08, ws.z);
+      wm.scale.setScalar(Math.max(0.25, ws.amt ?? 0.6));
+    }
 
-    const tg = cr.target();
-    if (tg) {
-      this.goalMark.visible = true;
-      this.goalMark.position.set(tg[0], W.height(tg[0], tg[2]) + 0.05, tg[2]);
-      this.goalMark.rotation.z = t;
+    // Hydrothermal vent volumetric plume advection
+    const vents = W.vents || [];
+    if (vents.length > 0) {
+      this.ventPlumes.visible = true;
+      const vp = this.ventPlumes.geometry.attributes.position.array;
+      for (let i = 0; i < this.ventPlumeN; i++) {
+        let lf = (this._ventLife[i] + dt * (0.28 + (i % 5) * 0.05)) % 1;
+        this._ventLife[i] = lf;
+        const v = vents[i % vents.length];
+        const swirl = t * 2.2 + i * 1.7 + lf * 5.0;
+        const spread = 0.16 + lf * 0.85;
+        vp[3 * i] = v.x + Math.cos(swirl) * spread + (W.windX ?? 0) * lf * 1.1;
+        vp[3 * i + 1] = v.y + 0.78 + lf * 3.6;
+        vp[3 * i + 2] = v.z + Math.sin(swirl) * spread + (W.windZ ?? 0) * lf * 1.1;
+      }
+      this.ventPlumes.geometry.attributes.position.needsUpdate = true;
     } else {
-      this.goalMark.visible = false;
+      this.ventPlumes.visible = false;
     }
 
-    // 8) Wind-Drifted Spores & Rain
-    const sp = this.spores.geometry.attributes.position.array;
-    const n = this.rainN;
-    this.spores.geometry.setDrawRange(0, n);
-    for (let i = 0; i < n; i++) {
-      sp[3 * i] += W.wind.x * dtReal * 0.65 + Math.sin(t + i) * 0.003;
-      sp[3 * i + 2] += W.wind.z * dtReal * 0.65;
-      sp[3 * i + 1] -= dtReal * (0.2 + 5 * W.wind.rain * (i % 3 === 0 ? 1 : 0));
-      if (sp[3 * i + 1] < -2 || Math.abs(sp[3 * i]) > 22 || Math.abs(sp[3 * i + 2]) > 22) {
-        sp[3 * i] = (Math.random() - 0.5) * 44;
-        sp[3 * i + 1] = 8 + Math.random() * 6;
-        sp[3 * i + 2] = (Math.random() - 0.5) * 44;
+    // 3) Sync Multi-Agent Biosphere
+    this.syncEcosystem(t);
+
+    // 4) Sync Focal Creature 96x48 Organic Dermal Tube + Crest + Fluke + Mandible + Curved Antennae + 4/6/8 Limbs + Wet Eyes
+    this.skinTex.needsUpdate = true;
+    this.skinU.t.value = t;
+    this.skinU.glitch.value = Math.max(0, this.skinU.glitch.value - dt * 2.6);
+    this.skinU.sleep.value = cr.sleep?.asleep ? 1.0 : 0.0;
+    this.skinU.camo.value = cr.camoLevel ?? 0;
+    this.skinU.uHue.value = cr.gen.pigmentHue ?? 0.72;
+    this.skinU.uOsteo.value = B.hox?.osteoderm ?? 0.5;
+    if (this.p5Layer?.dermalTex) {
+      this.skinU.uDermalTex.value = this.p5Layer.dermalTex;
+      this.skinU.uHasDermal.value = 1.0;
+    }
+    this.appendageMat.color.setHSL(cr.gen.pigmentHue ?? 0.72, 0.68 - 0.32 * (cr.camoLevel ?? 0), 0.32);
+    this.appendageMat.emissive.setHSL(((cr.gen.pigmentHue ?? 0.72) + 0.10) % 1, 0.85, 0.09 + 0.10 * (cr.vocalAmp ?? 0));
+
+    // Interpolate 7 soft-body segments smoothly onto RING_M=48 stations x RING_S=96 circumferential vertices
+    const X = B.x, Y = B.y, Z = B.z, F = B.F;
+    const sPos = this.skinGeo.attributes.position.array;
+    const cPos = this.crestGeo.attributes.position.array;
+    const crestAmp = 0.24 * (cr.gen.crestFin ?? 1.0);
+    const breath = 1.0 + 0.035 * Math.sin(t * 2.8);
+
+    // Extract 7 spine core positions + 8 octagonal dermal ring offsets per segment
+    const segC = [], segUp = [], segSide = [], segFwd = [], segR8 = [];
+    for (let s = 0; s < NS; s++) {
+      const ci = B.c[s], fr = F[s];
+      const cx = X[ci], cy = Y[ci], cz = Z[ci];
+      segC.push([cx, cy, cz]);
+      segUp.push(fr.u);
+      segSide.push(fr.s);
+      segFwd.push(fr.f);
+      const R = B.ring[s], D = B.ringDiag[s];
+      const oct = [R[0], D[0], R[1], D[1], R[2], D[2], R[3], D[3]];
+      const rads = new Float32Array(8);
+      for (let k = 0; k < 8; k++) {
+        const pi = oct[k];
+        rads[k] = Math.hypot(X[pi] - cx, Y[pi] - cy, Z[pi] - cz);
+      }
+      segR8.push(rads);
+    }
+
+    const catmull1D = (v0, v1, v2, v3, tt) =>
+      0.5 * (2 * v1 + (-v0 + v2) * tt + (2 * v0 - 5 * v1 + 4 * v2 - v3) * tt * tt + (-v0 + 3 * v1 - 3 * v2 + v3) * tt * tt * tt);
+    const getClamped = (arr, idx) => arr[Math.max(0, Math.min(NS - 1, idx))];
+
+    for (let m = 0; m < RING_M; m++) {
+      const u = m / (RING_M - 1);
+      // Extend slightly past tail (s=0) and snout (s=NS-1) for rounded organic tapered caps
+      const f = -0.22 + u * ((NS - 1) + 0.44);
+      const i = Math.max(0, Math.min(NS - 2, Math.floor(f)));
+      const tt = Math.max(0, Math.min(1, f - i));
+      const p0 = getClamped(segC, i - 1), p1 = getClamped(segC, i), p2 = getClamped(segC, i + 1), p3 = getClamped(segC, i + 2);
+      const u1 = getClamped(segUp, i), u2 = getClamped(segUp, i + 1);
+      const s1 = getClamped(segSide, i), s2 = getClamped(segSide, i + 1);
+      const fw1 = getClamped(segFwd, i), fw2 = getClamped(segFwd, i + 1);
+
+      let cx = catmull1D(p0[0], p1[0], p2[0], p3[0], tt);
+      let cy = catmull1D(p0[1], p1[1], p2[1], p3[1], tt);
+      let cz = catmull1D(p0[2], p1[2], p2[2], p3[2], tt);
+
+      // Smooth snout & tail-tip axial extension + hemispherical dome taper
+      let capScale = 1.0;
+      if (f < 0) {
+        const ef = -f / 0.22;
+        cx -= fw1[0] * ef * 0.16; cy -= fw1[1] * ef * 0.16; cz -= fw1[2] * ef * 0.16;
+        capScale = Math.sqrt(Math.max(0.004, 1 - ef * ef));
+      } else if (f > NS - 1) {
+        const ef = (f - (NS - 1)) / 0.22;
+        cx += fw2[0] * ef * 0.18; cy += fw2[1] * ef * 0.18; cz += fw2[2] * ef * 0.18;
+        capScale = Math.sqrt(Math.max(0.004, 1 - ef * ef));
+      }
+
+      let ux = u1[0] * (1 - tt) + u2[0] * tt, uy = u1[1] * (1 - tt) + u2[1] * tt, uz = u1[2] * (1 - tt) + u2[2] * tt;
+      let un = Math.hypot(ux, uy, uz) || 1; ux /= un; uy /= un; uz /= un;
+      let sx = s1[0] * (1 - tt) + s2[0] * tt, sy = s1[1] * (1 - tt) + s2[1] * tt, sz = s1[2] * (1 - tt) + s2[2] * tt;
+      let sn = Math.hypot(sx, sy, sz) || 1; sx /= sn; sy /= sn; sz /= sn;
+
+      const rA = getClamped(segR8, i), rB = getClamped(segR8, i + 1);
+      const chestBreath = (u > 0.45 && u < 0.82) ? breath : 1.0;
+
+      let dorsalR = 0;
+      for (let j = 0; j <= RING_S; j++) {
+        const ang = (j / RING_S) * Math.PI * 2; // 0 = dorsal (+u), pi/2 = -side, pi = ventral (-u)
+        const octF = ((j / RING_S) * 8) % 8;
+        const oi0 = Math.floor(octF) & 7, oi1 = (oi0 + 1) & 7;
+        const ofrac = octF - Math.floor(octF);
+        const rad0 = rA[oi0] * (1 - ofrac) + rA[oi1] * ofrac;
+        const rad1 = rB[oi0] * (1 - ofrac) + rB[oi1] * ofrac;
+        // Subtle organic dorsoventral muscular flute sculpting
+        const muscleFlute = 1.0 + 0.045 * Math.cos(ang * 2.0) + 0.022 * Math.cos(ang * 6.0);
+        const rad = (rad0 * (1 - tt) + rad1 * tt) * capScale * chestBreath * muscleFlute;
+        if (j === 0) dorsalR = rad;
+
+        const ca = Math.cos(ang), sa = -Math.sin(ang);
+        const nx = ca * ux + sa * sx;
+        const ny = ca * uy + sa * sy;
+        const nz = ca * uz + sa * sz;
+        const vo = 3 * (m * (RING_S + 1) + j);
+        sPos[vo] = cx + nx * rad;
+        sPos[vo + 1] = cy + ny * rad;
+        sPos[vo + 2] = cz + nz * rad;
+      }
+
+      // Dorsal bioluminescent crest-fin ribbon along spine top
+      const finEnv = Math.sin(Math.pow(u, 0.85) * Math.PI) * (0.72 + 0.28 * Math.sin(u * 18.0 - t * 3.8));
+      const finRipple = Math.sin(t * 4.2 - u * 9.0) * 0.035 * crestAmp;
+      cPos[6 * m] = cx + ux * (dorsalR * 0.92);
+      cPos[6 * m + 1] = cy + uy * (dorsalR * 0.92);
+      cPos[6 * m + 2] = cz + uz * (dorsalR * 0.92);
+      cPos[6 * m + 3] = cx + ux * (dorsalR * 0.92 + crestAmp * finEnv) + sx * finRipple;
+      cPos[6 * m + 4] = cy + uy * (dorsalR * 0.92 + crestAmp * finEnv) + sy * finRipple;
+      cPos[6 * m + 5] = cz + uz * (dorsalR * 0.92 + crestAmp * finEnv) + sz * finRipple;
+    }
+    this.skinGeo.attributes.position.needsUpdate = true;
+    this.skinGeo.computeVertexNormals();
+    this.crestGeo.attributes.position.needsUpdate = true;
+    this.crestGeo.computeVertexNormals();
+
+    // Caudal Tail Fluke Fan at segment 0
+    {
+      const f0 = F[0], tc = segC[0];
+      const flukeSpan = 0.34 * (cr.gen.tailFluke ?? 1.0);
+      const fp = this.flukeGeo.attributes.position.array;
+      fp[0] = tc[0] - f0.f[0] * 0.08;
+      fp[1] = tc[1] - f0.f[1] * 0.08;
+      fp[2] = tc[2] - f0.f[2] * 0.08;
+      for (let k = 0; k < 13; k++) {
+        const a = ((k / 12) - 0.5) * 1.95;
+        const len = flukeSpan * (0.68 + 0.32 * Math.cos(a * 2.2));
+        const wave = Math.sin(t * 4.5 + a * 2.5) * 0.035;
+        const dx = -f0.f[0] * Math.cos(a) * len + f0.s[0] * Math.sin(a) * len + f0.u[0] * wave;
+        const dy = -f0.f[1] * Math.cos(a) * len + f0.s[1] * Math.sin(a) * len + f0.u[1] * wave;
+        const dz = -f0.f[2] * Math.cos(a) * len + f0.s[2] * Math.sin(a) * len + f0.u[2] * wave;
+        fp[3 * (k + 1)] = fp[0] + dx;
+        fp[3 * (k + 1) + 1] = fp[1] + dy;
+        fp[3 * (k + 1) + 2] = fp[2] + dz;
+      }
+      this.flukeGeo.attributes.position.needsUpdate = true;
+      this.flukeGeo.computeVertexNormals();
+    }
+
+    // Head Frame, Articulated Cranial Mandible & Curved 3D Antennae + Gill Barbules
+    const fh = F[NS - 1], hc = segC[NS - 1];
+    const headR = B.segRad[NS - 1];
+    const jawAng = 0.08 + 0.55 * (B.jawOpen ?? 0) + 0.22 * (cr.vocalAmp ?? 0) * (0.5 + 0.5 * Math.sin(t * 24.0));
+    this.mandibleMesh.position.set(
+      hc[0] + fh.f[0] * (headR * 0.52) - fh.u[0] * (headR * 0.55),
+      hc[1] + fh.f[1] * (headR * 0.52) - fh.u[1] * (headR * 0.55),
+      hc[2] + fh.f[2] * (headR * 0.52) - fh.u[2] * (headR * 0.55)
+    );
+    this._tmpV1.set(
+      this.mandibleMesh.position.x + fh.f[0] - fh.u[0] * Math.sin(jawAng),
+      this.mandibleMesh.position.y + fh.f[1] - fh.u[1] * Math.sin(jawAng),
+      this.mandibleMesh.position.z + fh.f[2] - fh.u[2] * Math.sin(jawAng)
+    );
+    this.mandibleMesh.up.set(fh.u[0], fh.u[1], fh.u[2]);
+    this.mandibleMesh.lookAt(this._tmpV1);
+
+    const antLen = 0.52 * (cr.gen.antennaLen ?? 1.0);
+    const gillSpan = B.hox?.gillFronds ?? 1.0;
+    const chemGlow = Math.min(1, (cr.pherFood ?? 0) + (cr.pherAlarm ?? 0) + (cr.pherMate ?? 0));
+    this.barbuleMat.emissiveIntensity = 0.85 + 1.45 * chemGlow;
+    for (let s = 0; s < 2; s++) {
+      const sgn = s === 0 ? -1 : 1;
+      const ant = this.antennae[s];
+      for (let k = 0; k < 5; k++) {
+        const u = k / 4;
+        const twitch = Math.sin(t * 6.5 + s * 2.1 - u * 2.8) * 0.055 * u * (1 + chemGlow);
+        const flare = sgn * (headR * 0.45 + u * antLen * 0.55 + twitch);
+        const lift = headR * 0.58 + Math.sin(u * Math.PI * 0.72) * antLen * 0.58;
+        const fwd = headR * 0.55 + u * antLen * 0.72 - u * u * 0.14;
+        ant.pts[k][0] = hc[0] + fh.f[0] * fwd + fh.u[0] * lift + fh.s[0] * flare;
+        ant.pts[k][1] = hc[1] + fh.f[1] * fwd + fh.u[1] * lift + fh.s[1] * flare;
+        ant.pts[k][2] = hc[2] + fh.f[2] * fwd + fh.u[2] * lift + fh.s[2] * flare;
+
+        const bm = ant.barbs[k];
+        bm.position.set(ant.pts[k][0], ant.pts[k][1], ant.pts[k][2]);
+        bm.scale.setScalar((1.05 - 0.55 * u) * gillSpan * 0.85);
+        this._tmpV1.set(
+          ant.pts[k][0] + fh.s[0] * sgn * 0.5 + fh.u[0] * 0.35,
+          ant.pts[k][1] + fh.s[1] * sgn * 0.5 + fh.u[1] * 0.35,
+          ant.pts[k][2] + fh.s[2] * sgn * 0.5 + fh.u[2] * 0.35
+        );
+        bm.lookAt(this._tmpV1);
+      }
+      writeCatmullTube(ant.geo, ANT_RINGS, ANT_SIDES, ant.pts, ant.radii, fh.u);
+    }
+
+    // 5) 8 Muscular Catmull-Rom Limbs + Webbed Autopod Pads + Curved Keratin Talons (4L / 6L / 8L Hox topologies!)
+    for (let k = 0; k < 8; k++) {
+      const Lb = B.limbs[k];
+      const showLimb = !!(Lb && !Lb.vestigial);
+      const lt = this.limbTubes[k];
+      const foot = this.feet[k];
+      const clawSet = this.claws[k];
+      lt.mesh.visible = showLimb;
+      foot.visible = showLimb;
+      for (let c = 0; c < 3; c++) clawSet[c].visible = showLimb;
+      if (!showLimb) continue;
+
+      const sc = segC[Lb.s], fs = F[Lb.s];
+      const hx = X[Lb.hip], hy = Y[Lb.hip], hz = Z[Lb.hip];
+      const kx = X[Lb.knee], ky = Y[Lb.knee], kz = Z[Lb.knee];
+      const fx = X[Lb.foot], fy = Y[Lb.foot], fz = Z[Lb.foot];
+
+      // Deep shoulder/hip girdle root inside trunk -> hip -> biceps/femur belly -> knee -> forearm/crus -> autopod
+      const xb = B.crossBridge ? B.crossBridge[k] : 0.25;
+      const girthM = (cr.gen.bodyGirth ?? 1.0) * (1.0 + 0.22 * xb);
+      lt.pts[0][0] = sc[0] * 0.42 + hx * 0.58;
+      lt.pts[0][1] = sc[1] * 0.42 + hy * 0.58;
+      lt.pts[0][2] = sc[2] * 0.42 + hz * 0.58;
+
+      lt.pts[1][0] = (hx + kx) * 0.5 + fs.u[0] * 0.035;
+      lt.pts[1][1] = (hy + ky) * 0.5 + fs.u[1] * 0.035;
+      lt.pts[1][2] = (hz + kz) * 0.5 + fs.u[2] * 0.035;
+
+      lt.pts[2][0] = kx; lt.pts[2][1] = ky; lt.pts[2][2] = kz;
+
+      lt.pts[3][0] = kx * 0.42 + fx * 0.58;
+      lt.pts[3][1] = ky * 0.42 + fy * 0.58;
+      lt.pts[3][2] = kz * 0.42 + fz * 0.58;
+
+      lt.pts[4][0] = fx; lt.pts[4][1] = fy; lt.pts[4][2] = fz;
+
+      lt.radii[0] = 0.088 * girthM;
+      lt.radii[1] = 0.078 * girthM; // bulging proximal stylopod muscle belly
+      lt.radii[2] = 0.052 * girthM; // anatomical knee/elbow joint taper
+      lt.radii[3] = 0.056 * girthM; // zeugopod gastrocnemius/forearm belly
+      lt.radii[4] = 0.038 * girthM; // wrist/ankle
+
+      writeCatmullTube(lt.geo, LIMB_RINGS, LIMB_SIDES, lt.pts, lt.radii, fs.u);
+
+      // Orient webbed foot pad & 3 curved talons along distal limb + forward ground tangent
+      let dx = fx - kx, dy = fy - ky, dz = fz - kz;
+      let dn = Math.hypot(dx, dy, dz) || 1; dx /= dn; dy /= dn; dz /= dn;
+      const tx = fs.f[0] * 0.65 + dx * 0.35;
+      const ty = Math.max(-0.25, fs.f[1] * 0.5 + dy * 0.2);
+      const tz = fs.f[2] * 0.65 + dz * 0.35;
+
+      const grip = B.gripP[Lb.foot] ?? 0;
+      foot.position.set(fx, fy - 0.012, fz);
+      foot.material.emissiveIntensity = 0.35 + 1.15 * grip;
+      this._tmpV1.set(fx + tx, fy + ty, fz + tz);
+      foot.up.set(0, 1, 0);
+      foot.lookAt(this._tmpV1);
+
+      const sgnLat = Lb.side === 1 ? -1 : 1;
+      for (let c = 0; c < 3; c++) {
+        const sp = (c - 1) * 0.42;
+        const tl = clawSet[c];
+        const cxOff = tx * 0.05 + fs.s[0] * sp * 0.09;
+        const czOff = tz * 0.05 + fs.s[2] * sp * 0.09;
+        tl.position.set(fx + cxOff, fy - 0.012, fz + czOff);
+        this._tmpV1.set(
+          tl.position.x + tx + fs.s[0] * (sp * 0.38 + sgnLat * 0.08),
+          tl.position.y - 0.12 - 0.22 * grip,
+          tl.position.z + tz + fs.s[2] * (sp * 0.38 + sgnLat * 0.08)
+        );
+        tl.up.set(0, 1, 0);
+        tl.lookAt(this._tmpV1);
       }
     }
-    this.spores.geometry.attributes.position.needsUpdate = true;
 
-    // 9) Lighting & 4 Camera Modes (Orbit Follow, Creature Eye POV, Auto-Director, Biosphere Overhead)
-    const com = B.com();
-    this.rim.position.set(com[0], com[1] + 1.5, com[2]);
-    this.rim.intensity = 3 + 6 * nm.NE;
-    this.sun.target.position.set(com[0], com[1], com[2]);
-    const sunAz = 0.8 + (cr.hour / 24) * Math.PI * 2;
-    const sunElev = Math.max(2.5, 6 + 15 * day);
-    this.sun.position.set(com[0] + Math.cos(sunAz) * 14, com[1] + sunElev, com[2] + Math.sin(sunAz) * 14);
-    this.skyU.sunDir.value.copy(this.sun.position).sub(this.sun.target.position).normalize();
+    // 6) Curved Muscular Eye Peduncles + Wet Refractive Corneal Eyeballs + Microsaccadic Gaze
+    const sacX = cr.retina?.sacYaw ?? 0;
+    const sacY = cr.retina?.sacPitch ?? 0;
+    for (let s = 0; s < 2; s++) {
+      const st = B.stalks[s], tube = this.stalkTubes[s];
+      const bx = X[st.base], by = Y[st.base], bz = Z[st.base];
+      const mx = X[st.mid], my = Y[st.mid], mz = Z[st.mid];
+      const ex = X[st.eye], ey = Y[st.eye], ez = Z[st.eye];
+      const sgn = s === 0 ? -1 : 1;
 
-    if (this.cameraMode === 'pov') {
-      // First-Person Creature Eye POV perched between binocular eye stalks looking along neural gaze!
-      const eL = B.stalks[0].eye, eR = B.stalks[1].eye;
-      const ex = 0.5 * (X[eL] + X[eR]) + hf.f[0] * 0.16 + hf.u[0] * 0.06;
-      const ey = 0.5 * (Y[eL] + Y[eR]) + hf.f[1] * 0.16 + hf.u[1] * 0.06;
-      const ez = 0.5 * (Z[eL] + Z[eR]) + hf.f[2] * 0.16 + hf.u[2] * 0.06;
-      this.camera.position.lerp(this._tmpV1.set(ex, Math.max(W.height(ex, ez) + 0.18, ey), ez), 0.35);
-      const gDir = mainGazeDir || this._tmpV2.set(hf.f[0], hf.f[1], hf.f[2]);
-      this._povLook.lerp(this._tmpV2.set(ex + gDir.x * 6, ey + gDir.y * 6, ez + gDir.z * 6), 0.25);
-      this.camera.lookAt(this._povLook);
-    } else if (this.cameraMode === 'director') {
-      // Smooth low-angle heroic cinema sweep around focal creature & nearby action
-      this._dirAngle += dtReal * 0.22;
-      const rad = 3.8 + 1.4 * Math.sin(t * 0.31);
-      const hOff = 1.45 + 0.75 * (0.5 + 0.5 * Math.cos(t * 0.23));
-      const tx = com[0] + Math.cos(this._dirAngle) * rad;
-      const tz = com[2] + Math.sin(this._dirAngle) * rad;
-      const ty = Math.max(W.height(tx, tz) + 0.45, com[1] + hOff);
-      this.camera.position.lerp(this._tmpV1.set(tx, ty, tz), 0.06);
-      this.camera.lookAt(com[0], com[1] + 0.22, com[2]);
-    } else if (this.cameraMode === 'overhead') {
-      this.controls.update();
+      tube.pts[0][0] = hc[0] * 0.35 + bx * 0.65 + fh.s[0] * sgn * 0.05;
+      tube.pts[0][1] = hc[1] * 0.35 + by * 0.65;
+      tube.pts[0][2] = hc[2] * 0.35 + bz * 0.65 + fh.s[2] * sgn * 0.05;
+      tube.pts[1][0] = (bx + mx) * 0.5 + fh.s[0] * sgn * 0.04;
+      tube.pts[1][1] = (by + my) * 0.5;
+      tube.pts[1][2] = (bz + mz) * 0.5 + fh.s[2] * sgn * 0.04;
+      tube.pts[2][0] = mx; tube.pts[2][1] = my; tube.pts[2][2] = mz;
+      tube.pts[3][0] = ex; tube.pts[3][1] = ey; tube.pts[3][2] = ez;
+      writeCatmullTube(tube.geo, STALK_RINGS, STALK_SIDES, tube.pts, tube.radii, fh.f);
+
+      const eyeObj = this.eyes[s];
+      eyeObj.grp.position.set(ex, ey, ez);
+      const gx = fh.f[0] + fh.s[0] * (sacX + sgn * 0.14) + fh.u[0] * sacY;
+      const gy = fh.f[1] + fh.s[1] * (sacX + sgn * 0.14) + fh.u[1] * sacY;
+      const gz = fh.f[2] + fh.s[2] * (sacX + sgn * 0.14) + fh.u[2] * sacY;
+      this._tmpV1.set(ex + gx, ey + gy, ez + gz);
+      eyeObj.grp.up.set(fh.u[0], fh.u[1], fh.u[2]);
+      eyeObj.grp.lookAt(this._tmpV1);
+      // Pupillary light reflex (constricts in bright daylight, dilates at night or high NE arousal)
+      const dilate = 0.72 + 0.42 * (1 - day) + 0.25 * (cr.brain.nm.NE ?? 0.3);
+      eyeObj.pupil.scale.set(0.68 * dilate, 1.05 * dilate, 0.55);
+    }
+    // Dorsal parietal / pineal ocellus at cranial crown
+    {
+      const pe = this.eyes[2];
+      const topIdx = B.ring[NS - 1][0];
+      pe.grp.position.set(
+        X[topIdx] + fh.u[0] * 0.03,
+        Y[topIdx] + fh.u[1] * 0.03,
+        Z[topIdx] + fh.u[2] * 0.03
+      );
+      this._tmpV1.set(
+        pe.grp.position.x + fh.u[0] * 0.8 + fh.f[0] * 0.5,
+        pe.grp.position.y + fh.u[1] * 0.8 + fh.f[1] * 0.5,
+        pe.grp.position.z + fh.u[2] * 0.8 + fh.f[2] * 0.5
+      );
+      pe.grp.up.set(fh.f[0], fh.f[1], fh.f[2]);
+      pe.grp.lookAt(this._tmpV1);
+    }
+
+    // 7) Internal Organs, GIGA-Safe 12,000-Neuron Spiking Brain Cloud & 512 WCSPH Blood Corpuscles
+    const hrHz = (cr.metab.hr || 72) / 60;
+    this.heartPh = (this.heartPh + dt * hrHz * Math.PI * 2) % (Math.PI * 2);
+    const systole = 1.0 + 0.22 * Math.pow(Math.max(0, Math.sin(this.heartPh)), 3);
+    const c4 = segC[4], f4 = F[4];
+    this.heart.position.set(c4[0] + f4.u[0] * 0.04, c4[1] + f4.u[1] * 0.04, c4[2] + f4.u[2] * 0.04);
+    this.heart.scale.setScalar(systole);
+    this.heartMat.emissiveIntensity = 0.65 + 0.95 * (systole - 1) * 4;
+
+    for (let l = 0; l < 2; l++) {
+      const sgn = l === 0 ? -1 : 1;
+      this.lungs[l].position.set(
+        c4[0] + f4.s[0] * sgn * 0.11,
+        c4[1] + f4.s[1] * sgn * 0.11,
+        c4[2] + f4.s[2] * sgn * 0.11
+      );
+      this.lungs[l].scale.set(1.35 * breath, 0.82 * breath, 0.78 * breath);
+    }
+    const c3 = segC[3], c1 = segC[1];
+    this.liver.position.set(c3[0] - F[3].u[0] * 0.05, c3[1] - F[3].u[1] * 0.05, c3[2] - F[3].u[2] * 0.05);
+    this.liver.scale.setScalar(0.75 + 0.45 * Math.min(1, (cr.metab.liverGly || 20) / 40));
+    this.bladderMesh.position.set(c1[0] - F[1].u[0] * 0.06, c1[1] - F[1].u[1] * 0.06, c1[2] - F[1].u[2] * 0.06);
+    this.bladderMesh.scale.setScalar(0.45 + 0.75 * Math.min(1, (cr.metab.bladder || 0) / 1.2));
+    this.colonMesh.position.set(c1[0] + F[1].u[0] * 0.03, c1[1] + F[1].u[1] * 0.03, c1[2] + F[1].u[2] * 0.03);
+    this.colonMesh.scale.setScalar(0.45 + 0.75 * Math.min(1, (cr.metab.colon || 0) / 1.5));
+
+    const gutMass = Math.min(1, ((cr.metab.gut.glc + cr.metab.gut.fat + cr.metab.gut.prot) || 0) / 8);
+    for (let b = 0; b < 10; b++) {
+      const uGut = ((1 - ((b / 10 + t * 0.08 * (cr.metab.motility || 0.4)) % 1)) * 0.72 + 0.12) * (NS - 1);
+      const gi = Math.min(NS - 2, Math.floor(uGut));
+      const gf = uGut - gi;
+      const ga = segC[gi], gb = segC[gi + 1];
+      const bm = this.boluses[b];
+      bm.visible = gutMass > 0.04;
+      bm.position.set(
+        ga[0] * (1 - gf) + gb[0] * gf,
+        ga[1] * (1 - gf) + gb[1] * gf - 0.03,
+        ga[2] * (1 - gf) + gb[2] * gf
+      );
+      bm.scale.setScalar(0.5 + 0.85 * gutMass);
+    }
+
+    // Stratified 12,000-neuron 3D spiking brain cloud (handles both standard lastSpike and 14.16M-neuron GIGA mode!)
+    {
+      const br = cr.brain;
+      const c5 = segC[5], c6 = segC[6];
+      const bx0 = c5[0] * 0.32 + c6[0] * 0.68;
+      const by0 = c5[1] * 0.32 + c6[1] * 0.68;
+      const bz0 = c5[2] * 0.32 + c6[2] * 0.68;
+      const bp = this.brainPts.geometry.attributes.position.array;
+      const bc = this.brainPts.geometry.attributes.color.array;
+      const hasLast = !!br.lastSpike;
+
+      // In GIGA mode, scatter sampled active sheet micro-buckets into brainGlow with O(1) cost
+      if (!hasLast && br.prevSheetSpk && br.prevSheetSpkCount > 0) {
+        const sheetSpan = Math.max(1, R0.STR - R0.THAL);
+        const stepK = Math.max(1, Math.floor(br.prevSheetSpkCount / 180));
+        for (let k = 0; k < br.prevSheetSpkCount; k += stepK) {
+          const ni = R0.THAL + br.prevSheetSpk[k];
+          const v = Math.min(this.brainVisN - 1, Math.floor((ni / Math.max(1, sheetSpan + 512)) * this.brainVisN));
+          this.brainGlow[v] = 1.0;
+        }
+      }
+
+      for (let v = 0; v < this.brainVisN; v++) {
+        const lx = this.brainLocal[3 * v], ly = this.brainLocal[3 * v + 1], lz = this.brainLocal[3 * v + 2];
+        bp[3 * v] = bx0 + fh.f[0] * lx + fh.u[0] * ly + fh.s[0] * lz;
+        bp[3 * v + 1] = by0 + fh.f[1] * lx + fh.u[1] * ly + fh.s[1] * lz;
+        bp[3 * v + 2] = bz0 + fh.f[2] * lx + fh.u[2] * ly + fh.s[2] * lz;
+
+        const ni = this.brainIdx[v];
+        let flash = this.brainGlow[v] * 0.86;
+        if (hasLast) {
+          const age = br.t - br.lastSpike[ni];
+          if (age >= 0 && age < 0.14) flash = Math.max(flash, 1 - age / 0.14);
+        } else if (ni < R0.THAL || ni >= R0.STR) {
+          if (br.spk[ni]) flash = 1.0;
+        }
+        this.brainGlow[v] = flash;
+        const gain = 0.24 + 1.55 * flash;
+        bc[3 * v] = Math.min(1.8, this.brainBaseCol[3 * v] * gain + 0.35 * flash);
+        bc[3 * v + 1] = Math.min(1.8, this.brainBaseCol[3 * v + 1] * gain + 0.35 * flash);
+        bc[3 * v + 2] = Math.min(1.8, this.brainBaseCol[3 * v + 2] * gain + 0.35 * flash);
+      }
+      this.brainPts.geometry.attributes.position.needsUpdate = true;
+      this.brainPts.geometry.attributes.color.needsUpdate = true;
+    }
+
+    // 512 3D WCSPH + D3Q19 LBM Vascular Blood Corpuscles (oxygenated crimson -> venous cyan-violet)
+    if (cr.fluid?.initedPos) {
+      this.bloodPts.visible = true;
+      const fl = cr.fluid;
+      const blP = this.bloodPts.geometry.attributes.position.array;
+      const blC = this.bloodPts.geometry.attributes.color.array;
+      const nBl = fl.px.length;
+      for (let i = 0; i < nBl; i++) {
+        blP[3 * i] = fl.px[i];
+        blP[3 * i + 1] = fl.py[i];
+        blP[3 * i + 2] = fl.pz[i];
+        const o2 = Math.max(0, Math.min(1, (fl.pO2[i] - 0.55) / 0.42));
+        blC[3 * i] = 0.22 + 0.88 * o2;
+        blC[3 * i + 1] = 0.14 + 0.22 * (1 - o2);
+        blC[3 * i + 2] = 0.68 - 0.42 * o2;
+      }
+      this.bloodPts.geometry.attributes.position.needsUpdate = true;
+      this.bloodPts.geometry.attributes.color.needsUpdate = true;
     } else {
+      this.bloodPts.visible = false;
+    }
+
+    // 8) Atmospheric Rain & Bioluminescent Spores
+    if (rainAmt > 0.02) {
+      this.rainLines.visible = true;
+      this.rainLines.material.opacity = Math.min(0.52, rainAmt * 0.55);
+      const rp = this.rainLines.geometry.attributes.position.array;
+      const wx = (W.windX ?? 0) * 0.22, wz = (W.windZ ?? 0) * 0.22;
+      for (let i = 0; i < this.rainN; i++) {
+        const sx = com[0] + this._rainSeeds[3 * i];
+        const sy = ((this._rainSeeds[3 * i + 1] - t * 16.5) % 18 + 18) % 18;
+        const sz = com[2] + this._rainSeeds[3 * i + 2];
+        rp[6 * i] = sx; rp[6 * i + 1] = sy; rp[6 * i + 2] = sz;
+        rp[6 * i + 3] = sx + wx; rp[6 * i + 4] = sy - 0.58; rp[6 * i + 5] = sz + wz;
+      }
+      this.rainLines.geometry.setDrawRange(0, this.rainN * 2);
+      this.rainLines.geometry.attributes.position.needsUpdate = true;
+    } else {
+      this.rainLines.visible = false;
+    }
+
+    {
+      const sp = this.sporePts.geometry.attributes.position.array;
+      for (let i = 0; i < this.sporeN; i++) {
+        const bx = this._sporeSeeds[4 * i], by = this._sporeSeeds[4 * i + 1], bz = this._sporeSeeds[4 * i + 2], ph = this._sporeSeeds[4 * i + 3];
+        const x = bx + Math.sin(t * 0.35 + ph) * 1.4;
+        const z = bz + Math.cos(t * 0.31 + ph) * 1.4;
+        sp[3 * i] = x;
+        sp[3 * i + 1] = W.height(x, z) + by + 0.28 * Math.sin(t * 0.9 + ph);
+        sp[3 * i + 2] = z;
+      }
+      this.sporePts.geometry.attributes.position.needsUpdate = true;
+    }
+
+    // 9) 4 Camera Modes (Orbit Follow, Cinematic Director Sweep, First-Person Binocular POV, Biosphere Overhead)
+    if (this.cameraMode === 'orbit') {
       if (this.follow) {
         const tgt = this.controls.target;
-        const k = this.reduced ? 0.03 : 0.085;
-        const dx = (com[0] - tgt.x) * k, dy = (com[1] - tgt.y) * k, dz = (com[2] - tgt.z) * k;
-        tgt.x += dx; tgt.y += dy; tgt.z += dz;
-        this.camera.position.x += dx; this.camera.position.y += dy; this.camera.position.z += dz;
+        const dx = com[0] - tgt.x, dy = (com[1] + 0.12) - tgt.y, dz = com[2] - tgt.z;
+        const lerp = 1 - Math.exp(-dt * 5.5);
+        tgt.x += dx * lerp; tgt.y += dy * lerp; tgt.z += dz * lerp;
+        this.camera.position.x += dx * lerp;
+        this.camera.position.y += dy * lerp;
+        this.camera.position.z += dz * lerp;
       }
+      this.controls.update();
+    } else if (this.cameraMode === 'director') {
+      this._dirAngle += dt * (this.reduced ? 0.05 : 0.16);
+      const dist = 3.35 + 0.85 * Math.sin(t * 0.21);
+      const elev = 1.25 + 0.55 * Math.sin(t * 0.15 + 1.1);
+      const tx = com[0] + Math.cos(this._dirAngle) * dist;
+      const tz = com[2] + Math.sin(this._dirAngle) * dist;
+      const ty = Math.max(W.height(tx, tz) + 0.45, com[1] + elev);
+      this.camera.position.lerp(this._tmpV1.set(tx, ty, tz), 1 - Math.exp(-dt * 3.5));
+      this.controls.target.lerp(this._tmpV2.set(com[0], com[1] + 0.14, com[2]), 1 - Math.exp(-dt * 5.0));
+      this.camera.lookAt(this.controls.target);
+    } else if (this.cameraMode === 'pov') {
+      const eL = B.stalks[0].eye, eR = B.stalks[1].eye;
+      const ex = (X[eL] + X[eR]) * 0.5 + fh.f[0] * 0.16;
+      const ey = (Y[eL] + Y[eR]) * 0.5 + fh.f[1] * 0.16 + 0.04;
+      const ez = (Z[eL] + Z[eR]) * 0.5 + fh.f[2] * 0.16;
+      this.camera.position.set(ex, ey, ez);
+      this._povLook.lerp(this._tmpV1.set(ex + fh.f[0] * 4, ey + fh.f[1] * 4, ez + fh.f[2] * 4), 1 - Math.exp(-dt * 10));
+      this.camera.lookAt(this._povLook);
+    } else if (this.cameraMode === 'overhead') {
       this.controls.update();
     }
 
-    // Project sun direction to screen UV for crepuscular god-ray scattering
-    const sunWorld = this._tmpV1.copy(this.camera.position).addScaledVector(this.skyU.sunDir.value, 100);
-    sunWorld.project(this.camera);
-    this.aoPass.uniforms.uSunScreen.value.set(sunWorld.x * 0.5 + 0.5, sunWorld.y * 0.5 + 0.5);
-    this.aoPass.uniforms.uGodRay.value = sunWorld.z < 1 ? 0.18 * day : 0.0;
+    // Clamp camera above local terrain height so orbit never clips underground
+    if (this.cameraMode !== 'pov') {
+      const floorY = W.height(this.camera.position.x, this.camera.position.z) + 0.22;
+      if (this.camera.position.y < floorY) this.camera.position.y = floorY;
+    }
 
-    if (this.bloom.enabled) this.composer.render();
+    if (this.quality >= 1) this.composer.render(dt);
     else this.renderer.render(this.scene, this.camera);
   }
 
+  // ------------------------------------------------------------------ Interactive Raycasting (Poke Soft-Body Node or Place World Prop)
   pick(ndcX, ndcY) {
-    const rc = new THREE.Raycaster();
-    rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera);
+    if (!this._ray) this._ray = new THREE.Raycaster();
+    this._ray.setFromCamera(this._tmpV1.set(ndcX, ndcY), this.camera);
+    const ray = this._ray.ray;
+
     const B = this.cr.body;
-    let best = -1, bd = 0.38;
+    let bestP = -1, bestT = Infinity;
     for (let i = 0; i < B.n; i++) {
-      const p = new THREE.Vector3(B.x[i], B.y[i], B.z[i]);
-      const d = rc.ray.distanceToPoint(p);
-      if (d < bd) { bd = d; best = i; }
+      this._tmpV2.set(B.x[i], B.y[i], B.z[i]);
+      const dSq = ray.distanceSqToPoint(this._tmpV2);
+      const rHit = Math.max(0.16, B.r[i] * 1.65);
+      if (dSq < rHit * rHit) {
+        const tHit = ray.origin.distanceTo(this._tmpV2);
+        if (tHit < bestT) { bestT = tHit; bestP = i; }
+      }
     }
-    const hit = rc.intersectObject(this.terrain)[0];
-    return { particle: best, point: hit ? hit.point : null, dir: rc.ray.direction };
+    if (bestP >= 0) {
+      return { particle: bestP, dir: ray.direction.clone(), point: null };
+    }
+
+    const hits = this._ray.intersectObject(this.terrain, false);
+    if (hits.length > 0) {
+      return { particle: -1, dir: ray.direction.clone(), point: hits[0].point };
+    }
+    return { particle: -1, dir: ray.direction.clone(), point: null };
   }
 }

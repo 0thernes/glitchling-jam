@@ -63,6 +63,7 @@ export class Creature {
     this.G = {
       ...GAIT,
       cS: gn.cS, cO: gn.cO, rS: gn.rS, rO: gn.rO, tauA: gn.tauA, cf: gn.cf, wvAsc: gn.wvAsc, wvDesc: gn.wvDesc,
+      cpgPhaseBias: this.body.hox?.cpgPhaseBias || null,
       ...(globalThis.TW?.gait || {}),
     };
     this.cpg = new CPG(seed, this.G);
@@ -81,17 +82,25 @@ export class Creature {
       this.nav.pz = c0[2];
       this.navErr = { hd: 0, pos: 0 };
     }
+    const mEval = (this.motorEval = !!opts.motorEval);
     this.retina = new Retina(seed, SITES, this.world.pools.length);
+    if (mEval) this.retina.skipSheet = true;
     this.ssm = new SelectiveSSM(NY + 8, 32, seed);
-    this.wm = new WorldModel(NZ, NY, seed, opts.wmScale || null);
-    this.metacog = new Metacognition(seed, 96);
+    this.wm = mEval
+      ? { surprise: 0, predVar: 0.05, lesion: true, learn: () => 0 }
+      : new WorldModel(NZ, NY, seed, opts.wmScale || null);
+    this.metacog = mEval
+      ? { achGain: 1, exploreTemp: 1, step: () => {}, auditAndConsolidate: () => {} }
+      : new Metacognition(seed, 96);
     this.metaFeat = new Float64Array(96);
     this.ofcApp = new Float32Array(NSTR_OPT);
     this.ofcAv = new Float32Array(NSTR_OPT);
     this.dreamAct40 = new Float64Array(40);
     this.dreamPlan32 = new Float64Array(32);
+    this.dreamMacroAct8 = new Float64Array(8);
     this.dreamY5 = new Float64Array(NY);
     this.dreamY20 = new Float64Array(NY);
+    this.dreamMacro8 = new Float64Array(8);
     this.visPrev = new Float32Array(N_VIS_PATCH);
     this.hasVisPrev = false;
 
@@ -180,14 +189,16 @@ export class Creature {
     this.hdcVisit = new HDCMap(seed, 1024, 0.45);
     this.hdcFood = new HDCMap(seed + 1, 1024, 0.35);
     this.hdcWater = new HDCMap(seed + 2, 1024, 0.35);
-    this.hop = new Hopfield(NZ, 1024, 24, seed);
+    this.hop = mEval
+      ? { X: [], lastIdx: -1, lesionDG: true, ca1Novelty: 0, eventsSkipped: 0, sleep: () => 0, retrieve: () => null, shouldStore: () => false, store: () => {} }
+      : new Hopfield(NZ, 1024, 24, seed);
     this.consolidated = false;
     this.zMean = new Float64Array(NZ);
     this.familiar = 0;
     this.drinking = 0;
     this.cephalic = 0;
-    this.limbUse = new Float64Array(6);
-    this.limbUseEMA = new Float64Array(6);
+    this.limbUse = new Float64Array(this.body.limbs.length);
+    this.limbUseEMA = new Float64Array(this.body.limbs.length);
     this.limbUseN = 0;
     this.pc = new PredictiveCoding(seed, NY);
 
@@ -207,7 +218,7 @@ export class Creature {
     this.speedEMA = 0;
 
     // Initial retinal look around starting pose
-    this.retina.step(this.body, this.world, this.nav, false, false);
+    if (!opts.noVision) this.retina.step(this.body, this.world, this.nav, false, false);
   }
 
   setClockMode(mode = 'circadian') {
@@ -468,12 +479,12 @@ export class Creature {
     const y = this.y;
     for (let i = 0; i < 6; i++) { y[i] = clamp(B.curvL[i] / 3, -2, 2); y[6 + i] = clamp(B.curvU[i] / 3, -2, 2); }
     y[12] = clamp(vf / 3, -2, 2); y[13] = clamp(vl / 3, -2, 2); y[14] = clamp(vy * 20, -2, 2); y[15] = upY; y[16] = sy;
-    B.limbs.forEach((L, k) => { y[17 + k] = B.contact[L.foot] ? 1 : 0; });
+    for (let k = 0; k < 6; k++) { y[17 + k] = B.limbs[k] && B.contact[B.limbs[k].foot] ? 1 : 0; }
     y[23] = Math.sin(bear); y[24] = Math.cos(bear) * (tg ? 1 : 0);
 
-    // Neural drive currents for all non-motor brain regions
+    // Neural drive currents for all non-motor brain regions (O(1) sparse sheet reset on MEGA/GIGA!)
     const ext = this.brain.ext, nm = this.brain.nm;
-    ext.fill(0);
+    this.brain.prepareExt(awake, this.sleep.stage);
     const sens = new Float64Array(16);
     for (let i = 0; i < 8; i++) {
       const ph = -Math.PI + ((i + 0.5) * 2 * Math.PI) / 8;
@@ -544,10 +555,12 @@ export class Creature {
     const ens = clamp((M.gut.glc + M.gut.fat + M.gut.prot) / 6);
     for (let i = 0; i < 48; i++) ext[R0.ENS + i] = 0.6 + 0.8 * ens + 0.4 * M.para;
 
-    for (let i = 0; i < RN.STR; i++) ext[R0.STR + i] = 0.4;
-    for (let i = 0; i < RN.CTX; i++) ext[R0.CTX + i] = 0.55 + 0.3 * nm.ACh;
-    for (let i = 0; i < RN.THAL; i++) ext[R0.THAL + i] = awake ? 0.5 : this.sleep.stage === 4 ? 0.45 : 0.2;
-    for (let i = 0; i < RN.HIP; i++) ext[R0.HIP + i] = 0.45;
+    if (!this.brain.sparseSheetExt) {
+      for (let i = 0; i < RN.STR; i++) ext[R0.STR + i] = 0.4;
+      for (let i = 0; i < RN.CTX; i++) ext[R0.CTX + i] = 0.55 + 0.3 * nm.ACh;
+      for (let i = 0; i < RN.THAL; i++) ext[R0.THAL + i] = awake ? 0.5 : this.sleep.stage === 4 ? 0.45 : 0.2;
+      for (let i = 0; i < RN.HIP; i++) ext[R0.HIP + i] = 0.45;
+    }
     if (!this.brain.delegated && awake) {
       if (!this.lesion.nav) this.brain.drivePlaceCells(this.nav.px, this.nav.pz, 1.15);
       if (!this.lesion.vision) {
@@ -556,7 +569,9 @@ export class Creature {
       }
     }
     if (this.familiar > 0 && this.hop.lastIdx >= 0) {
-      for (let j = 0; j < 8; j++) ext[R0.HIP + ((this.hop.lastIdx * 7 + j * 5) % RN.HIP)] += 1.4 * this.familiar;
+      for (let j = 0; j < 8; j++) {
+        this.brain._markExt(R0.HIP + ((this.hop.lastIdx * 7 + j * 5) % RN.HIP), 1.4 * this.familiar);
+      }
     }
     if (this.race) this.raceDrive(ext);
 
@@ -855,8 +870,10 @@ export class Creature {
 
     // Advance coupled 1D Navier-Stokes vascular network + 120 3D SPH blood parcels + baroreceptor reflex
     this.fluid.lesion = !!this.lesion.fluid;
-    this.fluid.step(dt, B, this.metab, this.world, br.spikes);
-    this.metab.hr = clamp(this.metab.hr + 0.06 * this.fluid.baroDrive, 42, 195);
+    if (!(this.motorEval && this.lesion.fluid)) {
+      this.fluid.step(dt, B, this.metab, this.world, br.spikes);
+      this.metab.hr = clamp(this.metab.hr + 0.06 * this.fluid.baroDrive, 42, 195);
+    }
     this.hop.lesionDG = !!this.lesion.dg;
 
     const com = B.com();
@@ -888,6 +905,10 @@ export class Creature {
       const callDrive = awake ? clamp(0.8 * Math.max(0, this.rpe) + 0.55 * predNear + 0.35 * this.pherMate, 0, 1) : 0;
       this.vocalAmp += dt * 4.0 * (callDrive - this.vocalAmp);
       this.vocalFreq = 290 + 240 * (this.gen.pigmentHue ?? 0.72) + 190 * predNear + 90 * Math.sin(this.t * 5.5);
+      const jawTgt = awake
+        ? clamp(0.65 * this.drinking + 0.55 * this.vocalAmp + (this.dist < 1.8 && this.goal ? 0.45 : 0) + 0.25 * Math.max(0, this.motRate[4]), 0, 1)
+        : 0.04;
+      B.jawOpen += dt * 8.0 * (jawTgt - (B.jawOpen || 0));
     }
     this.updateCarry(dt);
     if (this.race) this.raceCheck(dt);
@@ -1080,7 +1101,7 @@ export class Creature {
         mf[80 + i] = this.brain.rate[R0.HIP + Math.min(RN.HIP - 1, i * hipSt)] / 20;
       }
       this.metacog.step(mf, wmStepSE, this.wm.predVar, this.familiar, this.progEMA, this.lastRaceAltG, this.lastRaceBestG, !!this.lesion.metacog);
-      if (this.frame % 60 === 0) this.metacog.auditAndConsolidate(this, false);
+      if (!this.lesion.metacog && this.frame % 60 === 0) this.metacog.auditAndConsolidate(this, false);
     }
 
     // Sleep consolidation on entering deep NREM (stage 3): Hopfield trisynaptic mDAE + DG + InfoNCE, HDC cross-spectral Wiener, EWC + Vidal MPS
@@ -1121,7 +1142,8 @@ export class Creature {
     }
     if (this.sleep.stage === 0 && (this.episodes.length < 400 ? true : this.frame % 60 === 0)) {
       const ctx = [];
-      for (let i = 0; i < RN.CTX && ctx.length < 48; i++) if (this.brain.rate[R0.CTX + i] > 15) ctx.push(i);
+      const ctxLim = Math.min(RN.CTX, 4096);
+      for (let i = 0; i < ctxLim && ctx.length < 48; i++) if (this.brain.rate[R0.CTX + i] > 15) ctx.push(i);
       const ep = {
         zPrev: zPrevSnap,
         z: Float64Array.from(z),
@@ -1541,23 +1563,26 @@ export class Creature {
     }
     const ssm = this.ssm.clone();
     const log = [];
-    const act40 = this.dreamAct40, plan32 = this.dreamPlan32, y5 = this.dreamY5, y20 = this.dreamY20;
+    const act40 = this.dreamAct40, plan32 = this.dreamPlan32, macroAct8 = this.dreamMacroAct8;
+    const y5 = this.dreamY5, y20 = this.dreamY20, macro8 = this.dreamMacro8;
     for (let m = 0; m < 8; m++) {
       ssm.re.set(e.ssm[0]);
       ssm.im.set(e.ssm[1]);
       const rollCtx = this.wm.newRolloutCtx();
       const z = Float64Array.from(e.z), y = new Float64Array(NY), u = new Float64Array(NY + 8);
+      for (let q = 0; q < 8; q++) macroAct8[q] = q === m ? 0.9 : 0.15;
       for (let s = 0; s < 5; s++) {
-        for (let q = 0; q < 8; q++) act40[s * 8 + q] = q === m ? 0.9 : 0.15;
+        for (let q = 0; q < 8; q++) act40[s * 8 + q] = macroAct8[q];
       }
       for (let c = 0; c < 4; c++) {
-        for (let q = 0; q < 8; q++) plan32[c * 8 + q] = q === m ? 0.9 : 0.15;
+        for (let q = 0; q < 8; q++) plan32[c * 8 + q] = macroAct8[q];
       }
       this.wm.predict5(e.z, act40, y5);
       this.wm.predict20(e.z, plan32, y20, null, e.vis || null);
+      this.wm.predict60(e.z, macroAct8, macro8);
       let prog = 0;
       for (let s = 0; s < 8; s++) {
-        for (let q = 0; q < 8; q++) z[64 + q] = q === m ? 0.9 : 0.15;
+        for (let q = 0; q < 8; q++) z[64 + q] = macroAct8[q];
         this.wm.predict(z, y, rollCtx, true, e.vis || null);
         prog += y[12];
         u.set(y);
@@ -1565,7 +1590,9 @@ export class Creature {
         ssm.step(u, false);
         ssm.features(z);
       }
-      const val = 0.58 * (prog / 8) + 0.24 * y5[12] + 0.18 * y20[12];
+      // 4-Timescale Hierarchical Rollout Valuation: +0.1s reactive, +0.5s short, +2.0s tactical, +60.0s 1-minute macro-horizon
+      const macroScore = macro8[0] + 0.25 * macro8[3];
+      const val = 0.50 * (prog / 8) + 0.20 * y5[12] + 0.16 * y20[12] + 0.14 * macroScore;
       this.Vimg[m] += 0.2 * (val - this.Vimg[m]);
       log.push(val);
     }

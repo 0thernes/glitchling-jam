@@ -1,24 +1,33 @@
-// Coupled 1D incompressible Navier-Stokes vascular network + 63-voxel 3D Biot-Darcy poroelastic capillary continuum
-// + two-way Fluid-Structure Interaction (FSI) + 256-parcel 3D WCSPH (Weakly Compressible SPH) hemodynamics.
-//  1) 16-node compliant vascular graph (7 dorsal-aorta segments, 7 vena-cava segments, cerebral carotid bed, hepatic-portal bed)
-//     and 26 directed vessels with cardiac/bicuspid venous valves, Frank-Starling preload, carotid baroreflex & orthostatic gravity.
-//  2) 63-voxel (7 axial x 3 dorsoventral x 3 mediolateral) 3D Biot-Darcy poroelastic capillary-interstitial tissue continuum:
-//       phi * dp_cap/dt = div((kappa / mu) * grad(p_cap)) + L_p * (P_vasc - p_cap - sigma * Pi_onc) - alpha_Biot * dJ_FEM/dt
-//     coupled TWO-WAY (FSI) back onto the 85-particle / 336-tetrahedron 3D anisotropic FEM body via physical turgor forces
-//     (body.fsiFx, body.fsiFy, body.fsiFz) on dermal & ring nodes!
-//  3) 256 3D WCSPH blood parcels advected through the deforming 3D lumen with Tait equation-of-state pressure (gamma = 7),
-//     Morris laminar shear viscosity, spatial-hashed O(N) neighborhood kernel, and per-parcel O2 + glucose transport.
+// Coupled 1D incompressible Navier-Stokes vascular network + 3D D3Q19 Lattice-Boltzmann (432-cell / 8,208-population)
+// Microvascular Sinus Navier-Stokes Solver + 63-voxel 3D Biot-Darcy Poroelastic Capillary Continuum
+// + Two-Way Fluid-Structure Interaction (FSI) + 512-parcel 3D WCSPH (Weakly Compressible SPH) hemodynamics.
 import { clamp, mulberry } from './util.js';
 import { NS } from './body.js';
 
 export const N_NODES = 16; // 0..6 aorta(seg 0..6), 7..13 vena(seg 0..6), 14 cerebral(head), 15 portal(gut/liver)
-export const N_PARCELS = 256;
+export const N_PARCELS = 512;
 export const NX_CAP = NS; // 7 axial segments
 export const NY_CAP = 3;  // 0 = ventral, 1 = core, 2 = dorsal
 export const NZ_CAP = 3;  // 0 = left,    1 = medial, 2 = right
 export const N_CAP = NX_CAP * NY_CAP * NZ_CAP; // 63 3D poroelastic capillary voxels
 
-const HASH_N = 512; // power-of-two spatial hash table for exact r < hSPH WCSPH neighbor lookup
+// 3D D3Q19 Lattice-Boltzmann vascular lumen grid: 12 axial x 6 dorsoventral x 6 mediolateral = 432 3D cells (8,208 f_q populations)
+export const NX_LBM = 12;
+export const NY_LBM = 6;
+export const NZ_LBM = 6;
+export const N_LBM = NX_LBM * NY_LBM * NZ_LBM;
+const LBM_Q = 19;
+const LBM_EX = new Int8Array([0,  1, -1,  0,  0,  0,  0,  1, -1,  1, -1,  1, -1,  1, -1,  0,  0,  0,  0]);
+const LBM_EY = new Int8Array([0,  0,  0,  1, -1,  0,  0,  1, -1, -1,  1,  0,  0,  0,  0,  1, -1,  1, -1]);
+const LBM_EZ = new Int8Array([0,  0,  0,  0,  0,  1, -1,  0,  0,  0,  0,  1, -1, -1,  1,  1, -1, -1,  1]);
+const LBM_OPP = new Uint8Array([0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15, 18, 17]);
+const LBM_W = new Float32Array([
+  1 / 3,
+  1 / 18, 1 / 18, 1 / 18, 1 / 18, 1 / 18, 1 / 18,
+  1 / 36, 1 / 36, 1 / 36, 1 / 36, 1 / 36, 1 / 36, 1 / 36, 1 / 36, 1 / 36, 1 / 36, 1 / 36, 1 / 36,
+]);
+
+const HASH_N = 1024; // power-of-two spatial hash table for exact r < hSPH WCSPH neighbor lookup
 
 export class Hemodynamics {
   constructor(seed = 1) {
@@ -76,7 +85,29 @@ export class Hemodynamics {
     this.meanCapP = 2.5;
     this.fsiForceMag = 0;
 
-    // 256 3D WCSPH blood parcels inside the deforming vascular & capillary lumen
+    // 3D D3Q19 Lattice-Boltzmann (432 voxels x 19 = 8,208 populations) microvascular Navier-Stokes solver
+    this.lbmF = new Float32Array(N_LBM * LBM_Q);
+    this.lbmFNext = new Float32Array(N_LBM * LBM_Q);
+    this.lbmRho = new Float32Array(N_LBM).fill(1.0);
+    this.lbmUx = new Float32Array(N_LBM);
+    this.lbmUy = new Float32Array(N_LBM);
+    this.lbmUz = new Float32Array(N_LBM);
+    this.lbmWall = new Uint8Array(N_LBM);
+    for (let ix = 0; ix < NX_LBM; ix++) {
+      for (let iy = 0; iy < NY_LBM; iy++) {
+        for (let iz = 0; iz < NZ_LBM; iz++) {
+          const c = (ix * NY_LBM + iy) * NZ_LBM + iz;
+          // Cylindrical-lumen corner mask: outer edge corners act as no-slip bounce-back endothelial walls
+          const ry = iy - 2.5, rz = iz - 2.5;
+          if (ry * ry + rz * rz > 9.6) this.lbmWall[c] = 1;
+          for (let q = 0; q < LBM_Q; q++) this.lbmF[c * LBM_Q + q] = LBM_W[q];
+        }
+      }
+    }
+    this.lbmVorticity = 0;
+    this.lbmMaxSpeed = 0;
+
+    // 512 3D WCSPH blood parcels inside the deforming vascular & capillary lumen
     this.px = new Float32Array(N_PARCELS);
     this.py = new Float32Array(N_PARCELS);
     this.pz = new Float32Array(N_PARCELS);
@@ -212,11 +243,16 @@ export class Hemodynamics {
         const pR = capP[(s * NY_CAP + 1) * NZ_CAP + 2] - 2.5;
         const pL = capP[(s * NY_CAP + 1) * NZ_CAP + 0] - 2.5;
         const pulse = Math.max(0, (P[s] - 76) * 0.06);
+        const lbmIx = Math.min(NX_LBM - 1, Math.round((s / (NS - 1)) * (NX_LBM - 1)));
+        const lbmDynDor = (this.lbmRho[(lbmIx * NY_LBM + 4) * NZ_LBM + 3] - 1.0) * 18.0;
+        const lbmDynVen = (this.lbmRho[(lbmIx * NY_LBM + 1) * NZ_LBM + 3] - 1.0) * 18.0;
+        const lbmDynR = (this.lbmRho[(lbmIx * NY_LBM + 3) * NZ_LBM + 4] - 1.0) * 18.0;
+        const lbmDynL = (this.lbmRho[(lbmIx * NY_LBM + 3) * NZ_LBM + 1] - 1.0) * 18.0;
 
-        const fUp = clamp((pDor + pulse) * kTurgor, -0.04, 0.06);
-        const fDn = clamp(pVen * kTurgor, -0.04, 0.06);
-        const fRt = clamp(pR * kTurgor, -0.04, 0.06);
-        const fLt = clamp(pL * kTurgor, -0.04, 0.06);
+        const fUp = clamp((pDor + pulse + lbmDynDor) * kTurgor, -0.04, 0.06);
+        const fDn = clamp((pVen + lbmDynVen) * kTurgor, -0.04, 0.06);
+        const fRt = clamp((pR + lbmDynR) * kTurgor, -0.04, 0.06);
+        const fLt = clamp((pL + lbmDynL) * kTurgor, -0.04, 0.06);
 
         // Cardinal ring nodes: [up, right, down, left]
         const iU = rg[0], iR = rg[1], iD = rg[2], iL = rg[3];
@@ -249,7 +285,121 @@ export class Hemodynamics {
   }
 
   /**
-   * Advance coupled 1D Navier-Stokes vascular network + 63-voxel 3D Biot-Darcy FSI + 256 WCSPH blood parcels.
+   * 3D D3Q19 Lattice-Boltzmann (12x6x6 = 432 cells = 8,208 populations) Microvascular Sinus Navier-Stokes Solver:
+   *  - BGK collision f_q <- f_q - omega * (f_q - f_q^eq(rho, u)) + Guo body-force S_q
+   *  - Driven by pulsatile systolic heart jet (ix = 7) + segmental FEM wall pumping + orthostatic gravity
+   *  - Exact endothelial bounce-back no-slip boundary on outer corner walls + periodic closed vascular loop
+   */
+  stepLatticeBoltzmann3D(body, mu, systole, gx, gy, gz) {
+    const f = this.lbmF, fn = this.lbmFNext, wall = this.lbmWall;
+    const rhoA = this.lbmRho, uxA = this.lbmUx, uyA = this.lbmUy, uzA = this.lbmUz;
+    // Kinematic blood viscosity nu_LB = (tau - 0.5) / 3 -> omega = 1 / tau
+    const tau = clamp(0.58 + 3.0 * mu, 0.56, 1.35);
+    const omega = 1 / tau;
+    const forceCoeff = 1 - 0.5 * omega;
+    const sysJet = this.lesion ? 0.002 : (0.012 + 0.058 * systole);
+    const gScale = 0.00035;
+
+    let maxSpd = 0;
+    // Pass 1: Macroscopic moments + BGK collision + Guo body forcing + 3D D3Q19 streaming
+    for (let ix = 0; ix < NX_LBM; ix++) {
+      const seg = Math.min(NS - 1, Math.floor((ix / NX_LBM) * NS));
+      const femSqueeze = body.segPressure ? body.segPressure[seg] * 0.006 : 0;
+      const isHeart = ix === 7 || ix === 8;
+      for (let iy = 0; iy < NY_LBM; iy++) {
+        const yWallSqueeze = (2.5 - iy) * femSqueeze * 0.35;
+        for (let iz = 0; iz < NZ_LBM; iz++) {
+          const c = (ix * NY_LBM + iy) * NZ_LBM + iz;
+          const off = c * LBM_Q;
+          if (wall[c]) {
+            rhoA[c] = 1.0;
+            uxA[c] = uyA[c] = uzA[c] = 0;
+            // Bounce-back at endothelial wall nodes
+            fn[off] = f[off];
+            for (let q = 1; q < LBM_Q; q++) fn[off + LBM_OPP[q]] = f[off + q];
+            continue;
+          }
+
+          let rho = 0, mx = 0, my = 0, mz = 0;
+          for (let q = 0; q < LBM_Q; q++) {
+            const fq = f[off + q];
+            rho += fq;
+            mx += fq * LBM_EX[q];
+            my += fq * LBM_EY[q];
+            mz += fq * LBM_EZ[q];
+          }
+          rho = clamp(rho, 0.82, 1.22);
+          // Pulsatile aortic jet along dorsal core + venous return along ventral lumen + helical secondary swirl
+          const swirl = isHeart ? 0.004 * systole : 0.0012;
+          const Fx = (iy >= 3 ? sysJet * (isHeart ? 1.45 : 0.32) : -sysJet * 0.28) + gx * gScale;
+          const Fy = yWallSqueeze - swirl * (iz - 2.5) + gy * gScale;
+          const Fz = (2.5 - iz) * femSqueeze * 0.35 + swirl * (iy - 2.5) + gz * gScale;
+
+          let ux = clamp((mx + 0.5 * Fx) / rho, -0.18, 0.18);
+          let uy = clamp((my + 0.5 * Fy) / rho, -0.14, 0.14);
+          let uz = clamp((mz + 0.5 * Fz) / rho, -0.14, 0.14);
+          const u2 = ux * ux + uy * uy + uz * uz;
+          const spd = Math.sqrt(u2);
+          if (spd > maxSpd) maxSpd = spd;
+
+          rhoA[c] = rho;
+          uxA[c] = ux;
+          uyA[c] = uy;
+          uzA[c] = uz;
+
+          for (let q = 0; q < LBM_Q; q++) {
+            const ex = LBM_EX[q], ey = LBM_EY[q], ez = LBM_EZ[q], wq = LBM_W[q];
+            const eu = ex * ux + ey * uy + ez * uz;
+            const feq = wq * rho * (1 + 3 * eu + 4.5 * eu * eu - 1.5 * u2);
+            const forceTerm = forceCoeff * wq * (
+              3 * ((ex - ux) * Fx + (ey - uy) * Fy + (ez - uz) * Fz) +
+              9 * eu * (ex * Fx + ey * Fy + ez * Fz)
+            );
+            const fPost = Math.max(1e-5, f[off + q] - omega * (f[off + q] - feq) + forceTerm);
+
+            // Stream to neighbor (nx, ny, nz); bounce back if neighbor is solid endothelial wall
+            const nx = (ix + ex + NX_LBM) % NX_LBM;
+            const ny = iy + ey;
+            const nz = iz + ez;
+            if (ny < 0 || ny >= NY_LBM || nz < 0 || nz >= NZ_LBM) {
+              fn[off + LBM_OPP[q]] = fPost;
+            } else {
+              const nc = (nx * NY_LBM + ny) * NZ_LBM + nz;
+              if (wall[nc]) fn[off + LBM_OPP[q]] = fPost;
+              else fn[nc * LBM_Q + q] = fPost;
+            }
+          }
+        }
+      }
+    }
+    f.set(fn);
+    this.lbmMaxSpeed = maxSpd;
+
+    // Pass 2: Central-difference 3D vorticity |curl u| across interior vascular lumen
+    let vortSq = 0, vortCnt = 0;
+    for (let ix = 0; ix < NX_LBM; ix++) {
+      const ixP = (ix + 1) % NX_LBM, ixM = (ix + NX_LBM - 1) % NX_LBM;
+      for (let iy = 1; iy < NY_LBM - 1; iy++) {
+        for (let iz = 1; iz < NZ_LBM - 1; iz++) {
+          const c = (ix * NY_LBM + iy) * NZ_LBM + iz;
+          if (wall[c]) continue;
+          const dw_dy = 0.5 * (uzA[(ix * NY_LBM + (iy + 1)) * NZ_LBM + iz] - uzA[(ix * NY_LBM + (iy - 1)) * NZ_LBM + iz]);
+          const dv_dz = 0.5 * (uyA[(ix * NY_LBM + iy) * NZ_LBM + (iz + 1)] - uyA[(ix * NY_LBM + iy) * NZ_LBM + (iz - 1)]);
+          const du_dz = 0.5 * (uxA[(ix * NY_LBM + iy) * NZ_LBM + (iz + 1)] - uxA[(ix * NY_LBM + iy) * NZ_LBM + (iz - 1)]);
+          const dw_dx = 0.5 * (uzA[(ixP * NY_LBM + iy) * NZ_LBM + iz] - uzA[(ixM * NY_LBM + iy) * NZ_LBM + iz]);
+          const dv_dx = 0.5 * (uyA[(ixP * NY_LBM + iy) * NZ_LBM + iz] - uyA[(ixM * NY_LBM + iy) * NZ_LBM + iz]);
+          const du_dy = 0.5 * (uxA[(ix * NY_LBM + (iy + 1)) * NZ_LBM + iz] - uxA[(ix * NY_LBM + (iy - 1)) * NZ_LBM + iz]);
+          const ox = dw_dy - dv_dz, oy = du_dz - dw_dx, oz = dv_dx - du_dy;
+          vortSq += ox * ox + oy * oy + oz * oz;
+          vortCnt++;
+        }
+      }
+    }
+    this.lbmVorticity = vortCnt > 0 ? Math.sqrt(vortSq / vortCnt) : 0;
+  }
+
+  /**
+   * Advance coupled 1D Navier-Stokes vascular network + 3D D3Q19 LBM + 63-voxel 3D Biot-Darcy FSI + 512 WCSPH blood parcels.
    */
   step(dt, body, metab, world, spikes = 0) {
     this.updateNodeGeometry(body);
@@ -346,13 +496,14 @@ export class Hemodynamics {
     this.o2Node[14] = clamp(this.o2Node[14] - dt * brainDemand, 0.18, 0.98);
     this.meanO2 = o2Sum / NS;
 
-    // Solve 63-voxel 3D Biot-Darcy capillary filtration & two-way FSI turgor coupling
+    // Solve 3D D3Q19 Lattice-Boltzmann microvascular Navier-Stokes + 63-voxel 3D Biot-Darcy FSI turgor coupling
+    this.stepLatticeBoltzmann3D(body, mu, systole, gx, gy, gz);
     this.stepBiotCapillaryFSI(dt, body, mu);
 
-    // 256-parcel 3D WCSPH (Weakly Compressible SPH) with Tait EOS (gamma = 7) & spatial-hash O(N) neighborhood
+    // 512-parcel 3D WCSPH (Weakly Compressible SPH) with Tait EOS (gamma = 7) & spatial-hash O(N) neighborhood
     const px = this.px, py = this.py, pz = this.pz, vx = this.vx, vy = this.vy, vz = this.vz;
     const pRho = this.pRho, pPres = this.pPres;
-    const hSPH = 0.15, h2 = hSPH * hSPH, invCell = 1 / hSPH;
+    const hSPH = 0.125, h2 = hSPH * hSPH, invCell = 1 / hSPH;
     const head = this._hHead, next = this._hNext;
     head.fill(-1);
     for (let i = 0; i < N_PARCELS; i++) {
@@ -457,9 +608,12 @@ export class Hemodynamics {
       const cy = NP[u3 + 1] + (NP[v3 + 1] - NP[u3 + 1]) * s + fr.u[1] * r0 + fr.s[1] * r1;
       const cz = NP[u3 + 2] + (NP[v3 + 2] - NP[u3 + 2]) * s + fr.u[2] * r0 + fr.s[2] * r1;
 
-      vx[i] = vx[i] * 0.86 + (cx - px[i]) * 14 * dt;
-      vy[i] = vy[i] * 0.86 + (cy - py[i]) * 14 * dt + gy * 0.015 * dt;
-      vz[i] = vz[i] * 0.86 + (cz - pz[i]) * 14 * dt;
+      const lbmIx = Math.min(NX_LBM - 1, Math.floor((seg / NS) * NX_LBM));
+      const lbmCell = (lbmIx * NY_LBM + (e.u < 7 ? 4 : 1)) * NZ_LBM + 3;
+      const swirlY = this.lbmUy[lbmCell] * 0.9, swirlZ = this.lbmUz[lbmCell] * 0.9;
+      vx[i] = vx[i] * 0.86 + (cx - px[i]) * 14 * dt + fr.f[0] * this.lbmUx[lbmCell] * 0.6 * dt;
+      vy[i] = vy[i] * 0.86 + (cy - py[i]) * 14 * dt + (gy * 0.015 + fr.u[1] * swirlY + fr.s[1] * swirlZ) * dt;
+      vz[i] = vz[i] * 0.86 + (cz - pz[i]) * 14 * dt + (fr.u[2] * swirlY + fr.s[2] * swirlZ) * dt;
       px[i] += vx[i] * dt + (cx - px[i]) * 0.35;
       py[i] += vy[i] * dt + (cy - py[i]) * 0.35;
       pz[i] += vz[i] * dt + (cz - pz[i]) * 0.35;

@@ -1,18 +1,9 @@
-// Soft body (Pass 17): 336-Element Anisotropic Fiber-Reinforced (I4) 3D Volumetric Neo-Hookean Finite-Element (FEM) Continuum +
-// Evo-Devo Heritable 3D Morphology + Two-Way Biot Poroelastic Fluid-Structure Interaction (FSI) + Active Contractile Muscles.
-//
-// Architecture:
-//  1) 85-particle anatomical body (51 primary spine/ring/limb/stalk nodes at indices 0..50 for 100% compatibility + 28 octagonal
-//     dermal/epimysial vertices + 6 internal mid-bay axial centroids), parameterized by heritable Evo-Devo morphological genes
-//     (`bodyLen`, `bodyTaper`, `bodyGirth`, `foreLimb`, `hindLimb`, `stalkHeight`, `crestFin`, `tailFluke`, `scuteAniso`, `fiberStiff`).
-//  2) 336 positively-oriented 3D volumetric tetrahedral continuum elements (288 octagonal trunk myofibril elements + 36 proximal-distal
-//     limb muscle-belly elements + 12 cranial/stalk elements) with precomputed reference shape inverses Dm^-1, rest volumes V0 > 0,
-//     and rest myofibril unit vectors a0.
-//  3) Evaluates exact 3x3 deformation gradients F = Ds * Dm^-1, volumetric Jacobians J = det(F), isotropic Cauchy-Green trace I1,
-//     and Holzapfel-Gasser-Ogden transversely isotropic muscle-fiber invariant I4 = ||F * a0||^2, with XPBD hydrostatic + deviatoric +
-//     anisotropic fiber projections and two-way FSI coupling to 3D Biot capillary turgor forces (`fsiFx`, `fsiFy`, `fsiFz`).
+// Soft body (Pass 18): 336–348-Element Anisotropic Fiber-Reinforced (I4) 3D Volumetric Neo-Hookean Finite-Element (FEM) Continuum +
+// 108-Gene Embryonic Hox-GRN Topological Body Plans (4/6/8 Limbs) + Huxley 2-State Ca2+-Troponin Actin-Myosin Sarcomere Histology +
+// Two-Way LBM/Biot Poroelastic Fluid-Structure Interaction (FSI).
 import * as T from '../tsotchke/taylor.js';
 import { clamp } from './util.js';
+import { evalHoxGRN } from './genome.js';
 
 export const NS = 7; // body segments, 0 = tail ... 6 = head
 const SEG = 0.4;
@@ -67,6 +58,9 @@ export class Body {
   constructor(world, x0 = 0, z0 = 0, heading = 0, morph = null) {
     this.world = world;
     const M = morph || {};
+    const hox = evalHoxGRN(M);
+    this.hox = hox;
+    this.limbPairs = hox.limbPairs; // 2 = quadruped (4 limbs), 3 = hexapod (6 limbs, starter), 4 = octopod (8 limbs)
     const mLen = clamp(M.bodyLen ?? 1.0, 0.80, 1.25);
     const mTaper = clamp(M.bodyTaper ?? 0.0, -0.28, 0.28);
     const mGirth = clamp(M.bodyGirth ?? 1.0, 0.82, 1.22);
@@ -85,12 +79,16 @@ export class Body {
       scuteAniso: clamp(M.scuteAniso ?? 1.0, 0.65, 1.35),
       fiberStiff: clamp(M.fiberStiff ?? 1.0, 0.65, 1.45),
       pigmentHue: clamp(M.pigmentHue ?? 0.52, 0, 1),
+      limbPairs: hox.limbPairs,
+      osteoderm: hox.osteoderm,
+      gillFronds: hox.gillFronds,
+      sarcomereVmax: hox.sarcomereVmax,
     };
 
     const segStep = SEG * mLen;
     this.segRad = Float64Array.from({ length: NS }, (_, i) => {
       const u = i / (NS - 1) - 0.5; // -0.5 tail .. +0.5 head
-      return RAD[i] * mGirth * clamp(1 + mTaper * u, 0.72, 1.32);
+      return RAD[i] * mGirth * hox.segGirthMod[i] * clamp(1 + mTaper * u, 0.72, 1.32);
     });
 
     const P = [];
@@ -141,27 +139,37 @@ export class Body {
     }
 
     this.limbs = [];
-    const limb = (s, side, kind, idx) => {
+    const suppressMidLegs = this.limbPairs === 2;
+    const limb = (s, side, kind, idx, extraPair = false) => {
       const sz = side === 1 ? -1 : 1;
       const fx = (s - (NS - 1) / 2) * segStep;
       const isArm = kind === 'arm';
-      const lMult = isArm ? mFore : mHind;
+      const vestigial = !isArm && !extraPair && suppressMidLegs && s === 3;
+      const lMult = vestigial ? 0.22 : (isArm ? mFore : mHind);
       const L1 = (isArm ? 0.38 : 0.34) * lMult;
       const rs = this.segRad[s];
       tagLimb = this.limbs.length;
       const hip = this.ring[s][side];
-      const knee = add(...W(fx + (isArm ? 0.1 : 0) * mLen, isArm ? 0.05 : -0.05, sz * (rs + L1)), 0.35, 0.07, 'knee');
-      const foot = add(
-        ...W(fx + (isArm ? 0.25 : 0) * mLen, (isArm ? -0.15 : -0.4) * lMult, sz * (rs + L1 + 0.1 * lMult)),
-        0.3, 0.08, isArm ? 'hand' : 'foot'
+      const knee = add(
+        ...W(fx + (isArm ? 0.1 : 0) * mLen, vestigial ? 0.02 : (isArm ? 0.05 : -0.05), sz * (rs + L1)),
+        vestigial ? 0.12 : 0.35, 0.07, vestigial ? 'bud' : 'knee'
       );
-      con(hip, knee, 1); con(knee, this.c[s], 0.9); con(knee, foot, 1); con(foot, this.c[s], 0.15);
+      const foot = add(
+        ...W(fx + (isArm ? 0.25 : 0) * mLen, vestigial ? 0.0 : (isArm ? -0.15 : -0.4) * lMult, sz * (rs + L1 + 0.1 * lMult)),
+        vestigial ? 0.10 : 0.3, 0.08, vestigial ? 'bud' : (isArm ? 'hand' : 'foot')
+      );
+      con(hip, knee, 1); con(knee, this.c[s], 0.9); con(knee, foot, 1); con(foot, this.c[s], vestigial ? 0.65 : 0.15);
       const sw = isArm ? CH.arm + idx * 3 : CH.leg + idx * 2;
-      con(knee, this.ring[s + 1][side], 0.8, sw, -0.45);
-      con(knee, this.ring[s - 1][side], 0.8, sw, 0.45);
-      con(foot, hip, 0.8, sw + 1, 0.5);
+      const swGain = vestigial ? 0 : (extraPair ? -0.42 : 0.45);
+      con(knee, this.ring[s + 1][side], 0.8, vestigial ? -1 : sw, -swGain);
+      con(knee, this.ring[s - 1][side], 0.8, vestigial ? -1 : sw, swGain);
+      con(foot, hip, 0.8, vestigial ? -1 : sw + 1, vestigial ? 0 : 0.5);
       if (isArm) con(knee, this.ring[s][2], 0.7, sw + 2, 0.45);
-      this.limbs.push({ kind, s, side, hip, knee, foot, grip: isArm ? CH.armGrip + idx : CH.legGrip + idx, idx });
+      this.limbs.push({
+        kind, s, side, hip, knee, foot,
+        grip: isArm ? CH.armGrip + idx : CH.legGrip + idx,
+        idx, vestigial, extraPair,
+      });
       tagLimb = -1;
     };
     limb(1, 1, 'leg', 0); limb(1, 3, 'leg', 1);
@@ -222,6 +230,13 @@ export class Body {
         con(this.ring[s + 1][j], mc, 0.35);
       }
     }
+
+    // 3) Optional Hox-expressed 4th bilateral thoracic limb pair (octopod, limbPairs === 4) at segment s = 2 (nodes 85..88)
+    if (this.limbPairs === 4) {
+      limb(2, 1, 'leg', 0, true);
+      limb(2, 3, 'leg', 1, true);
+    }
+    this.activeLimbs = this.limbs.filter((L) => !L.vestigial).length;
 
     const n = P.length;
     this.n = n;
@@ -331,11 +346,18 @@ export class Body {
 
     this.cons = cons;
     this.u = new Float64Array(CH.N);
+    this.caTroponin = new Float64Array(CH.N);   // Sarcoplasmic Ca2+-Troponin C bound fraction [0..1]
+    this.crossBridge = new Float64Array(CH.N);  // Huxley attached actin-myosin cross-bridge fraction [0..1]
+    this.sarcomereForce = new Float64Array(CH.N); // Effective sarcomere active tension output [-1..1]
+    this.prevStretch = new Float64Array(CH.N);
+    this.meanCrossBridge = 0;
+    this.meanCaTroponin = 0;
+    this.jawOpen = 0;
     this.stretch = new Float64Array(CH.N);
     this.ext = [];
     this.scale = 1;
     this.girth = new Float64Array(NS).fill(1);
-    this.limbLen = new Float64Array(6).fill(1);
+    this.limbLen = new Float64Array(this.limbs.length).fill(1);
     this.energy = 0;
     this.grabbing = 0;
     for (const L of this.limbs) this.gripP[L.foot] = 0;
@@ -577,8 +599,10 @@ export class Body {
       Z[i] += vz + (gz + drag * (wz - vz / dt) + imFsi * fFz[i]) * dt * dt;
     }
 
-    const u = this.u;
-    let e = 0;
+    const u = this.u, caT = this.caTroponin, xbArr = this.crossBridge, sf = this.sarcomereForce;
+    const prevSt = this.prevStretch, curSt = this.stretch;
+    const vMax = 3.2 * (this.morph?.sarcomereVmax ?? 1.0);
+    let e = 0, xbSum = 0, caSum = 0;
     for (let k = 0; k < CH.N; k++) {
       let o2Gain = 1;
       if (this.segO2 && k < CH.stalk) {
@@ -586,9 +610,41 @@ export class Body {
         const o2 = this.segO2[Math.min(NS - 1, Math.max(0, s))];
         if (o2 < 0.55) o2Gain = clamp(0.35 + 1.18 * o2, 0.35, 1);
       }
-      u[k] = lesionMuscles ? 0 : clamp(u[k] * o2Gain, -1, 1);
-      e += Math.abs(u[k]);
+      const uDrive = lesionMuscles ? 0 : clamp(u[k] * o2Gain, -1, 1);
+      u[k] = uDrive;
+
+      // Huxley 2-state sarcoplasmic Ca2+-Troponin C binding & actin-myosin cross-bridge kinetics:
+      //   dca/dt = (|u| - ca) / tau_SERCA,   dn_xb/dt = f_att(ca) * (1 - n_xb) - g_det(|v|) * n_xb
+      const mag = Math.abs(uDrive);
+      const tauCa = mag > caT[k] ? 0.0055 : 0.014;
+      const ca = caT[k] + Math.min(1, dt / tauCa) * (mag - caT[k]);
+      caT[k] = ca;
+
+      const vShort = clamp((prevSt[k] - curSt[k]) / Math.max(1e-4, dt), -4.5, 4.5);
+      prevSt[k] = curSt[k];
+      const fAtt = 140 * ca;
+      const gDet = 32 * (1 + 0.55 * (Math.abs(vShort) / vMax));
+      const rTot = fAtt + gDet;
+      const xbEq = rTot > 1e-6 ? fAtt / rTot : 0;
+      const xb = xbEq + (xbArr[k] - xbEq) * Math.exp(-Math.min(8, rTot * dt));
+      xbArr[k] = xb;
+
+      // Gordon-Huxley-Julian filament-overlap force-length f_L(lambda) & Hill-Huxley concentric/eccentric force-velocity f_V(v)
+      const fL = Math.exp(-((curSt[k] / 0.44) ** 2));
+      const vr = vShort / vMax;
+      const fV = vr >= 0
+        ? Math.max(0.48, (1 - 0.32 * vr) / (1 + 0.62 * vr))
+        : Math.min(1.30, 1 + 0.24 * (-vr));
+      const xbNorm = mag > 1e-4 ? clamp((xb / Math.max(0.16, mag * 0.814)) * fL * fV, 0.78, 1.18) : 1.0;
+      const sarcoMag = clamp(mag * (0.86 + 0.14 * xbNorm), 0, 1.05);
+      sf[k] = uDrive >= 0 ? sarcoMag : -sarcoMag;
+
+      xbSum += xb;
+      caSum += ca;
+      e += Math.abs(sf[k]);
     }
+    this.meanCrossBridge = xbSum / CH.N;
+    this.meanCaTroponin = caSum / CH.N;
     this.energy = e;
 
     const cons = this.cons, sc = this.scale;
@@ -615,7 +671,7 @@ export class Body {
         const C = cons[ord[fw ? qq : cons.length - 1 - qq]];
         const a = C.a, b = C.b;
         let rest = C.rest * sc * (C.seg >= 0 ? this.girth[C.seg] : C.limb >= 0 ? this.limbLen[C.limb] : 1);
-        if (C.m >= 0) rest *= Math.max(0.35, 1 + C.g * u[C.m]);
+        if (C.m >= 0) rest *= Math.max(0.35, 1 + C.g * sf[C.m]);
         const dx = X[b] - X[a], dy = Y[b] - Y[a], dz = Z[b] - Z[a];
         const d = Math.hypot(dx, dy, dz) || 1e-9;
         const w = IM[a] + IM[b];
@@ -646,8 +702,8 @@ export class Body {
     const scuteAniso = this.morph?.scuteAniso ?? 1.0;
     this.grabbing = 0;
     for (let i = 0; i < this.n; i++) {
-      // Internal mid-bay core centroids live strictly inside the trunk lumen
-      if (this.kind[i] === 'midcore') { this.contact[i] = 0; continue; }
+      // Internal mid-bay core centroids & embryonically suppressed limb buds do not contact ground
+      if (this.kind[i] === 'midcore' || this.kind[i] === 'bud') { this.contact[i] = 0; continue; }
       const r = this.r[i];
       let hit = 0, nx = 0, ny = 1, nz = 0;
       const h = W.height(X[i], Z[i]);

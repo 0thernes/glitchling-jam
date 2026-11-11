@@ -128,7 +128,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 export class WebGPUBrainAccelerator {
   static async create(brain) {
     try {
-      if (!globalThis.navigator?.gpu) return null;
+      // 14.16M-neuron GIGA uses its specialized Int8/Int16 wave-CSR worker engine (<240 MB RAM) rather than multi-56MB f32 GPU readbacks
+      if (brain?.isGiga || !globalThis.navigator?.gpu) return null;
       const adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return null;
       const device = await adapter.requestDevice();

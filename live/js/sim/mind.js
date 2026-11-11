@@ -1,18 +1,14 @@
-// Learning machinery beside the spiking substrate (upgraded in pass 17):
+// Learning machinery beside the spiking substrate (upgraded in pass 18):
 //  - SelectiveSSM: 32-mode complex diagonal state-space model (S4D/Mamba selectivity) with exact online mode-wise RTRL
 //    eligibility traces for input matrix B, selective step-size gate Wd, gate bias bd, and modal frequencies omega.
-//    Prediction-error gradients from the Causal Transformer-SSM WorldModel flow back into SelectiveSSM online.
-//  - WorldModel: Causal Multi-Head RoPE Self-Attention + RMSNorm + SwiGLU + RTRL-SSM Multimodal Transformer-XL
-//    over up to T=16 causal KV tokens (up to 9.1 s receptive field), ingesting BOTH 72-D neural-SSM state AND 96-D (8x4x3)
-//    raw foveal RGB visual pixels, and training via end-to-end analytical backpropagation across THREE horizons:
-//      1) +0.1 s (1-step) kinematics + raw foveal RGB pixel prediction + heteroscedastic predVar
-//      2) +0.5 s (5-step) action-conditioned nonlinear SwiGLU horizon
-//      3) +2.0 s (20-step multi-second) action-conditioned kinematic + raw foveal pixel end-to-end BPTT through all L blocks!
-//    Selectable scales (?wm=std|large|xl|ultra):
-//      * 'std'   (L=2, d=64,  H=4, ffn=128, T=12 ->   ~148k params, real-time default)
-//      * 'large' (L=3, d=128, H=4, ffn=256, T=12 ->   ~625k params)
-//      * 'xl'    (L=4, d=168, H=6, ffn=320, T=16 -> ~1.24M params)
-//      * 'ultra' (L=6, d=240, H=8, ffn=480, T=16 -> ~2.76M params, multi-million-parameter Transformer-XL)
+//  - WorldModel: Causal Multi-Head RoPE Self-Attention + RMSNorm + SwiGLU + RTRL-SSM Multimodal Transformer-XL +
+//    Conditional Rectified Flow-Matching Generative Video Head + 4-Timescale Hierarchical Planner (+0.1s / +0.5s / +2.0s / +60.0s),
+//    ingesting BOTH 72-D neural-SSM state AND 384-D (16x8x3) raw foveal RGB visual pixels across 5 scales (?wm=std|large|xl|ultra|titan):
+//      * 'std'   (L=2, d=64,  H=4, ffn=128, T=12 ->    ~195k params, real-time default)
+//      * 'large' (L=3, d=128, H=4, ffn=256, T=12 ->    ~715k params)
+//      * 'xl'    (L=4, d=168, H=6, ffn=320, T=16 ->  ~1.36M params)
+//      * 'ultra' (L=6, d=240, H=8, ffn=480, T=16 ->  ~2.95M params)
+//      * 'titan' (L=8, d=320, H=8, ffn=960, T=32 -> ~11.12M params, 11-million-parameter causal multimodal Transformer-XL!)
 //  - Sleep: two-process (adenosine S + circadian C) flip-flop and ultradian N1/N2/N3/REM stage cycle.
 //  - PredictiveCoding: two-level Rao & Ballard / Whittington & Bogacz hierarchical inference & Hebbian error learning.
 import { mulberry, gauss, softplus, clamp } from './util.js';
@@ -23,18 +19,24 @@ const dsilu = (x) => {
   return s * (1 + x * (1 - s));
 };
 
-export const N_VIS_PATCH = 96; // 8x4x3 raw foveal RGB pixel patch from binocular retina
+export const N_VIS_PATCH = 384; // 16x8x3 high-acuity raw foveal RGB pixel patch from 128x64 binocular retinas
+export const N_MACRO = 8;       // 8-D 1-minute (+60.0 s) hierarchical macro-state observables
+export const D_FLOW = 24;       // 24-D latent space for 4-step Conditional Rectified Flow-Matching generative video head
+export const H_FLOW = 48;       // Velocity-field MLP hidden dimension
 
 export const WM_SCALES = {
   std:   { L: 2, d: 64,  H: 4, ffn: 128, T: 12, d5: 64  },
   large: { L: 3, d: 128, H: 4, ffn: 256, T: 12, d5: 96  },
   xl:    { L: 4, d: 168, H: 6, ffn: 320, T: 16, d5: 112 },
   ultra: { L: 6, d: 240, H: 8, ffn: 480, T: 16, d5: 144 },
+  titan: { L: 8, d: 320, H: 8, ffn: 960, T: 32, d5: 192 },
 };
 
 function resolveWMScale(scaleArg) {
   if (typeof scaleArg === 'string' && WM_SCALES[scaleArg]) return scaleArg;
-  if (typeof scaleArg === 'number') return scaleArg >= 220 ? 'ultra' : scaleArg >= 160 ? 'xl' : scaleArg >= 96 ? 'large' : 'std';
+  if (typeof scaleArg === 'number') {
+    return scaleArg >= 300 ? 'titan' : scaleArg >= 220 ? 'ultra' : scaleArg >= 160 ? 'xl' : scaleArg >= 96 ? 'large' : 'std';
+  }
   const g =
     globalThis.WM_SCALE ||
     globalThis.TW?.wmScale ||
@@ -342,12 +344,40 @@ export class WorldModel {
     this.Wskip20z = allocF32(nY * nZ, 0);
     this.Wskip20a = allocF32(nY * nA20, 0);
 
+    // 600-step (+60.0 s = 1-Minute) Hierarchical Macro-State Subgoal Rollout & Planner Head
+    this.K60 = 60; // 60 x 1.0-s macro slots = 60.0 s (600 ticks @ 10 Hz)
+    this.nMacro = N_MACRO;
+    const nAct = this.nAct;
+    this.Wg60h = allocF32(d5 * d, 0.55 / Math.sqrt(d));
+    this.Wg60a = allocF32(d5 * nAct, 0.75 / Math.sqrt(8));
+    this.bg60 = allocF32(d5, 0);
+    this.Wu60h = allocF32(d5 * d, 0.55 / Math.sqrt(d));
+    this.Wu60a = allocF32(d5 * nAct, 0.75 / Math.sqrt(8));
+    this.bu60 = allocF32(d5, 0);
+    this.Wout60 = allocF32(N_MACRO * d5, 0.04 / Math.sqrt(d5));
+    this.bout60 = allocF32(N_MACRO, 0);
+    this.Wskip60z = allocF32(N_MACRO * nZ, 0);
+    this.Wskip60a = allocF32(N_MACRO * nAct, 0);
+
+    // Online 4-Step Conditional Rectified Flow-Matching Generative Video Head (dz/ds = v_theta(z_s, s, h_t) over 16x8x3 RGB)
+    this.dFlow = D_FLOW;
+    this.hFlow = H_FLOW;
+    this.WflowEnc = allocF32(D_FLOW * nVis, 0.35 / Math.sqrt(nVis));
+    this.WflowZ = allocF32(H_FLOW * D_FLOW, 0.55 / Math.sqrt(D_FLOW));
+    this.WflowH = allocF32(H_FLOW * d, 0.45 / Math.sqrt(d));
+    this.WflowT = allocF32(H_FLOW * 4, 0.30);
+    this.bflowH = allocF32(H_FLOW, 0);
+    this.WflowVel = allocF32(D_FLOW * H_FLOW, 0.14 / Math.sqrt(H_FLOW));
+    this.bflowVel = allocF32(D_FLOW, 0);
+    this.WflowOut = allocF32(nVis * D_FLOW, 0.12 / Math.sqrt(D_FLOW));
+
     // Heteroscedastic uncertainty head
     this.Wvar = allocF32(d, 0.05);
     this.bvar = -2.4;
     pCount += 1;
     this.predVar = 0.08;
     this.paramCount = pCount;
+    this._flowRng = mulberry(seed * 919 + 41);
 
     this.pastCap = pastCap;
     this.ringPtr = 0;
@@ -388,6 +418,35 @@ export class WorldModel {
     this.act20Buf = new Float32Array(d5);
     this.dh20Buf = new Float32Array(d);
 
+    // 600-step (+60.0 s = 1-Minute) macro-state causal FIFO buffer (60 x 1.0-s averages)
+    this.fifo60 = Array.from({ length: this.K60 }, () => ({
+      z: new Float64Array(nZ),
+      h: new Float32Array(d),
+      act: new Float64Array(nAct),
+      macro: new Float64Array(N_MACRO),
+    }));
+    this.fifo60Len = 0;
+    this.fifo60Head = 0;
+    this.secTick = 0;
+    this.secActAcc = new Float64Array(nAct);
+    this.secMacroAcc = new Float64Array(N_MACRO);
+    this.macroHorizonEMA = new Float64Array(N_MACRO);
+    this.macroCurBuf = new Float64Array(N_MACRO);
+    this.macroActMean = new Float64Array(nAct);
+    this.p60Buf = new Float64Array(N_MACRO);
+    this.g60Buf = new Float32Array(d5);
+    this.u60Buf = new Float32Array(d5);
+    this.act60Buf = new Float32Array(d5);
+
+    // Conditional Rectified Flow-Matching scratch buffers
+    this.visFlowPred = new Float32Array(nVis);
+    this.flowZ0 = new Float32Array(D_FLOW);
+    this.flowZ1 = new Float32Array(D_FLOW);
+    this.flowZs = new Float32Array(D_FLOW);
+    this.flowPre = new Float32Array(H_FLOW);
+    this.flowAct = new Float32Array(H_FLOW);
+    this.flowVel = new Float32Array(D_FLOW);
+
     // Forward/backward scratch buffers
     this.xCur = new Float32Array(d);
     this.xNext = new Float32Array(d);
@@ -412,16 +471,21 @@ export class WorldModel {
     this.err = new Float64Array(nY);
     this.err5 = new Float64Array(nY);
     this.err20 = new Float64Array(nY);
+    this.err60 = new Float64Array(N_MACRO);
     this.var = 1;
     this.surprise = 0;
     this.mse = 1;
     this.mse5 = 1;
     this.mse20 = 1;
+    this.mse60 = 0.25;
     this.visMSE = 0.05;
     this.visMSE20 = 0.08;
+    this.visFlowMSE = 0.05;
+    this.flowVelLoss = 0.05;
     this.n = 0;
     this.n5 = 0;
     this.n20 = 0;
+    this.n60 = 0;
     this.lesion = false;
   }
 
@@ -877,6 +941,232 @@ export class WorldModel {
     return outY;
   }
 
+  /** Extract 8-D macro-state observables from 25-D proprioceptive/kinematic state y */
+  extractMacro(y, out8) {
+    out8[0] = y[12] || 0; // forward ground speed
+    out8[1] = y[13] || 0; // lateral drift speed
+    out8[2] = y[14] || 0; // vertical bounce
+    out8[3] = y[15] || 0; // dorsal uprightness upY
+    out8[4] = y[16] || 0; // roll tilt sy
+    out8[5] = ((y[17] || 0) + (y[18] || 0) + (y[19] || 0) + (y[20] || 0) + (y[21] || 0) + (y[22] || 0)) / 6; // stance contact
+    out8[6] = y[23] || 0; // sin(bearing)
+    out8[7] = y[24] || 0; // cos(bearing)
+    return out8;
+  }
+
+  /** 600-step (+60.0 s = 1-Minute) Hierarchical Macro-State Subgoal Rollout Prediction */
+  predict60(z0, macroGoalAct8, outMacro, hCtx = null) {
+    const {
+      nZ, nAct, dModel: d, d5, Wg60h, Wg60a, bg60, Wu60h, Wu60a, bu60,
+      Wout60, bout60, Wskip60z, Wskip60a, g60Buf, u60Buf, act60Buf,
+    } = this;
+    const h = hCtx || this._encode(z0, false, null);
+    for (let k = 0; k < d5; k++) {
+      const offH = k * d, offA = k * nAct;
+      let sg = bg60[k], su = bu60[k];
+      for (let j = 0; j < d; j++) {
+        const hj = h[j];
+        sg += Wg60h[offH + j] * hj;
+        su += Wu60h[offH + j] * hj;
+      }
+      for (let a = 0; a < nAct; a++) {
+        const va = macroGoalAct8[a];
+        sg += Wg60a[offA + a] * va;
+        su += Wu60a[offA + a] * va;
+      }
+      g60Buf[k] = sg;
+      u60Buf[k] = su;
+      act60Buf[k] = silu(sg) * su;
+    }
+    for (let m = 0; m < N_MACRO; m++) {
+      let s = bout60[m];
+      const off5 = m * d5, offZ = m * nZ, offA = m * nAct;
+      for (let k = 0; k < d5; k++) s += Wout60[off5 + k] * act60Buf[k];
+      for (let i = 0; i < nZ; i++) s += Wskip60z[offZ + i] * z0[i];
+      for (let a = 0; a < nAct; a++) s += Wskip60a[offA + a] * macroGoalAct8[a];
+      outMacro[m] = s;
+    }
+    return outMacro;
+  }
+
+  _learn60(z0, h0, macroAct8, macroTarget8, lr) {
+    const {
+      nZ, nAct, dModel: d, d5, Wg60h, Wg60a, bg60, Wu60h, Wu60a, bu60,
+      Wout60, bout60, Wskip60z, Wskip60a, g60Buf, u60Buf, act60Buf, p60Buf,
+    } = this;
+    this.predict60(z0, macroAct8, p60Buf, h0);
+    let zz = 1, aa = 1, hh = 1, fn = 1;
+    for (let i = 0; i < nZ; i++) zz += z0[i] * z0[i];
+    for (let a = 0; a < nAct; a++) aa += macroAct8[a] * macroAct8[a];
+    for (let j = 0; j < d; j++) hh += h0[j] * h0[j];
+    for (let k = 0; k < d5; k++) fn += act60Buf[k] * act60Buf[k];
+
+    const etaSk = (0.65 * lr) / (zz + aa);
+    const etaOut = (0.24 * lr) / (fn + zz);
+    const etaHid = (0.70 * lr) / (hh + 2 * aa + 4);
+    const dAct60 = this.dFfnBuf;
+    for (let k = 0; k < d5; k++) dAct60[k] = 0;
+
+    let se60 = 0;
+    for (let m = 0; m < N_MACRO; m++) {
+      const gp = p60Buf[m] - macroTarget8[m];
+      this.err60[m] = -gp;
+      se60 += gp * gp;
+      const off5 = m * d5, offZ = m * nZ, offA = m * nAct;
+      for (let k = 0; k < d5; k++) {
+        dAct60[k] += Wout60[off5 + k] * gp;
+        Wout60[off5 + k] = clamp(Wout60[off5 + k] - etaOut * gp * act60Buf[k], -2.5, 2.5);
+      }
+      bout60[m] = clamp(bout60[m] - 0.2 * etaSk * gp, -2.5, 2.5);
+      for (let i = 0; i < nZ; i++) Wskip60z[offZ + i] = clamp(Wskip60z[offZ + i] - etaSk * gp * z0[i], -2.5, 2.5);
+      for (let a = 0; a < nAct; a++) Wskip60a[offA + a] = clamp(Wskip60a[offA + a] - etaSk * gp * macroAct8[a], -2.5, 2.5);
+    }
+    se60 /= N_MACRO;
+
+    for (let k = 0; k < d5; k++) {
+      const da = dAct60[k];
+      const dg = clamp(da * u60Buf[k] * dsilu(g60Buf[k]), -3, 3);
+      const du = clamp(da * silu(g60Buf[k]), -3, 3);
+      const offH = k * d, offA = k * nAct;
+      for (let j = 0; j < d; j++) {
+        const hj = h0[j];
+        Wg60h[offH + j] = clamp(Wg60h[offH + j] - etaHid * dg * hj, -2.5, 2.5);
+        Wu60h[offH + j] = clamp(Wu60h[offH + j] - etaHid * du * hj, -2.5, 2.5);
+      }
+      for (let a = 0; a < nAct; a++) {
+        const va = macroAct8[a];
+        Wg60a[offA + a] = clamp(Wg60a[offA + a] - etaHid * dg * va, -2.5, 2.5);
+        Wu60a[offA + a] = clamp(Wu60a[offA + a] - etaHid * du * va, -2.5, 2.5);
+      }
+      bg60[k] = clamp(bg60[k] - etaHid * dg, -2.5, 2.5);
+      bu60[k] = clamp(bu60[k] - etaHid * du, -2.5, 2.5);
+    }
+    this.mse60 = this.n60 === 0 ? se60 : this.mse60 + 0.04 * (se60 - this.mse60);
+    this.n60++;
+    return se60;
+  }
+
+  /** Evaluate Conditional Rectified Flow velocity field v_theta(z_s, s, h_t) in R^{24} */
+  _flowVelocity(zs, s, hCtx, outVel) {
+    const { dModel: d, WflowZ, WflowH, WflowT, bflowH, WflowVel, bflowVel, flowPre, flowAct } = this;
+    const t0 = s, t1 = 1 - s, t2 = Math.sin(Math.PI * s), t3 = Math.cos(Math.PI * s);
+    for (let k = 0; k < H_FLOW; k++) {
+      const oZ = k * D_FLOW, oH = k * d, oT = k * 4;
+      let acc = bflowH[k] + WflowT[oT] * t0 + WflowT[oT + 1] * t1 + WflowT[oT + 2] * t2 + WflowT[oT + 3] * t3;
+      for (let m = 0; m < D_FLOW; m++) acc += WflowZ[oZ + m] * zs[m];
+      for (let j = 0; j < d; j++) acc += WflowH[oH + j] * hCtx[j];
+      flowPre[k] = acc;
+      flowAct[k] = silu(acc);
+    }
+    for (let m = 0; m < D_FLOW; m++) {
+      let sv = bflowVel[m];
+      const oV = m * H_FLOW;
+      for (let k = 0; k < H_FLOW; k++) sv += WflowVel[oV + k] * flowAct[k];
+      outVel[m] = sv;
+    }
+    return outVel;
+  }
+
+  /** Integrate 4-step Conditional Rectified Flow ODE dz/ds = v_theta(z_s, s, h_t) -> synthesize 16x8x3 future foveal RGB frame */
+  predictVisFlow(visPrev, hCtx, outVis = null, steps = 4) {
+    const { nVis, WflowOut, flowZs, flowVel } = this;
+    flowZs.fill(0);
+    const dtFlow = 1 / Math.max(1, steps);
+    for (let st = 0; st < steps; st++) {
+      const s = (st + 0.5) * dtFlow;
+      this._flowVelocity(flowZs, s, hCtx, flowVel);
+      for (let m = 0; m < D_FLOW; m++) flowZs[m] += dtFlow * flowVel[m];
+    }
+    const dst = outVis || this.visFlowPred;
+    for (let v = 0; v < nVis; v++) {
+      let sv = visPrev ? visPrev[v] : 0.25;
+      const oD = v * D_FLOW;
+      for (let m = 0; m < D_FLOW; m++) sv += WflowOut[oD + m] * flowZs[m];
+      dst[v] = clamp(sv, 0, 1);
+    }
+    return dst;
+  }
+
+  /** Online Conditional Rectified Flow-Matching velocity training + 4-step ODE visual frame synthesis */
+  _learnVisFlow(visPrev, visCur, hCtx, lr) {
+    const {
+      nVis, dModel: d, WflowEnc, WflowZ, WflowH, WflowT, bflowH, WflowVel, bflowVel, WflowOut,
+      flowZ0, flowZ1, flowZs, flowPre, flowAct, flowVel, visFlowPred,
+    } = this;
+    // 1) Encode residual RGB innovation dVis = visCur - visPrev into target latent z1
+    for (let m = 0; m < D_FLOW; m++) {
+      let s = 0;
+      const oE = m * nVis;
+      for (let v = 0; v < nVis; v++) s += WflowEnc[oE + v] * (visCur[v] - visPrev[v]);
+      flowZ1[m] = clamp(s, -3, 3);
+      flowZ0[m] = 0.08 * gauss(this._flowRng);
+    }
+    // 2) Stratified flow time s in (0.08, 0.92) along straight-line path z_s = (1 - s)*z0 + s*z1
+    const s = 0.08 + 0.84 * (((this.n * 0.61803398875) % 1 + 1) % 1);
+    for (let m = 0; m < D_FLOW; m++) flowZs[m] = (1 - s) * flowZ0[m] + s * flowZ1[m];
+    this._flowVelocity(flowZs, s, hCtx, flowVel);
+
+    let hh = 1;
+    for (let j = 0; j < d; j++) hh += hCtx[j] * hCtx[j];
+    const etaV = (0.35 * lr) / (H_FLOW + 4);
+    const etaH = (0.45 * lr) / (hh + D_FLOW + 4);
+
+    const dAct = this.dUpBuf; // length ffn >= 128 >= H_FLOW (48)
+    for (let k = 0; k < H_FLOW; k++) dAct[k] = 0;
+    let velSE = 0;
+    for (let m = 0; m < D_FLOW; m++) {
+      const targetV = flowZ1[m] - flowZ0[m];
+      const errV = clamp(flowVel[m] - targetV, -3, 3);
+      velSE += errV * errV;
+      const oV = m * H_FLOW;
+      for (let k = 0; k < H_FLOW; k++) {
+        dAct[k] += WflowVel[oV + k] * errV;
+        WflowVel[oV + k] = clamp(WflowVel[oV + k] - etaV * errV * flowAct[k], -2.5, 2.5);
+      }
+      bflowVel[m] = clamp(bflowVel[m] - 0.25 * etaV * errV, -2.0, 2.0);
+    }
+    this.flowVelLoss = 0.96 * this.flowVelLoss + 0.04 * (velSE / D_FLOW);
+
+    const t0 = s, t1 = 1 - s, t2 = Math.sin(Math.PI * s), t3 = Math.cos(Math.PI * s);
+    for (let k = 0; k < H_FLOW; k++) {
+      const dg = clamp(dAct[k] * dsilu(flowPre[k]), -3, 3);
+      const oZ = k * D_FLOW, oH = k * d, oT = k * 4;
+      for (let m = 0; m < D_FLOW; m++) WflowZ[oZ + m] = clamp(WflowZ[oZ + m] - etaH * dg * flowZs[m], -2.5, 2.5);
+      for (let j = 0; j < d; j++) WflowH[oH + j] = clamp(WflowH[oH + j] - etaH * dg * hCtx[j], -2.5, 2.5);
+      WflowT[oT] = clamp(WflowT[oT] - etaH * dg * t0, -2.5, 2.5);
+      WflowT[oT + 1] = clamp(WflowT[oT + 1] - etaH * dg * t1, -2.5, 2.5);
+      WflowT[oT + 2] = clamp(WflowT[oT + 2] - etaH * dg * t2, -2.5, 2.5);
+      WflowT[oT + 3] = clamp(WflowT[oT + 3] - etaH * dg * t3, -2.5, 2.5);
+      bflowH[k] = clamp(bflowH[k] - 0.25 * etaH * dg, -2.0, 2.0);
+    }
+
+    // 3) Integrate 4-step rectified flow ODE from z0=0 and train decoder WflowOut + coupled encoder WflowEnc
+    this.predictVisFlow(visPrev, hCtx, visFlowPred, 4);
+    let fse = 0;
+    const etaDec = (0.38 * lr) / (D_FLOW + 2);
+    const dLat = flowZ0;
+    dLat.fill(0);
+    for (let v = 0; v < nVis; v++) {
+      const gv = visFlowPred[v] - visCur[v];
+      fse += gv * gv;
+      const oD = v * D_FLOW;
+      for (let m = 0; m < D_FLOW; m++) {
+        dLat[m] += WflowOut[oD + m] * gv;
+        WflowOut[oD + m] = clamp(WflowOut[oD + m] - etaDec * gv * flowZs[m], -2.0, 2.0);
+      }
+    }
+    const etaEnc = (0.12 * lr) / (nVis * 0.1 + 4);
+    for (let m = 0; m < D_FLOW; m++) {
+      const dm = clamp(dLat[m], -2, 2);
+      const oE = m * nVis;
+      for (let v = 0; v < nVis; v++) {
+        WflowEnc[oE + v] = clamp(WflowEnc[oE + v] - etaEnc * dm * (visCur[v] - visPrev[v]), -2.0, 2.0);
+      }
+    }
+    fse /= nVis;
+    this.visFlowMSE = this.n === 0 ? fse : this.visFlowMSE + 0.015 * (fse - this.visFlowMSE);
+  }
+
   _learn5(z0, dz0, h0, actSeq40, yTarget, lr) {
     const { nZ, nY, dModel: d, d5, nA5, Wg5h, Wg5a, bg5, Wu5h, Wu5a, bu5, Wout5, bout5, Wskip5z, Wskip5a, Wvel5, g5Buf, u5Buf, act5Buf, p5Buf } = this;
     this.predict5(z0, actSeq40, p5Buf, h0, dz0);
@@ -1135,6 +1425,8 @@ export class WorldModel {
       }
       vse /= nVis;
       this.visMSE = this.n === 0 ? vse : this.visMSE + 0.015 * (vse - this.visMSE);
+      // Train 4-step Conditional Rectified Flow-Matching generative video head on 384-D (16x8x3) foveal RGB frames
+      this._learnVisFlow(visPrev, visCur, hOutNorm, lr);
     }
 
     // Backprop analytically through all L Transformer-XL blocks + causal T-lag KV history + input embeddings
@@ -1147,9 +1439,9 @@ export class WorldModel {
     for (let j = 0; j < d; j++) this.Wvar[j] = clamp(this.Wvar[j] - gVar * hOutNorm[j], -2, 2);
     this.bvar = clamp(this.bvar - gVar * hh * 0.25, -6, 4);
 
-    // Online 5-step (+0.5 s) multi-horizon training + KV ring commit
+    // Online 5-step (+0.5 s) & 600-step (+60.0 s = 1-Minute) multi-horizon training + KV ring commit
     if (seq) {
-      const nAct = this.nAct, K5 = this.K5;
+      const nAct = this.nAct, K5 = this.K5, K60 = this.K60;
       const actStart = nZ - nAct;
       if (this.fifoLen === K5 - 1) {
         const oldest = this.fifo5[this.fifoHead];
@@ -1171,6 +1463,51 @@ export class WorldModel {
         slot.h.set(hOutNorm);
         for (let a = 0; a < nAct; a++) slot.act[a] = z[actStart + a];
         this.fifoLen++;
+      }
+
+      // Accumulate 1.0-s (10-tick) macro-observables for the +60.0 s (1-Minute) hierarchical planner head
+      this.extractMacro(y, this.macroCurBuf);
+      for (let m = 0; m < N_MACRO; m++) {
+        this.secMacroAcc[m] += 0.1 * this.macroCurBuf[m];
+        this.macroHorizonEMA[m] = this.n === 0 ? this.macroCurBuf[m] : 0.985 * this.macroHorizonEMA[m] + 0.015 * this.macroCurBuf[m];
+      }
+      for (let a = 0; a < nAct; a++) this.secActAcc[a] += 0.1 * z[actStart + a];
+      if (++this.secTick >= 10) {
+        this.secTick = 0;
+        if (this.fifo60Len === K60) {
+          // Exact +60.0 s (600 ticks @ 10 Hz = 1 full minute) macro-horizon update!
+          const old60 = this.fifo60[this.fifo60Head];
+          this.macroActMean.fill(0);
+          for (let s = 0; s < K60; s++) {
+            const ent = this.fifo60[(this.fifo60Head + s) % K60];
+            for (let a = 0; a < nAct; a++) this.macroActMean[a] += ent.act[a] / K60;
+          }
+          this._learn60(old60.z, old60.h, this.macroActMean, this.macroHorizonEMA, lr);
+          old60.z.set(z);
+          old60.h.set(hOutNorm);
+          old60.act.set(this.secActAcc);
+          old60.macro.set(this.secMacroAcc);
+          this.fifo60Head = (this.fifo60Head + 1) % K60;
+        } else {
+          // Early sub-minute bootstrap once >= 10 s of trajectory are collected, transitioning seamlessly to exact +60.0 s at 60 s
+          if (this.fifo60Len >= 10) {
+            const boot = this.fifo60[this.fifo60Head];
+            this.macroActMean.fill(0);
+            for (let s = 0; s < this.fifo60Len; s++) {
+              const ent = this.fifo60[(this.fifo60Head + s) % K60];
+              for (let a = 0; a < nAct; a++) this.macroActMean[a] += ent.act[a] / this.fifo60Len;
+            }
+            this._learn60(boot.z, boot.h, this.macroActMean, this.macroHorizonEMA, 0.5 * lr);
+          }
+          const slot60 = this.fifo60[(this.fifo60Head + this.fifo60Len) % K60];
+          slot60.z.set(z);
+          slot60.h.set(hOutNorm);
+          slot60.act.set(this.secActAcc);
+          slot60.macro.set(this.secMacroAcc);
+          this.fifo60Len++;
+        }
+        this.secActAcc.fill(0);
+        this.secMacroAcc.fill(0);
       }
       this._commitToken(z);
     }

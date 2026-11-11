@@ -11,7 +11,7 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let seed = +(Q.get('seed') || 1) || 1;
 $('seed').value = seed;
 let clockMode = CLOCK_MODES[Q.get('clock')] ? Q.get('clock') : 'realtime';
-let wmScale = ['std', 'large', 'xl', 'ultra'].includes(Q.get('wm')) ? Q.get('wm') : 'std';
+let wmScale = ['std', 'large', 'xl', 'ultra', 'titan'].includes(Q.get('wm')) ? Q.get('wm') : 'std';
 let cameraMode = ['orbit', 'pov', 'director', 'overhead'].includes(Q.get('cam')) ? Q.get('cam') : 'orbit';
 
 const flaws = JSON.parse(JSON.stringify(DEFAULT_FLAWS));
@@ -32,17 +32,23 @@ try {
 
 function currentEcoOpts() {
   if (Q.get('eco') === '0') return null;
-  const peers = $('eco-peers') ? +$('eco-peers').value : +(Q.get('peers') ?? 5);
-  const mites = $('eco-mites') ? +$('eco-mites').value : 28;
+  const peers = $('eco-peers') ? +$('eco-peers').value : +(Q.get('peers') ?? 8);
+  const mites = $('eco-mites') ? +$('eco-mites').value : 36;
   const predators = $('eco-preds') ? +$('eco-preds').value : 1;
-  return { peers, mites, predators, maxPeers: 14 };
+  return { peers, mites, predators, maxPeers: 32 };
 }
 
 let cr = new Creature(seed, { flaws, clockMode, wmScale, eco: currentEcoOpts() });
+cr.qrng.initWebGPU16Q?.().catch(() => {});
+
 let view = null;
 let p5Layer = null;
 let View, P5Layer;
 const audio = new BioAudio();
+const coarse = matchMedia('(pointer: coarse)').matches;
+const rawQ = Q.get('q') || 'auto';
+let qMode = rawQ === '4k' || rawQ === 'uhd' ? '4' : rawQ;
+const initQuality = qMode === 'auto' ? (coarse ? 1 : 3) : +qMode;
 
 try {
   [{ View }, { P5Layer }] = await Promise.all([
@@ -53,7 +59,7 @@ try {
   const initP5Mode = Q.get('p5') || (innerWidth < 720 ? 'off' : 'pip');
   p5Layer.setMode(['pip', 'split', 'off'].includes(initP5Mode) ? initP5Mode : 'pip');
   if (Q.get('p5tab') !== null) p5Layer.setView(+Q.get('p5tab') || 0);
-  view = new View($('gl'), cr, { reduced, quality: 2, p5Layer, cameraMode });
+  view = new View($('gl'), cr, { reduced, quality: initQuality, p5Layer, cameraMode });
   view.setCameraMode(cameraMode);
 } catch (e) {
   console.error(e);
@@ -65,14 +71,12 @@ window.glitch = {
   get view() { return view; },
   get p5() { return p5Layer; },
   get audio() { return audio; },
-  stats: { fps: 0, frames: 0, quality: 2, simMs: 0, renderMs: 0 },
+  stats: { fps: 0, frames: 0, quality: initQuality, simMs: 0, renderMs: 0, uptime: 0 },
 };
 
 let speed = +(Q.get('speed') || 1);
 $('speed').value = String(speed);
 let paused = false, tool = 'orbit';
-const rawQ = Q.get('q') || 'auto';
-let qMode = rawQ === '4k' || rawQ === 'uhd' ? '4' : rawQ;
 $('quality').value = ['auto', '0', '1', '2', '3', '4'].includes(qMode) ? qMode : 'auto';
 if ($('brain-scale')) $('brain-scale').value = BRAIN_SCALE;
 if ($('clock-mode')) $('clock-mode').value = clockMode;
@@ -94,11 +98,52 @@ function applyCameraMode(mode) {
 }
 applyCameraMode(cameraMode);
 
-const coarse = matchMedia('(pointer: coarse)').matches;
 const qMax = coarse ? 2 : 3;
+const qAutoFloor = coarse ? 0 : 2;
 if (view) {
-  view.setQuality(qMode === 'auto' ? (coarse ? 1 : 2) : +qMode);
+  view.setQuality(initQuality);
   addEventListener('resize', () => view.resize());
+}
+
+// ---------------------------------------------------------------- O(1) region lookup & overflow-safe raster bucketing (up to 14.16M GIGA)
+const raster = $('raster'), rctx = raster.getContext('2d');
+const regionColors = REGIONS.map((_, ri) => `hsl(${(ri / REGIONS.length) * 360},90%,62%)`);
+const rasterRowBucket = new Int8Array(raster.height);
+rasterRowBucket.fill(-1);
+
+function regionIndexOf(ni) {
+  for (let r = REGIONS.length - 1; r >= 0; r--) {
+    if (ni >= R0[REGIONS[r][0]]) return r;
+  }
+  return 0;
+}
+
+function markNeuronSpikeOnRaster(ni) {
+  const row = Math.min(raster.height - 1, Math.max(0, Math.floor((ni * raster.height) / NNEU)));
+  rasterRowBucket[row] = regionIndexOf(ni);
+}
+
+function accumulateStepSpikes(b) {
+  if (NNEU <= 120000 && !b.delegated) {
+    for (let i = 0; i < NNEU; i++) {
+      if (b.spk[i]) markNeuronSpikeOnRaster(i);
+    }
+    return;
+  }
+  // Subcortical populations always step locally (< 350 neurons)
+  for (let i = 0; i < R0.THAL; i++) if (b.spk[i]) markNeuronSpikeOnRaster(i);
+  for (let i = R0.STR; i < NNEU; i++) if (b.spk[i]) markNeuronSpikeOnRaster(i);
+  if (!b.delegated) {
+    if (b.gigaMode && b.prevSheetSpk) {
+      const nSpk = b.prevSheetSpkCount || 0;
+      for (let k = 0; k < nSpk; k++) markNeuronSpikeOnRaster(R0.THAL + b.prevSheetSpk[k]);
+    } else {
+      const stride = Math.max(1, Math.floor((R0.STR - R0.THAL) / 8192));
+      for (let i = R0.THAL; i < R0.STR; i += stride) {
+        if (b.spk[i]) markNeuronSpikeOnRaster(i);
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------- optional Web Worker / WebGPU brain accelerators
@@ -134,14 +179,27 @@ async function setupBackend(mode) {
         if (e.data?.op === 'stepped') {
           workerPending = false;
           const d = e.data;
-          // Receive off-main-thread THAL + CTX + HIP sheet rates, spikes & plasticity telemetry
-          // (on 1.05M-neuron MEGA, d.rate & d.spk arrive every 4th batch to keep postMessage < 0.4 ms)
           if (d.rate && d.spk) {
             const sh0 = R0.THAL, sh1 = R0.STR;
+            const stride = Math.max(1, Math.floor((sh1 - sh0) / 8192));
             for (let i = sh0; i < sh1 && i < d.rate.length; i++) {
               cr.brain.rate[i] = d.rate[i];
               cr.brain.spk[i] = d.spk[i];
-              spikeAcc[i] |= d.spk[i];
+            }
+            for (let i = sh0; i < sh1 && i < d.spk.length; i += stride) {
+              if (d.spk[i]) markNeuronSpikeOnRaster(i);
+            }
+          }
+          if (d.subRateL) cr.brain.rate.set(d.subRateL, 0);
+          if (d.subRateR) cr.brain.rate.set(d.subRateR, R0.STR);
+          if (d.spkIdx) {
+            const nS = Math.min(d.spkIdx.length, cr.brain.prevSheetSpk ? cr.brain.prevSheetSpk.length : 0);
+            if (nS > 0) {
+              cr.brain.prevSheetSpk.set(d.spkIdx.subarray(0, nS));
+              cr.brain.prevSheetSpkCount = nS;
+            }
+            for (let k = 0; k < d.spkIdx.length; k++) {
+              markNeuronSpikeOnRaster(R0.THAL + d.spkIdx[k]);
             }
           }
           if (d.regRate) for (let k = 1; k <= 3; k++) { cr.brain.regRate[k] = d.regRate[k]; cr.brain.astro[k] = d.astro[k]; }
@@ -150,7 +208,10 @@ async function setupBackend(mode) {
           cr.brain.grown = d.grown;
           cr.brain.pruned = d.pruned;
           cr.brain.plateauBursts = d.plateauBursts ?? cr.brain.plateauBursts;
+          cr.brain.nmdaSpikes = d.nmdaSpikes ?? cr.brain.nmdaSpikes;
           cr.brain.ihMean = d.ihMean ?? cr.brain.ihMean;
+          cr.brain.skMean = d.skMean ?? cr.brain.skMean;
+          cr.brain.channelNoiseMean = d.channelNoiseMean ?? cr.brain.channelNoiseMean;
           cr.brain.dwLast = d.dwLast;
         }
       };
@@ -300,8 +361,8 @@ $('gl').addEventListener('pointerdown', (e) => {
 // ---------------------------------------------------------------- Ecology tab controls
 function syncEcoSliders() {
   if (!cr.eco) return;
-  const peers = +($('eco-peers')?.value ?? 5);
-  const mites = +($('eco-mites')?.value ?? 28);
+  const peers = +($('eco-peers')?.value ?? 8);
+  const mites = +($('eco-mites')?.value ?? 36);
   const predators = +($('eco-preds')?.value ?? 1);
   if ($('eco-peers-val')) $('eco-peers-val').textContent = String(peers);
   if ($('eco-mites-val')) $('eco-mites-val').textContent = String(mites);
@@ -319,13 +380,13 @@ if ($('eco-season')) {
 if ($('eco-spawn-peer')) {
   $('eco-spawn-peer').onclick = () => {
     if (!cr.eco) return;
-    cr.eco.maxPeers = Math.max(cr.eco.maxPeers, cr.eco.peers.length + 2);
+    cr.eco.maxPeers = Math.min(32, Math.max(cr.eco.maxPeers, cr.eco.peers.length + 2));
     const p = cr.eco.spawnPeer(null, null, true);
     if ($('eco-peers')) {
-      $('eco-peers').value = String(Math.min(14, cr.eco.peers.length));
+      $('eco-peers').value = String(Math.min(32, cr.eco.peers.length));
       if ($('eco-peers-val')) $('eco-peers-val').textContent = String(cr.eco.peers.length);
     }
-    if (p) cr.ev('biosphere', `spawned conspecific #${p.id} (92-gene variant)`);
+    if (p) cr.ev('biosphere', `spawned conspecific #${p.id} (${p.limbPairs * 2}L 108-gene Hox variant)`);
   };
 }
 if ($('eco-lay-egg')) {
@@ -336,7 +397,7 @@ if ($('eco-lay-egg')) {
     const mateId = cr.eco.peers[0]?.id ?? 0;
     const genNum = (cr.generation || 0) + 1;
     const eg = cr.eco.layEgg(com[0] + 0.45, com[2] + 0.35, cr.gen, mateGen, 0, mateId, genNum, true);
-    if (eg) cr.ev('egg', `laid fertilized diploid 92-gene egg #${eg.id} (gen ${genNum})`);
+    if (eg) cr.ev('egg', `laid fertilized diploid 108-gene Hox egg #${eg.id} (gen ${genNum})`);
   };
 }
 if ($('eco-pred-btn')) {
@@ -410,8 +471,8 @@ if ($('qrng-fetch')) {
     $('qrng-fetch').disabled = false;
     if (st) {
       st.textContent = r.ok
-        ? `${r.source}: ${r.bits} bits (SP 800-90B pass)`
-        : `offline/CORS (${r.reason || '12-qubit WASM Lindblad MCWF active'})`;
+        ? `${r.source}: ${r.bytes * 8} bits (SP 800-90B pass)`
+        : `offline/CORS (${r.reason || '14-qubit WASM Lindblad + ZNE active'})`;
     }
   };
 }
@@ -431,11 +492,13 @@ $('seed').onchange = () => { seed = +$('seed').value || 1; restart(); };
 function restart() {
   const f = cr.flaws;
   cr = new Creature(seed, { flaws: f, clockMode, wmScale, eco: currentEcoOpts() });
+  cr.qrng.initWebGPU16Q?.().catch(() => {});
   if ($('eco-season')) cr.world.seasonMode = $('eco-season').value;
   setupBackend(backendMode);
   if (view) {
     const prevQ = view.quality;
     const c = $('gl');
+    view.dispose?.();
     view.renderer.dispose();
     const nc = c.cloneNode();
     c.replaceWith(nc);
@@ -472,18 +535,18 @@ const LES = [
   ['mot', 'MOT neurons silenced'],
   ['cpg', 'LTC pattern generator off'],
   ['mn', 'all motor neurons off (paralysis)'],
-  ['fem', '336-tet anisotropic Neo-Hookean FEM off'],
-  ['fluid', '1D Navier-Stokes + Biot-Darcy FSI off'],
+  ['fem', 'anisotropic Neo-Hookean + Huxley FEM off'],
+  ['fluid', '1D NS + D3Q19 LBM + Biot-Darcy FSI off'],
   ['learnMotor', 'motor learning off'],
   ['stdp', 'STDP / plasticity off'],
-  ['wm', 'Multimodal +2.0s Transformer-XL WM off'],
+  ['wm', 'Hierarchical Flow + +60s Transformer-XL WM off'],
   ['ssmLearn', 'online RTRL SSM learning off'],
-  ['metacog', 'metacognition, MPS & Binary MERA off'],
-  ['vision', '64×32 foveated retina & V1–IT stream off'],
-  ['dg', 'spiking trisynaptic DG k-WTA off'],
+  ['metacog', 'metacognition, χ=24 MPS & 4-Layer MERA off'],
+  ['vision', '128×64 P/M/K fovea & 4,096 PQ-IT stream off'],
+  ['dg', '4,608-neu hippocampal DG k-WTA off'],
   ['homeo', 'intrinsic & Turrigiano homeostasis off'],
   ['struct', 'cortical structural rewiring off'],
-  ['qrng', 'Tsotchke 12-qubit WASM Lindblad QRNG off'],
+  ['qrng', '14-qubit WASM Lindblad + ZNE QRNG off'],
   ['astro', 'astrocyte modulation off'],
   ['veto', 'veto off'],
   ['efe', 'epistemic (EFE) term off'],
@@ -492,7 +555,7 @@ const LES = [
   ['motNorm', 'MOT normalisation off'],
   ['selfModel', 'self-model travel cost off'],
   ['hdc', 'HDC cognitive map off'],
-  ['hopfield', 'Hopfield / spiking trisynaptic memory off'],
+  ['hopfield', 'Hopfield / 4,608-neu hippocampal memory off'],
   ['pc', 'predictive-coding learning off'],
   ['turing', 'hormone -> skin morphogen link off'],
   ['growth', 'per-part growth off'],
@@ -530,16 +593,9 @@ buildLesions();
 
 // ---------------------------------------------------------------- legends
 $('regions').innerHTML = REGIONS.map(([n], i) => `<span><i style="background:hsl(${(i / REGIONS.length) * 360},90%,60%)"></i>${n}</span>`).join('');
+$('spk-label').textContent = `${NNEU.toLocaleString()} ${BRAIN_SCALE === 'GIGA' ? 'quantized mouse-cortex' : '8-comp HH+NMDA+SK'} neurons (brain ${BRAIN_SCALE})`;
 
-// ---------------------------------------------------------------- panel drawing
-const raster = $('raster'), rctx = raster.getContext('2d');
-const rowRegion = new Uint8Array(NNEU);
-REGIONS.forEach(([n, c], ri) => { for (let k = 0; k < c; k++) rowRegion[R0[n] + k] = ri; });
-const regionColors = REGIONS.map((_, ri) => `hsl(${(ri / REGIONS.length) * 360},90%,60%)`);
-const rasterRowBucket = new Int8Array(raster.height);
-$('spk-label').textContent = `${NNEU.toLocaleString()} 4-comp HH neurons (brain ${BRAIN_SCALE}), rows coloured by region`;
-const spikeAcc = new Uint8Array(NNEU);
-const surpHist = [], mseHist = [], mse5Hist = [], mse20Hist = [], varHist = [];
+const surpHist = [], mseHist = [], mse5Hist = [], mse20Hist = [], mse60Hist = [], varHist = [];
 const kapHist = [], tauHist = [], calHist = [];
 
 function bars(el, rows) {
@@ -565,15 +621,11 @@ function drawPanel() {
   if (p.hidden) return;
   const b = cr.brain;
 
-  // 1) Spike raster scroll (row-bucketed so even 1,048,644-neuron MEGA issues <= 213 fillRect calls)
+  // 1) Spike raster scroll (213 row buckets — constant cost even on 14,156,048-neuron GIGA!)
   rctx.drawImage(raster, -2, 0);
-  rctx.fillStyle = '#000';
+  rctx.fillStyle = '#03060d';
   rctx.fillRect(raster.width - 2, 0, 2, raster.height);
-  rasterRowBucket.fill(-1);
   const rH = raster.height;
-  for (let i = 0; i < NNEU; i++) {
-    if (spikeAcc[i]) rasterRowBucket[((i * rH) / NNEU) | 0] = rowRegion[i];
-  }
   for (let y = 0; y < rH; y++) {
     const ri = rasterRowBucket[y];
     if (ri >= 0) {
@@ -581,22 +633,24 @@ function drawPanel() {
       rctx.fillRect(raster.width - 2, y, 2, 1);
     }
   }
-  spikeAcc.fill(0);
+  rasterRowBucket.fill(-1);
 
   bars($('nm'), [['DA', b.nm.DA], ['NE', b.nm.NE], ['5-HT', b.nm['5HT']], ['ACh', b.nm.ACh], ['cortisol', b.nm.cortisol]]);
   bars($('mot'), MOT_NAMES.map((n, m) => [n, cr.motRate[m] / 1.5]));
 
-  // 2) Dual 64x32 log-polar foveated retinas (4,096 photoreceptors) + 32x16 V1 Gabor columns + 19 EKF-SLAM cells
+  // 2) Dual 128x64 P/M/K foveated retinas (16,384 photoreceptors) + 64x32 V1 Gabor columns + 19 EKF-SLAM cells
   if ($('retina')) {
     const ret = cr.retina, rx = $('retina').getContext('2d');
-    rx.fillStyle = '#05030a';
+    rx.fillStyle = '#03060d';
     rx.fillRect(0, 0, 360, 58);
-    const pw = 120 / W_RET, ph = 48 / H_RET;
+    const stepR = Math.max(1, Math.floor(W_RET / 64));
+    const colsR = Math.floor(W_RET / stepR), rowsR = Math.floor(H_RET / stepR);
+    const pw = 120 / colsR, ph = 48 / rowsR;
     const drawSheet = (sheet, x0) => {
-      for (let py = 0; py < H_RET; py++) {
-        const sy = H_RET - 1 - py;
-        for (let px = 0; px < W_RET; px++) {
-          const idx = (sy * W_RET + px) * 3;
+      for (let py = 0; py < rowsR; py++) {
+        const sy = (rowsR - 1 - py) * stepR;
+        for (let px = 0; px < colsR; px++) {
+          const idx = (sy * W_RET + px * stepR) * 3;
           const rr = Math.min(255, Math.round(sheet[idx] * 245));
           const gg = Math.min(255, Math.round(sheet[idx + 1] * 245));
           const bb = Math.min(255, Math.round(sheet[idx + 2] * 245));
@@ -608,18 +662,20 @@ function drawPanel() {
     drawSheet(ret.retL, 0);
     drawSheet(ret.retR, 122);
     const v1 = ret.v1Complex;
-    const vw = 116 / W_V1, vh = 48 / H_V1;
-    for (let vy = 0; vy < H_V1; vy++) {
-      const sy = H_V1 - 1 - vy;
-      for (let vx = 0; vx < W_V1; vx++) {
-        const base = (sy * W_V1 + vx) * N_ORI;
+    const stepV = Math.max(1, Math.floor(W_V1 / 32));
+    const colsV = Math.floor(W_V1 / stepV), rowsV = Math.floor(H_V1 / stepV);
+    const vw = 116 / colsV, vh = 48 / rowsV;
+    for (let vy = 0; vy < rowsV; vy++) {
+      const sy = (rowsV - 1 - vy) * stepV;
+      for (let vx = 0; vx < colsV; vx++) {
+        const base = (sy * W_V1 + vx * stepV) * N_ORI;
         let bestO = 0, bestE = -1, eTot = 0;
         for (let o = 0; o < N_ORI; o++) {
           const e = v1[base + o];
           eTot += e;
           if (e > bestE) { bestE = e; bestO = o; }
         }
-        const lum = Math.min(70, Math.round(8 + eTot * 240));
+        const lum = Math.min(72, Math.round(8 + eTot * 240));
         rx.fillStyle = `hsl(${bestO * 85 + 15},95%,${lum}%)`;
         rx.fillRect(244 + vx * vw, vy * vh, Math.ceil(vw), Math.ceil(vh));
       }
@@ -630,30 +686,30 @@ function drawPanel() {
     const totLm = ret.conf.length, lw = 360 / totLm;
     for (let i = 0; i < totLm; i++) {
       const cf = ret.conf[i];
-      rx.fillStyle = i < 16 ? `rgba(60,255,160,${(0.12 + 0.88 * cf).toFixed(2)})` : `rgba(40,210,255,${(0.12 + 0.88 * cf).toFixed(2)})`;
+      rx.fillStyle = i < 16 ? `rgba(52,245,166,${(0.14 + 0.86 * cf).toFixed(2)})` : `rgba(56,232,255,${(0.14 + 0.86 * cf).toFixed(2)})`;
       rx.fillRect(i * lw + 1, 50, Math.max(2, lw - 2), 7);
     }
   }
 
   // 3) Unified 21-channel Striatal D1/D2 race
   const rc = $('race').getContext('2d');
-  rc.fillStyle = '#000';
+  rc.fillStyle = '#03060d';
   rc.fillRect(0, 0, 360, 70);
   const cw = 360 / NSTR_OPT;
   for (let k = 0; k < NSTR_OPT; k++) {
     const d1 = cr.raceLog[k], d2 = cr.raceLog[NSTR_OPT + k];
-    const baseCol = k < 16 ? '#0f6' : k < 19 ? '#0cf' : k === 19 ? '#fa0' : '#c6f';
-    rc.fillStyle = isGoalChannel(cr.goal, k) ? '#ff0' : baseCol;
+    const baseCol = k < 16 ? '#34f5a6' : k < 19 ? '#38e8ff' : k === 19 ? '#ffb84d' : '#c688ff';
+    rc.fillStyle = isGoalChannel(cr.goal, k) ? '#fff066' : baseCol;
     const h1 = Math.min(33, d1 * 2.5), h2 = Math.min(33, d2 * 2.5);
     rc.fillRect(k * cw + 1, 35 - h1, Math.max(3, cw * 0.52), h1);
-    rc.fillStyle = '#f36';
+    rc.fillStyle = '#ff4477';
     rc.fillRect(k * cw + 1 + cw * 0.52, 35, Math.max(2, cw * 0.36), h2);
   }
 
   // 4) LTC CPG scroll
   const cc = $('cpg').getContext('2d');
   cc.drawImage(cc.canvas, -2, 0);
-  cc.fillStyle = '#000';
+  cc.fillStyle = '#03060d';
   cc.fillRect(358, 0, 2, 60);
   for (let k = 0; k < 24; k++) {
     const v = cr.cpg.x[k];
@@ -663,28 +719,30 @@ function drawPanel() {
 
   // 5) Online RTRL Selective SSM
   const sc = $('ssm').getContext('2d');
-  sc.fillStyle = '#000';
+  sc.fillStyle = '#03060d';
   sc.fillRect(0, 0, 360, 40);
   for (let k = 0; k < 32; k++) {
     const m = Math.hypot(cr.ssm.re[k], cr.ssm.im[k]);
-    sc.fillStyle = '#0ff';
+    sc.fillStyle = '#38e8ff';
     sc.fillRect(k * 11 + 2, 38 - Math.min(36, m * 30), 5, Math.min(36, m * 30));
-    sc.fillStyle = '#f0f';
+    sc.fillStyle = '#c688ff';
     sc.fillRect(k * 11 + 7, 38 - Math.min(36, cr.ssm.delta[k] * 12), 3, Math.min(36, cr.ssm.delta[k] * 12));
   }
 
-  // 6) Multimodal RoPE-SwiGLU Transformer-XL World Model (+0.1s, +0.5s, +2.0s BPTT & foveal RGB pixel MSE)
+  // 6) Hierarchical +0.1s / +0.5s / +2.0s BPTT / +60.0s Macro + 16x8 Rectified Flow-Matching World Model
   surpHist.push(cr.wm.surprise);
   mseHist.push(cr.wm.mse);
   mse5Hist.push(cr.wm.mse5 ?? cr.wm.mse);
   mse20Hist.push(cr.wm.mse20 ?? cr.wm.mse);
-  varHist.push(cr.wm.predVar ?? 0);
-  if (surpHist.length > 180) { surpHist.shift(); mseHist.shift(); mse5Hist.shift(); mse20Hist.shift(); varHist.shift(); }
+  mse60Hist.push(cr.wm.mse60 ?? cr.wm.mse);
+  varHist.push(cr.wm.visFlowMSE ?? cr.wm.visMSE ?? 0);
+  if (surpHist.length > 180) { surpHist.shift(); mseHist.shift(); mse5Hist.shift(); mse20Hist.shift(); mse60Hist.shift(); varHist.shift(); }
   const wc = $('wm').getContext('2d');
-  wc.fillStyle = '#000';
+  wc.fillStyle = '#03060d';
   wc.fillRect(0, 0, 360, 50);
   const drawLine = (ctx, h, col, sc2, hMax = 48) => {
     ctx.strokeStyle = col;
+    ctx.lineWidth = 1.25;
     ctx.beginPath();
     h.forEach((v, i) => {
       const y = hMax - Math.min(hMax - 2, v * sc2);
@@ -692,13 +750,13 @@ function drawPanel() {
     });
     ctx.stroke();
   };
-  drawLine(wc, surpHist, '#ff0', 36, 48);
-  drawLine(wc, mseHist, '#0ff', 60, 48);
-  drawLine(wc, mse5Hist, '#fa0', 60, 48);
-  drawLine(wc, mse20Hist, '#4f8', 60, 48);
-  drawLine(wc, varHist, '#f6f', 55, 48);
+  drawLine(wc, surpHist, '#ffe066', 36, 48);
+  drawLine(wc, mseHist, '#38e8ff', 60, 48);
+  drawLine(wc, mse20Hist, '#34f5a6', 60, 48);
+  drawLine(wc, mse60Hist, '#ffb84d', 55, 48);
+  drawLine(wc, varHist, '#d488ff', 65, 48);
 
-  // 7) Metacognition, Frenet-Serret Thought Curvature κ(t), τ(t), χ=16 MPS & Binary MERA
+  // 7) Metacognition, Frenet-Serret Thought Curvature κ(t), τ(t), χ=24 MPS & 4-Layer Binary MERA
   const MC = cr.metacog;
   if ($('metacog') && MC) {
     kapHist.push(MC.kappa);
@@ -706,90 +764,73 @@ function drawPanel() {
     calHist.push(MC.confidence);
     if (kapHist.length > 180) { kapHist.shift(); tauHist.shift(); calHist.shift(); }
     const mctx = $('metacog').getContext('2d');
-    mctx.fillStyle = '#000';
+    mctx.fillStyle = '#03060d';
     mctx.fillRect(0, 0, 360, 44);
-    drawLine(mctx, kapHist, '#f0f', 4, 42);
-    drawLine(mctx, tauHist, '#0ff', 4, 42);
-    drawLine(mctx, calHist, '#0f6', 38, 42);
+    drawLine(mctx, kapHist, '#d488ff', 4, 42);
+    drawLine(mctx, tauHist, '#38e8ff', 4, 42);
+    drawLine(mctx, calHist, '#34f5a6', 38, 42);
   }
 
   const ws = MC?.ws || {};
-  const qSrc = cr.qrng.hwHealthy ? `${cr.qrng.hwSource} (${cr.qrng.hwBitsRemaining} hw bits)` : (cr.qrng.wasmActive ? '12Q WASM Lindblad' : '12Q JS Lindblad');
+  const qSrc = cr.qrng.hwSource || (cr.qrng.wasmActive ? '14Q WASM+ZNE' : '14Q JS+ZNE');
   const stCircuit = cr.hop.spikingCircuit;
   stats($('mindstats'), [
     ['sleep stage / clock', `${STAGES[cr.sleep.stage]} · ${cr.timeCompression}× (${CLOCK_MODES[cr.clockMode]?.label || cr.clockMode})`],
     ['brain scale / backend', `${BRAIN_SCALE} (${b.backend}): ${b.N.toLocaleString()} neu, ${b.S.toLocaleString()} syn, ${(window.glitch.stats.stepMs ?? 0).toFixed(1)} ms/step`],
-    ['4-comp HH cable CTX / BAC / I_h', `AIS+Soma+Basal+Apical · ${Math.round(b.plateauBursts || 0)} Ca²⁺ bursts · I_h ${(b.ihMean || 0).toFixed(3)}`],
-    ['4,096-ch fovea / V1–V2–V4–IT / SLAM', `IT inv ${(cr.retina.itInvariance || 0).toFixed(3)} · V1 ${(cr.retina.v1EnergyMean || 0).toFixed(3)} · ${cr.retina.seenCount}/19 (${cr.retina.loopClosures} fixes)`],
-    ['spiking trisynaptic (964 LIF+NMDA)', `EC->DG->CA3->CA1 (${cr.hop.X.length}/1024) · SWRs ${stCircuit?.swrEvents || 0} (+${cr.wakingSWRs || 0} wake)`],
-    ['WM (+0.1s / +0.5s / +2.0s / visMSE)', `${cr.wm.scaleName} (${(cr.wm.paramCount || 0).toLocaleString()}): ${cr.wm.mse.toFixed(4)} / ${(cr.wm.mse5 || 0).toFixed(4)} / ${(cr.wm.mse20 || 0).toFixed(4)} · px ${(cr.wm.visMSE || 0).toFixed(4)}`],
+    ['8-comp HH+NMDA+SK + Fox-Lu Markov', `NMDA ${b.nmdaSpikes || 0} · BAC ${Math.round(b.plateauBursts || 0)} · SK ${(b.skMean || 0).toFixed(3)} · σ_ch ${(b.channelNoiseMean || 0).toFixed(3)}`],
+    ['16,384-cone P/M/K fovea & 4,096 PQ-IT', `IT inv ${(cr.retina.itInvariance || 0).toFixed(3)} · concepts ${cr.retina.itUniqueConceptsSeen || 1}/4,096 · SLAM ${cr.retina.seenCount}/19`],
+    ['4,608-neu Hip–Sub + 4 GABA classes', `DG 2,048 (3.1%) · Subic 256 · PV/Chnd/OLM/VIP 384 · SWRs ${stCircuit?.swrEvents || 0}`],
+    ['WM (+0.1s/+2s/+60s + 16×8 Flow)', `${cr.wm.scaleName} (${(cr.wm.paramCount || 0).toLocaleString()}): ${cr.wm.mse.toFixed(4)} / ${(cr.wm.mse20 || 0).toFixed(4)} / ${(cr.wm.mse60 || 0).toFixed(4)} · flow ${(cr.wm.visFlowMSE || 0).toFixed(4)}`],
     ['RTRL SSM |∇| / heteroscedastic σ²', `${(cr.ssm.gradNorm ?? 0).toExponential(1)} / ${(cr.wm.predVar ?? 0).toFixed(3)}`],
     ['thought curvature κ(t) / torsion τ(t)', `${(MC?.kappa ?? 0).toFixed(2)} / ${(MC?.torsion ?? 0).toFixed(2)} (||z′|| ${(MC?.speed ?? 0).toFixed(2)})`],
     ['metacog confidence / regret / temp', `${(MC?.confidence ?? 0).toFixed(2)} / ${(MC?.regret ?? 0).toFixed(2)} / ${(MC?.exploreTemp ?? 1).toFixed(2)}×`],
     ['weight space learned (motor / steer / ctx)', `${((ws.motorLearnedFrac ?? 0) * 100).toFixed(1)}% / ${((ws.steerLearnedFrac ?? 0) * 100).toFixed(1)}% / ${((ws.brainLearnedFrac ?? 0) * 100).toFixed(1)}%`],
-    ['EWC Fisher energy / SVD eff-rank', `${(cr.ewcEnergy ?? 0).toExponential(1)} / ${(ws.svdRank ?? 1).toFixed(1)} (bias ${(ws.biasNorm ?? 0).toFixed(2)})`],
-    ['Tsotchke 12-qubit WASM QRNG (4,096-D)', `${((cr.qrng.entropy ?? 0) * 12).toFixed(2)} / 12.00 bits · purity ${(cr.qrng.purity ?? 1).toFixed(3)} · ${cr.qrng.quantumJumps || 0} jumps · ${qSrc}`],
-    ['QGTL / Vidal MPS (χ=16) / Binary MERA', `Fubini ${(ws.fubiniTrace ?? 0).toFixed(2)} · MPS S ${(ws.mpsEntropy ?? 0).toFixed(2)} · MERA IR/ratio ${(ws.meraIrEntropy ?? 0).toFixed(2)}/${(ws.meraScaleRatio ?? 0).toFixed(2)}`],
+    ['14-qubit WASM (16,384-D) + Richardson ZNE', `${((cr.qrng.entropy ?? 0) * 14).toFixed(2)}/14b · ZNE ${(cr.qrng.zneGain ?? 1).toFixed(1)}× (${(cr.qrng.zneMitigatedErr ?? 0).toFixed(4)}) · ${qSrc}`],
+    ['QGTL / χ=24 Vidal MPS / 4-Layer MERA', `Fubini ${(ws.fubiniTrace ?? 0).toFixed(2)} · bond ${ws.mpsMaxBond ?? 1} · S ${(ws.mpsEntropy ?? 0).toFixed(2)} · MERA ${(ws.meraIrEntropy ?? 0).toFixed(2)}`],
     ['predictive-coding error / surprise', `${cr.pc.err.toFixed(3)} / ${cr.pc.surprise.toFixed(2)}`],
     ['thirst / water drunk', `${cr.metab.thirst.toFixed(2)} / ${(cr.stats.drinks || 0).toFixed(1)}`],
-    ['limb lengths (Evo-Devo + use-grown)', Array.from(cr.body.limbLen).map((x) => x.toFixed(2)).join(' ')],
-    ['sleep consolidations / merged / key loss', `${cr.memStats.consolidations || 0} / ${cr.memStats.merged || 0} / ${cr.hop.conLoss.toFixed(2)}`],
+    ['Hox limb lengths (active ' + cr.body.activeLimbs + 'L)', Array.from(cr.body.limbLen).slice(0, cr.body.activeLimbs).map((x) => x.toFixed(2)).join(' ')],
+    ['sleep consolidations / merged / InfoNCE', `${cr.memStats.consolidations || 0} / ${cr.memStats.merged || 0} / ${cr.hop.conLoss.toFixed(2)}`],
     ['HDC features re-drawn (Wiener coherence)', `${cr.hdcFood.resampled + cr.hdcWater.resampled}`],
     ['synapses pruned+regrown / alignment', `${b.grown} / ${(alignC.v ?? 0).toFixed(2)}`],
     ['heading / position error (nav mode)', `${cr.navErr.hd.toFixed(2)} rad / ${cr.navErr.pos.toFixed(1)} u (${cr.navMode})`],
-    ['vestibular gain / grid cells', `${cr.nav.vestGain.toFixed(2)} / ${[0, 1, 2].map((m) => cr.nav.gridRate(m).toFixed(2)).join(' ')}`],
     ['self-model speed / turn', `${cr.selfV.toFixed(2)} u/s / ${cr.selfW.toFixed(2)} rad/s`],
-    ['sleep pressure S', cr.sleep.S.toFixed(2)],
-    ['goal / held item', `${cr.goal ? cr.goal.type + (cr.goal.k !== undefined ? ' ' + cr.goal.k : cr.goal.pool !== undefined ? ' pool ' + cr.goal.pool : '') : cr.race ? 'racing…' : '—'}${cr.heldItem ? ` · carrying ${cr.heldItem.kind}` : ''}`],
-    ['races / vetoes', `${cr.stats.races} / ${cr.stats.vetoes}`],
-    ['fed / tries', `${cr.stats.eats} / ${cr.stats.tries}`],
-    ['NREM replays / REM dreams', `${cr.stats.replays} / ${cr.stats.dreams}`],
-    ['imagined synergy value', [...cr.Vimg].map((v) => v.toFixed(2)).join(' ')],
+    ['sleep pressure S / goal', `${cr.sleep.S.toFixed(2)} · ${cr.goal ? cr.goal.type + (cr.goal.k !== undefined ? ' ' + cr.goal.k : cr.goal.pool !== undefined ? ' pool ' + cr.goal.pool : '') : cr.race ? 'racing…' : '—'}`],
+    ['races / vetoes / fed / tries', `${cr.stats.races} / ${cr.stats.vetoes} · ${cr.stats.eats} / ${cr.stats.tries}`],
+    ['NREM replays / REM dreams (+60s plan)', `${cr.stats.replays} / ${cr.stats.dreams}`],
     ['STDP events / |Δw|', `${b.stdpEvents} / ${(b.dwLast || 0).toExponential(1)}`],
-    ['astrocyte Ca (CTX) / motor RPE δ', `${b.astro[2].toFixed(2)} / ${(cr.motorDelta || 0).toFixed(3)}`],
     ['behaviour entropy (fixed / bias-corr)', `${cr.entropy.toFixed(2)} / ${(cr.entropy2 ?? 0).toFixed(2)} bits (${cr.states || 0}/128)`],
-    ['world-model updates', cr.wm.n],
   ]);
 
   const M = cr.metab, F = cr.fluid, B = cr.body;
   stats($('bodystats'), [
     ['hour / season / microclimate', `${cr.hour.toFixed(2)} · ${cr.world.season} · amb ${(cr.ambientTemp ?? 22).toFixed(1)} °C -> core ${(cr.bodyTemp ?? 24).toFixed(1)} °C`],
-    ['3D anisotropic FEM (336 tets, 85 nodes)', `J_mean ${(B.meanTetJ ?? 1).toFixed(3)} · J_min ${(B.minTetJ ?? 1).toFixed(3)} · I₄_max ${(B.maxFiberStretch ?? 1).toFixed(2)} · U ${(B.femEnergy ?? 0).toFixed(3)}`],
-    ['1D Navier-Stokes + 63-vox Biot-Darcy FSI', `${(F?.mapPressure ?? 70).toFixed(1)} / ${(F?.P?.[11] ?? 7).toFixed(1)} mmHg · |F_FSI| ${(F?.fsiForceMag ?? 0).toFixed(4)} N · Re ${(F?.reynoldsMax ?? 100).toFixed(0)}`],
-    ['3D WCSPH blood / cerebral O₂', `mean ${(F?.meanO2 ?? 0.97).toFixed(3)} · brain ${(F?.o2Node?.[14] ?? 0.97).toFixed(3)} (256 WCSPH parcels)`],
-    ['Evo-Devo body (len / crest / fluke / camo)', `${(cr.gen.bodyLen ?? 1).toFixed(2)} / ${(cr.gen.crestFin ?? 1).toFixed(2)} / ${(cr.gen.tailFluke ?? 1).toFixed(2)} · camo ${((cr.camoLevel ?? 0) * 100).toFixed(0)}%`],
-    ['render pipeline / gamut / buffer', `${view?.hdrPipeline || 'HDR16F'} · ${view?.colorGamut || 'sRGB'} · ${view?.bufferWidth || 0}×${view?.bufferHeight || 0}`],
+    ['3D anisotropic FEM (' + B.nTets + ' tets, ' + B.n + ' nodes)', `J_mean ${(B.meanTetJ ?? 1).toFixed(3)} · J_min ${(B.minTetJ ?? 1).toFixed(3)} · I₄_max ${(B.maxFiberStretch ?? 1).toFixed(2)} · U ${(B.femEnergy ?? 0).toFixed(3)}`],
+    ['Huxley Ca²⁺–Troponin Cross-Bridge Histology', `Ca-TnC ${(B.meanCaTroponin ?? 0).toFixed(3)} · X-bridge ${(B.meanCrossBridge ?? 0).toFixed(3)} · ${B.activeLimbs}L Hox body plan`],
+    ['3D D3Q19 Lattice-Boltzmann + Biot-Darcy FSI', `ω_LBM ${(F?.lbmVorticity ?? 0).toFixed(4)} · u_max ${(F?.lbmMaxSpeed ?? 0).toFixed(3)} · |F_FSI| ${(F?.fsiForceMag ?? 0).toFixed(4)} N · ${(F?.mapPressure ?? 70).toFixed(1)} mmHg`],
+    ['512 3D WCSPH blood / cerebral O₂', `mean ${(F?.meanO2 ?? 0.97).toFixed(3)} · brain ${(F?.o2Node?.[14] ?? 0.97).toFixed(3)} (${F?.nParcels ?? 512} WCSPH parcels)`],
+    ['108-Gene Hox body (limbs / osteo / gills)', `${B.activeLimbs} limbs · osteoderm ${(cr.gen.osteoderm ?? 0.45).toFixed(2)} · gills ${(cr.gen.gillFronds ?? 0.68).toFixed(2)} · camo ${((cr.camoLevel ?? 0) * 100).toFixed(0)}%`],
+    ['render pipeline / gamut / buffer', `${view?.hdrPipeline || 'HDR16F + Sky IBL + GTAO + CAS'} · ${view?.colorGamut || 'sRGB'} · ${view?.bufferWidth || 0}×${view?.bufferHeight || 0}`],
     ['gut glc/fat/prot', `${M.gut.glc.toFixed(2)} / ${M.gut.fat.toFixed(2)} / ${M.gut.prot.toFixed(2)}`],
-    ['blood glucose', M.blood.glc.toFixed(2)],
-    ['blood FFA / AA / ketones', `${M.blood.ffa.toFixed(2)} / ${M.blood.aa.toFixed(2)} / ${M.blood.ket.toFixed(2)}`],
-    ['liver glycogen', M.liverGly.toFixed(1)],
-    ['fat store', M.fat.toFixed(0)],
-    ['muscle', M.muscle.toFixed(1)],
-    ['insulin / glucagon', `${M.insulin.toFixed(2)} / ${M.glucagon.toFixed(2)}`],
-    ['ghrelin / leptin', `${M.ghrelin.toFixed(2)} / ${M.leptin.toFixed(2)}`],
-    ['cortisol', M.cortisol.toFixed(2)],
-    ['ATP', M.atp.toFixed(2)],
-    ['heart rate (baroreflex)', M.hr.toFixed(0)],
-    ['water gut / blood', `${M.gut.water.toFixed(2)} / ${M.blood.water.toFixed(2)}`],
-    ['bladder / colon', `${M.bladder.toFixed(2)} / ${M.colon.toFixed(2)}`],
-    ['urinations / defecations', `${cr.stats.urine} / ${cr.stats.feces}`],
-    ['hunger / thirst', `${M.hunger().toFixed(2)} / ${M.thirst.toFixed(2)}`],
-    ['body scale (growth)', cr.body.scale.toFixed(3)],
-    ['distance travelled', cr.stats.dist.toFixed(1)],
-    ['muscle effort Σ|u|', cr.body.energy.toFixed(1)],
+    ['blood glc / FFA / AA / ketones', `${M.blood.glc.toFixed(2)} / ${M.blood.ffa.toFixed(2)} / ${M.blood.aa.toFixed(2)} / ${M.blood.ket.toFixed(2)}`],
+    ['liver glycogen / fat / muscle', `${M.liverGly.toFixed(1)} / ${M.fat.toFixed(0)} / ${M.muscle.toFixed(1)}`],
+    ['insulin / glucagon / ghrelin / leptin', `${M.insulin.toFixed(2)} / ${M.glucagon.toFixed(2)} / ${M.ghrelin.toFixed(2)} / ${M.leptin.toFixed(2)}`],
+    ['ATP / heart rate (baroreflex)', `${M.atp.toFixed(2)} · ${M.hr.toFixed(0)} bpm`],
+    ['water gut / blood · bladder / colon', `${M.gut.water.toFixed(2)}/${M.blood.water.toFixed(2)} · ${M.bladder.toFixed(2)}/${M.colon.toFixed(2)}`],
+    ['hunger / thirst / distance', `${M.hunger().toFixed(2)} / ${M.thirst.toFixed(2)} · ${cr.stats.dist.toFixed(1)} u`],
   ]);
 
   if ($('ecostats')) {
     const E = cr.eco, W = cr.world;
     stats($('ecostats'), [
-      ['conspecific Glitchlings', E ? `${E.peers.length} active (max ${E.maxPeers}) · max gen ${E.stats.maxGen}` : 'disabled (?eco=0)'],
+      ['saprotrophic microbe + plankton continuum', `${(W.microbeTotalPop || 0).toLocaleString()} organisms · pool bloom ${((W.planktonBloom || 0) * 100).toFixed(0)}%`],
+      ['embodied 3D conspecifics (up to 32)', E ? `${E.peers.length} active (cap ${E.maxPeers}) · max gen ${E.stats.maxGen}` : 'disabled (?eco=0)'],
       ['3D bioluminescent eggs / hatched births', E ? `${E.eggs.length} incubating · ${E.stats.eggsLaid} laid · ${E.stats.births} hatched` : '0'],
-      ['diploid 92-gene courtships / cladogram', E ? `${E.stats.courtships} courtships · ${E.lineageTree.length} phylogeny nodes` : '0'],
-      ['photonic bio-mites / pollinations', E ? `${E.mites.length} mites · ${E.stats.pollinationEvents} plant pollinations · ${E.stats.mitesEaten} eaten` : '0'],
-      ['Shadow-Leviathans / alarm calls', E ? `${E.predators.length} patrolling · ${E.stats.alarmCalls} Schreckstoff alarms` : '0'],
+      ['diploid 108-gene Hox courtships / clades', E ? `${E.stats.courtships} courtships · ${E.lineageTree.length} phylogeny nodes` : '0'],
+      ['photonic bio-mites / pollinations', E ? `${E.mites.length} mites · ${E.stats.pollinationEvents} pollinations · ${E.stats.mitesEaten} eaten` : '0'],
+      ['Shadow-Leviathans / Schreckstoff alarms', E ? `${E.predators.length} patrolling · ${E.stats.alarmCalls} alarms` : '0'],
       ['64×64×3 pheromone field (food/alarm/mate)', `mean ${(W.pherMean || 0).toFixed(4)} · focal [${(cr.pherFood || 0).toFixed(2)}, ${(cr.pherAlarm || 0).toFixed(2)}, ${(cr.pherMate || 0).toFixed(2)}]`],
-      ['32×32 soil nitrogen / mycelial edges', `mean N ${(W.meanSoilN || 0.5).toFixed(3)} · ${W.mycelia.length} fungal hyphae · ${W.vents.length} hydrothermal vents`],
-      ['season / crystal shelters', `${W.season} (phase ${(W.seasonPhase * 100).toFixed(0)}%) · ${W.shelters.length} shelters`],
+      ['32×32 soil nitrogen / mycelial hyphae', `mean N ${(W.meanSoilN || 0.5).toFixed(3)} · ${W.mycelia.length} fungal edges · ${W.vents.length} vents`],
     ]);
   }
 
@@ -804,20 +845,19 @@ function drawPanel() {
 
   const mc = $('meta').getContext('2d');
   mc.drawImage(mc.canvas, -1, 0);
-  mc.fillStyle = '#000';
+  mc.fillStyle = '#03060d';
   mc.fillRect(359, 0, 1, 90);
   const dot = (v, col) => { mc.fillStyle = col; mc.fillRect(359, 88 - Math.max(0, Math.min(86, v * 86)), 1, 2); };
-  dot(M.blood.glc / 6, '#f36');
-  dot(M.insulin, '#0ff');
-  dot(M.glucagon, '#ff0');
-  dot(M.liverGly / 60, '#a6f');
-  dot(M.ghrelin, '#0f6');
-  dot(M.cortisol, '#f80');
+  dot(M.blood.glc / 6, '#ff4477');
+  dot(M.insulin, '#38e8ff');
+  dot(M.glucagon, '#ffe066');
+  dot(M.liverGly / 60, '#b678ff');
+  dot(M.ghrelin, '#34f5a6');
+  dot(M.cortisol, '#ffb84d');
 }
 
 const alignC = { v: 0, t: 0 };
 
-// ---------------------------------------------------------------- events overlay
 function drawEvents() {
   const ev = cr.events;
   const el = $('events');
@@ -825,17 +865,22 @@ function drawEvents() {
   el.innerHTML = last.map((e) => `<div><b>${e.type}</b> ${e.msg}</div>`).join('');
 }
 
-// ---------------------------------------------------------------- main loop with adaptive quality & backend sync
-let slowT2 = 0, last = performance.now(), acc = 0, fpsT = 0, fpsN = 0, panelT = 0, goodT = 0;
+// ---------------------------------------------------------------- main loop with warmup-protected adaptive quality & compact worker IPC
+let slowT2 = 0, slowQ = 0, last = performance.now(), acc = 0, fpsT = 0, fpsN = 0, panelT = 0, goodT = 0;
 const S = window.glitch.stats;
 const Q_NAMES = ['low', 'med', 'high', 'ultra', '4K-UHD'];
 
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - last) / 1000);
+  const rawDt = (now - last) / 1000;
   last = now;
-  fpsT += dt;
-  fpsN++;
+  const dt = Math.min(0.1, Math.max(0, rawDt));
+  S.uptime = (S.uptime || 0) + dt;
+  // Ignore tab-switch / shader-compile stalls (rawDt > 0.2s) so auto quality never falsely downgrades!
+  if (rawDt < 0.2) {
+    fpsT += dt;
+    fpsN++;
+  }
   const t0 = performance.now();
   if (!paused) {
     acc += dt * 60 * speed;
@@ -845,41 +890,47 @@ function frame(now) {
       acc -= 1;
       n++;
       S.stepN = (S.stepN || 0) + 1;
-      if (cr.brain.delegated) {
-        for (let i = 0; i < R0.THAL; i++) spikeAcc[i] |= cr.brain.spk[i];
-        for (let i = R0.STR; i < NNEU; i++) spikeAcc[i] |= cr.brain.spk[i];
-      } else {
-        for (let i = 0; i < NNEU; i++) spikeAcc[i] |= cr.brain.spk[i];
-      }
+      accumulateStepSpikes(cr.brain);
       if (performance.now() - t0 > 14) { acc = 0; break; }
     }
     if (n > 0 && brainWorker && !workerPending) {
       const dtSim = Math.max(n / 60, Math.min(0.25, cr.t - lastWorkerT));
       lastWorkerT = cr.t;
       workerPending = true;
-      const extCopy = new Float32Array(cr.brain.ext);
       const effSteps = Math.max(1, Math.min(12, Math.round(dtSim * 60)));
-      brainWorker.postMessage(
-        {
-          op: 'stepBatch',
-          substeps: 8 * effSteps,
-          dt: 0.002,
-          runSlow: true,
-          slowDt: dtSim,
-          extBuf: extCopy.buffer,
-          stage: cr.sleep.stage,
-          nm: cr.brain.nm,
-          atonia: cr.brain.atonia,
-          achGain: cr.lesion.metacog ? 1 : (cr.metacog?.achGain ?? 1),
-          place: !cr.lesion.nav && cr.sleep.stage === 0 ? [cr.nav.px, cr.nav.pz, 1.15] : null,
-          v1Complex: !cr.lesion.vision && cr.sleep.stage === 0 ? cr.retina.v1Complex : null,
-          itAct: !cr.lesion.vision && cr.sleep.stage === 0 ? cr.retina.itAct : null,
-          ofcApp: cr.race ? cr.ofcApp : null,
-          ofcAv: cr.race ? cr.ofcAv : null,
-          lesion: cr.brain.lesion,
-        },
-        [extCopy.buffer]
-      );
+      const msg = {
+        op: 'stepBatch',
+        substeps: 8 * effSteps,
+        dt: 0.002,
+        runSlow: true,
+        slowDt: dtSim,
+        stage: cr.sleep.stage,
+        nm: cr.brain.nm,
+        atonia: cr.brain.atonia,
+        achGain: cr.lesion.metacog ? 1 : (cr.metacog?.achGain ?? 1),
+        place: !cr.lesion.nav && cr.sleep.stage === 0 ? [cr.nav.px, cr.nav.pz, 1.15] : null,
+        v1Complex: !cr.lesion.vision && cr.sleep.stage === 0 ? cr.retina.v1Complex : null,
+        itAct: !cr.lesion.vision && cr.sleep.stage === 0 ? cr.retina.itAct : null,
+        ofcApp: cr.race ? cr.ofcApp : null,
+        ofcAv: cr.race ? cr.ofcAv : null,
+        lesion: cr.brain.lesion,
+      };
+      const transfer = [];
+      if (cr.brain.sparseSheetExt) {
+        // Zero-bloat < 1.6 KB IPC for 1.05M MEGA & 14.16M GIGA!
+        const extSubL = cr.brain.ext.slice(0, R0.THAL);
+        const extSubR = cr.brain.ext.slice(R0.STR);
+        const sheetBaseExt = Float32Array.from(cr.brain.sheetBaseExt);
+        msg.extSubL = extSubL;
+        msg.extSubR = extSubR;
+        msg.sheetBaseExt = sheetBaseExt;
+        transfer.push(extSubL.buffer, extSubR.buffer, sheetBaseExt.buffer);
+      } else {
+        const extCopy = new Float32Array(cr.brain.ext);
+        msg.extBuf = extCopy.buffer;
+        transfer.push(extCopy.buffer);
+      }
+      brainWorker.postMessage(msg, transfer);
     } else if (n > 0 && gpuBrain && !gpuBrain.busy) {
       gpuBrain.stepBatch(cr.brain, 8, 0.002);
     }
@@ -905,16 +956,32 @@ function frame(now) {
     $('hud-fps').textContent = fps.toFixed(0) + ' fps';
     fpsT = 0;
     fpsN = 0;
-    if (view && qMode === 'auto') {
-      if (fps < 38 && view.quality > 0) { view.setQuality(view.quality - 1); goodT = 0; }
-      else if (fps > 57) { goodT++; if (goodT > 5 && view.quality < qMax) { view.setQuality(view.quality + 1); goodT = 0; } }
-      else goodT = 0;
+    if (view && qMode === 'auto' && S.uptime > 4.0) {
+      const minAllow = fps < 18 ? 0 : qAutoFloor;
+      if (fps < 32 && view.quality > minAllow) {
+        slowQ++;
+        goodT = 0;
+        if (slowQ >= 6) {
+          view.setQuality(view.quality - 1);
+          slowQ = 0;
+        }
+      } else if (fps > 55) {
+        slowQ = 0;
+        goodT++;
+        if (goodT >= 4 && view.quality < qMax) {
+          view.setQuality(view.quality + 1);
+          goodT = 0;
+        }
+      } else {
+        slowQ = 0;
+        goodT = 0;
+      }
     }
     if (cr.t - alignC.t > 2) { alignC.t = cr.t; alignC.v = cr.brain.alignment(); }
     if (!Q.get('brain') && !cr.brain.delegated && BRAIN_SCALE !== 'S' && S.frames > 300 && (S.stepMs ?? 0) > 12) {
       slowT2 = (slowT2 || 0) + 1;
       if (slowT2 > 5) {
-        const nextScale = BRAIN_SCALE === 'MEGA' ? 'XXL' : BRAIN_SCALE === 'XXL' ? 'XL' : BRAIN_SCALE === 'XL' ? 'L' : BRAIN_SCALE === 'L' ? 'M' : 'S';
+        const nextScale = BRAIN_SCALE === 'GIGA' ? 'MEGA' : BRAIN_SCALE === 'MEGA' ? 'XXL' : BRAIN_SCALE === 'XXL' ? 'XL' : BRAIN_SCALE === 'XL' ? 'L' : BRAIN_SCALE === 'L' ? 'M' : 'S';
         const u = new URL(location.href);
         u.searchParams.set('brain', nextScale);
         u.searchParams.set('auto', '1');
@@ -922,7 +989,7 @@ function frame(now) {
       }
     } else slowT2 = 0;
     S.quality = view ? view.quality : -1;
-    $('hud-q').textContent = (qMode === 'auto' ? 'auto:' : '') + (Q_NAMES[S.quality] || 'med');
+    $('hud-q').textContent = (qMode === 'auto' ? 'auto:' : '') + (Q_NAMES[S.quality] || 'ultra');
   }
 
   panelT += dt;
@@ -933,12 +1000,12 @@ function frame(now) {
     $('hud-stage').textContent = STAGES[cr.sleep.stage];
     const h = cr.hour;
     $('hud-clock').textContent = `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
-    if (view) $('hud-q').textContent = (qMode === 'auto' ? 'auto:' : '') + (Q_NAMES[view.quality] || 'med');
+    if (view) $('hud-q').textContent = (qMode === 'auto' ? 'auto:' : '') + (Q_NAMES[view.quality] || 'ultra');
   }
 }
 requestAnimationFrame(frame);
 
-// ---------------------------------------------------------------- lineage evolution (92-gene Evo-Devo Refine + Surrogate-Assisted De-Novo CMA-ES)
+// ---------------------------------------------------------------- lineage evolution (108-gene Hox + Morphogen Refine + De-Novo CMA-ES)
 {
   let lin = null;
   const log = $('evo-log');
@@ -951,21 +1018,21 @@ requestAnimationFrame(frame);
   };
   const show = () => {
     const rows = [
-      ['genome (92 Evo-Devo genes)', lineageInfo ? `evolved in browser (${lineageInfo.mode === 'denovo' ? 'de-novo random, ' : ''}${lineageInfo.gens} gens, CRN fitness ${lineageInfo.fit.toFixed(2)}, stack ${lineageStack.length})` : 'starter (92-gene Evo-Devo body + brain, see CHANGELOG pass 17)'],
+      ['genome (108 Hox Evo-Devo genes)', lineageInfo ? `evolved in browser (${lineageInfo.mode === 'denovo' ? 'de-novo random, ' : ''}${lineageInfo.gens} gens, CRN fitness ${lineageInfo.fit.toFixed(2)}, stack ${lineageStack.length})` : `starter (108-gene Hox ${cr.body.activeLimbs}L body + brain, pass 18)`],
     ];
     if (lin) {
-      const mStr = lin.mode === 'denovo' ? 'de-novo random [0.05,0.95]^92' : 'refine starter';
+      const mStr = lin.mode === 'denovo' ? 'de-novo random [0.05,0.95]^108' : 'refine starter';
       const ms = lin.morphSummary?.();
-      rows.push([`mode / gen / σ`, `${mStr} · gen ${lin.gen} / ${lin.sigma.toFixed(3)}${lin.running ? ' (running in workers…)' : ''}`]);
+      rows.push(['mode / gen / σ', `${mStr} · gen ${lin.gen} / ${lin.sigma.toFixed(3)}${lin.running ? ' (running in workers…)' : ''}`]);
       rows.push(['genomes scored (2-body CRN)', `${lin.evals}${lin.startFit !== null ? ` · initial ${lin.startFit.toFixed(2)}` : ''}`]);
       if (ms) {
-        rows.push(['evolved 3D morphospace', `len ${ms.bodyLen} · fore ${ms.foreLimb} · hind ${ms.hindLimb} · crest ${ms.crestFin} · fluke ${ms.tailFluke}`]);
+        rows.push(['evolved Hox 3D topology', `${ms.limbs} limbs · osteo ${ms.osteoderm} · len ${ms.bodyLen} · crest ${ms.crestFin} · fluke ${ms.tailFluke}`]);
       }
       for (const h of lin.hist.slice(-8)) {
         const dStr = (h.delta >= 0 ? '+' : '') + h.delta.toFixed(2);
         rows.push([
           `gen ${h.gen} (bodies ${h.seeds})`,
-          `fitness ${h.mean.toFixed(2)} (${dStr}) · turn ${h.turn.toFixed(2)} rad/s · fwd ${h.v.toFixed(2)} u/s · up ${h.up.toFixed(2)} · goal ${h.goal.toFixed(2)}`,
+          `fitness ${h.mean.toFixed(2)} (${dStr}) · ${h.morph?.limbs || 6}L · turn ${h.turn.toFixed(2)} · fwd ${h.v.toFixed(2)} u/s · up ${h.up.toFixed(2)}`,
         ]);
       }
     }
