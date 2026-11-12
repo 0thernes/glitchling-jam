@@ -1,6 +1,7 @@
-// Next-Gen Three.js + p5.js HDR16F / PMREM Sky IBL / 4K UHD Bio-Observatory Renderer (Pass 18)
-// Strictly READS live simulation state: 336/348-tet FEM + Huxley sarcomeres, 8-comp HH+NMDA+SK / 14.16M GIGA spikes,
-// 512 WCSPH + D3Q19 LBM blood parcels, 108-gene Hox 4/6/8-limb topologies, 1.4M+ microbial continuum, and 32-peer biosphere.
+// Next-Gen Three.js + p5.js HDR16F / PMREM Sky IBL / 4K UHD Bio-Observatory Renderer (Pass 19)
+// Strictly READS live simulation state: 5-clade (0L/4L/6L/8L/10L) 360-tet FEM + 32 Henneman muscle fascicles + Patagium + Angler Esca,
+// 16-comp Discrete Markov / 14.16M-neu 1.13B-syn GIGA spikes, 1,024 WCSPH Erythrocytes & Leukocytes + 64 Murray vessels + D3Q19 LBM,
+// 256 discrete 3D micro-fauna, >5.2M microbial continuum, and 48-peer multi-species biosphere.
 
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -20,9 +21,11 @@ const LIMB_RINGS = 14, LIMB_SIDES = 12;
 const STALK_RINGS = 10, STALK_SIDES = 10;
 const ANT_RINGS = 10, ANT_SIDES = 8;
 const PEER_RINGS = 20, PEER_SIDES = 10;
-const GRASS_COUNT = 3200;
-const MAX_PEER_MESHES = 32;
-const MAX_EGG_MESHES = 24;
+const GRASS_COUNT = 5600;
+const MAX_PEER_MESHES = 48;
+const MAX_EGG_MESHES = 28;
+const MAX_MICRO_FAUNA = 256;
+const MUSHROOM_COUNT = 96;
 const LEVIATHAN_SEGS = 24;
 
 // 12-Tap Spiral Interleaved-Gradient-Noise GTAO + 8-Step Volumetric Crepuscular Sunbeams (HDR16F safe)
@@ -340,37 +343,39 @@ export class View {
     S.fog = new THREE.FogExp2(0x060b18, 0.0068);
     S.environmentIntensity = 0.88;
 
-    const cam = (this.camera = new THREE.PerspectiveCamera(50, 1, 0.05, 320));
-    cam.position.set(3.2, 2.25, 3.8);
+    const cam = (this.camera = new THREE.PerspectiveCamera(48, 1, 0.05, 320));
+    cam.position.set(2.75, 1.72, 3.15);
 
     this.controls = new OrbitControls(cam, canvas);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.07;
     this.controls.maxPolarAngle = Math.PI * 0.492;
-    this.controls.minDistance = 0.95;
+    this.controls.minDistance = 0.85;
     this.controls.maxDistance = 58;
     this.follow = true;
     this.cameraMode = opts.cameraMode || 'orbit';
+    this.lightingMode = opts.lightingMode || 'auto';
     this._dirAngle = 0.5;
     this._povLook = new THREE.Vector3(0, 0.5, 1);
 
-    // Multi-point studio + biosphere lighting rig
-    this.hemi = new THREE.HemisphereLight(0xa8e0ff, 0x1a1424, 1.05);
+    // Multi-point studio + biosphere lighting rig with 4096px PCFSoftShadowMap support
+    this.hemi = new THREE.HemisphereLight(0xa8e0ff, 0x1a1424, 1.12);
     S.add(this.hemi);
-    this.sun = new THREE.DirectionalLight(0xfff2e0, 2.65);
+    this.sun = new THREE.DirectionalLight(0xfff2e0, 2.75);
     this.sun.position.set(12, 20, 8);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
-    this.sun.shadow.bias = -0.00035;
+    this.sun.shadow.bias = -0.0003;
+    this.sun.shadow.normalBias = 0.018;
     const sc = this.sun.shadow.camera;
-    sc.left = sc.bottom = -16;
-    sc.right = sc.top = 16;
+    sc.left = sc.bottom = -15;
+    sc.right = sc.top = 15;
     sc.near = 1;
     sc.far = 58;
     S.add(this.sun);
     S.add(this.sun.target);
 
-    this.rim = new THREE.PointLight(0x48e8ff, 4.8, 11.0, 1.45);
+    this.rim = new THREE.PointLight(0x48e8ff, 5.2, 12.0, 1.4);
     S.add(this.rim);
 
     this._upVec = new THREE.Vector3(0, 1, 0);
@@ -458,6 +463,11 @@ export class View {
     if (this.cg) this.cg.visible = true;
   }
 
+  setLightingMode(mode) {
+    this.lightingMode = mode || 'auto';
+    this._lastEnvDay = -999;
+  }
+
   setQuality(q) {
     this.quality = q;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -467,15 +477,23 @@ export class View {
       this.pr = [0.65, 0.85, 1.0, dpr][q] ?? dpr;
     }
     this.aoPass.enabled = q >= 1;
-    this.aoPass.uniforms.uStrength.value = q >= 2 ? 0.52 : 0.0;
+    this.aoPass.uniforms.uStrength.value = q >= 2 ? 0.54 : 0.0;
     this.bloom.enabled = q >= 1;
     this.casPass.enabled = q >= 2;
-    this.casPass.uniforms.uSharpness.value = q >= 3 ? 0.45 : 0.30;
-    this.renderer.shadowMap.enabled = q >= 3;
-    this.sun.castShadow = q >= 3;
+    this.casPass.uniforms.uSharpness.value = q >= 3 ? 0.48 : 0.32;
+    this.renderer.shadowMap.enabled = q >= 2;
+    this.sun.castShadow = q >= 2;
+    const wantShadow = q >= 3 ? 4096 : 2048;
+    if (this.sun.shadow.mapSize.x !== wantShadow) {
+      this.sun.shadow.mapSize.set(wantShadow, wantShadow);
+      if (this.sun.shadow.map) {
+        this.sun.shadow.map.dispose();
+        this.sun.shadow.map = null;
+      }
+    }
     this.rainN = [240, 600, 1100, 1600, 1800][q] ?? 1400;
     if (this.grassMesh) {
-      this.grassMesh.count = [700, 1400, 2400, GRASS_COUNT, GRASS_COUNT][q] ?? 2400;
+      this.grassMesh.count = [900, 2000, 3600, GRASS_COUNT, GRASS_COUNT][q] ?? 3600;
     }
     this.resize();
   }
@@ -1348,9 +1366,9 @@ export class View {
         eyes.push(eg);
       }
 
-      // Up to 8 lateral muscular limbs (pairs 0..3 -> 4L, 6L, or 8L Hox clade!)
+      // Up to 10 lateral muscular limbs (pairs 0..4 -> 0L Serpent, 4L Tetrapod, 6L Hexapod, 8L Octopod, or 10L Decapod!)
       const limbs = [];
-      for (let k = 0; k < 8; k++) {
+      for (let k = 0; k < 10; k++) {
         const lm = new THREE.Mesh(peerLimbGeo, bodyMat);
         grp.add(lm);
         limbs.push(lm);
@@ -1478,9 +1496,98 @@ export class View {
         radii: [0.04, 0.09, 0.14, 0.19, 0.22, 0.23, 0.21, 0.19, 0.14],
       });
     }
+
+    // 5) 256 GPU-Instanced 3D Benthic Detritivore Isopods, Pelagic Pool Copepods & Rhizosphere Springtails
+    const mfGeo = new THREE.SphereGeometry(0.045, 10, 8);
+    mfGeo.scale(1.65, 0.62, 0.92);
+    const mfMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      emissive: 0x163844,
+      emissiveIntensity: 0.72,
+      roughness: 0.24,
+      metalness: 0.18,
+      clearcoat: 0.92,
+      iridescence: 0.75,
+    });
+    this.microFaunaMesh = new THREE.InstancedMesh(mfGeo, mfMat, MAX_MICRO_FAUNA);
+    this.microFaunaMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.microFaunaMesh.frustumCulled = false;
+    const cInit = new THREE.Color();
+    for (let i = 0; i < MAX_MICRO_FAUNA; i++) {
+      cInit.setHSL(i % 3 === 0 ? 0.09 : i % 3 === 1 ? 0.52 : 0.34, 0.92, 0.58);
+      this.microFaunaMesh.setColorAt(i, cInit);
+    }
+    if (this.microFaunaMesh.instanceColor) this.microFaunaMesh.instanceColor.needsUpdate = true;
+    this.scene.add(this.microFaunaMesh);
+
+    // 6) 96 Bioluminescent Rhizosphere Mycena Mushroom Clusters around Flora & Basalt Outcrops
+    const capGeo = new THREE.ConeGeometry(0.11, 0.085, 14, 1, true);
+    capGeo.translate(0, 0.145, 0);
+    const stemGeo = new THREE.CylinderGeometry(0.016, 0.026, 0.14, 8);
+    stemGeo.translate(0, 0.07, 0);
+    const capMat = new THREE.MeshPhysicalMaterial({
+      color: 0x4ef5ff,
+      emissive: 0x18c8e8,
+      emissiveIntensity: 1.15,
+      roughness: 0.22,
+      transmission: 0.48,
+      transparent: true,
+      opacity: 0.88,
+      side: THREE.DoubleSide,
+    });
+    const stemMat = new THREE.MeshStandardMaterial({
+      color: 0xc8f4ff,
+      emissive: 0x145868,
+      emissiveIntensity: 0.55,
+      roughness: 0.45,
+    });
+    this.mushroomCaps = new THREE.InstancedMesh(capGeo, capMat, MUSHROOM_COUNT);
+    this.mushroomStems = new THREE.InstancedMesh(stemGeo, stemMat, MUSHROOM_COUNT);
+    this.mushroomCapMat = capMat;
+    const W = this.cr.world;
+    const mushDummy = new THREE.Object3D();
+    const mushCol = new THREE.Color();
+    for (let i = 0; i < MUSHROOM_COUNT; i++) {
+      const pl = W.plants[i % Math.max(1, W.plants.length)] || { x: 0, z: 0 };
+      const ang = (i * 2.39996) % (Math.PI * 2);
+      const rad = 0.42 + ((i * 7) % 11) * 0.095;
+      const mx = pl.x + Math.cos(ang) * rad;
+      const mz = pl.z + Math.sin(ang) * rad;
+      const my = W.height(mx, mz) - 0.01;
+      const sc = 0.55 + ((i * 13) % 9) * 0.09;
+      mushDummy.position.set(mx, my, mz);
+      mushDummy.rotation.set((Math.sin(i * 3.1) * 0.16), ang, (Math.cos(i * 2.7) * 0.16));
+      mushDummy.scale.setScalar(sc);
+      mushDummy.updateMatrix();
+      this.mushroomCaps.setMatrixAt(i, mushDummy.matrix);
+      this.mushroomStems.setMatrixAt(i, mushDummy.matrix);
+      mushCol.setHSL((0.46 + (i % 5) * 0.075) % 1, 0.92, 0.62);
+      this.mushroomCaps.setColorAt(i, mushCol);
+    }
+    this.mushroomCaps.instanceMatrix.needsUpdate = true;
+    this.mushroomStems.instanceMatrix.needsUpdate = true;
+    if (this.mushroomCaps.instanceColor) this.mushroomCaps.instanceColor.needsUpdate = true;
+    this.scene.add(this.mushroomCaps, this.mushroomStems);
   }
 
   syncEcosystem(t) {
+    // Always animate the 256 embodied 3D micro-fauna in the biosphere (even if conspecific peers are 0)
+    if (this.microFaunaMesh && this.cr.world.microFauna) {
+      const mf = this.cr.world.microFauna;
+      const nMF = Math.min(mf.length, MAX_MICRO_FAUNA);
+      for (let i = 0; i < nMF; i++) {
+        const f = mf[i];
+        const sc = 0.68 + 0.55 * (f.energy ?? 0.7);
+        this._tmpV1.set(f.x, f.y + 0.02, f.z);
+        this._tmpQ.setFromAxisAngle(this._upVec, -(f.hdg || 0));
+        this._tmpV2.set(sc, sc, sc);
+        this._tmpM.compose(this._tmpV1, this._tmpQ, this._tmpV2);
+        this.microFaunaMesh.setMatrixAt(i, this._tmpM);
+      }
+      this.microFaunaMesh.count = nMF;
+      this.microFaunaMesh.instanceMatrix.needsUpdate = true;
+    }
+
     const eco = this.cr.eco;
     if (!eco) {
       this.ecoGroup.visible = false;
@@ -1488,7 +1595,7 @@ export class View {
     }
     this.ecoGroup.visible = true;
 
-    // 1) Sync up to 32 embodied conspecifics
+    // 1) Sync up to 48 embodied 5-clade conspecifics
     const peers = eco.peers;
     const nP = Math.min(peers.length, MAX_PEER_MESHES);
     const prof = [0.58, 0.86, 1.0, 1.05, 0.98, 0.88, 0.72];
@@ -1545,10 +1652,10 @@ export class View {
         eg.lookAt(eg.position.x + fx, eg.position.y, eg.position.z + fz);
       }
 
-      // Hox 4 / 6 / 8 lateral limbs
-      const limbSegs = [1, 5, 3, 2]; // pair 0=hind, pair 1=fore, pair 2=mid(6L), pair 3=extra(8L)
+      // Hox 0 / 4 / 6 / 8 / 10 lateral limbs across all 5 macro-bauplan clades!
+      const limbSegs = [1, 5, 3, 2, 4]; // pair 0=hind, pair 1=fore, pair 2=mid(6L), pair 3=extra(8L), pair 4=decapod(10L)
       const activePairs = p.limbPairs ?? 3;
-      for (let pair = 0; pair < 4; pair++) {
+      for (let pair = 0; pair < 5; pair++) {
         const segIdx = limbSegs[pair];
         const show = pair < activePairs;
         for (let side = 0; side < 2; side++) {
@@ -1560,7 +1667,7 @@ export class View {
           const bx = p.segX[segIdx], by = p.segY[segIdx], bz = p.segZ[segIdx];
           const rAttach = slot.radii[segIdx] * 0.82;
           lm.position.set(bx + rx * sgn * rAttach, by - 0.02 * p.scale, bz + rz * sgn * rAttach);
-          const swing = Math.sin(p.gaitPh + pair * 1.65 + side * Math.PI) * 0.42;
+          const swing = Math.sin(p.gaitPh + pair * 1.45 + side * Math.PI) * 0.42;
           lm.rotation.set(0, -p.hdg + (sgn > 0 ? 0 : Math.PI) + swing * sgn, 0);
           lm.scale.setScalar(p.scale * (pair === 1 ? (p.gen.foreLimb ?? 1) : (p.gen.hindLimb ?? 1)));
         }
@@ -1721,13 +1828,10 @@ export class View {
         }
 
         float hexScute(vec2 p) {
-          vec2 q = vec2(p.x * 1.1547, p.y + p.x * 0.57735);
-          vec2 i = floor(q), f = fract(q);
-          float v = mod(i.x + i.y, 3.0);
-          float ca = step(1.0, v), cb = step(2.0, v);
-          vec2 ma = step(f.xy, f.yx);
-          vec2 d = min(f, 1.0 - f);
-          return clamp(min(d.x, d.y) * 3.2 + 0.08 * (ca - cb + ma.x * 0.02), 0.0, 1.0);
+          float k1 = cos(p.x * 6.2831853);
+          float k2 = cos((0.5 * p.x + 0.8660254 * p.y) * 6.2831853);
+          float k3 = cos((-0.5 * p.x + 0.8660254 * p.y) * 6.2831853);
+          return clamp(0.5 + 0.1666667 * (k1 + k2 + k3), 0.0, 1.0);
         }
       ` + sh.fragmentShader
         .replace(
@@ -1883,7 +1987,7 @@ export class View {
       });
     }
 
-    // 5) 8 Continuous Skinned Muscular Catmull-Rom Limb Tubes + 8 Webbed Autopod Pads + 8x3 Curved Keratin Talons
+    // 5) 10 Continuous Skinned Muscular Catmull-Rom Limb Tubes + 10 Webbed Autopod Pads + 10x4 Curved Keratin Talons (0L..10L Clades!)
     this.limbTubes = [];
     this.feet = [];
     this.claws = [];
@@ -1899,7 +2003,7 @@ export class View {
       clearcoatRoughness: 0.08,
     });
 
-    for (let k = 0; k < 8; k++) {
+    for (let k = 0; k < 10; k++) {
       const lGeo = makeTubeGeometry(LIMB_RINGS, LIMB_SIDES);
       const lMesh = new THREE.Mesh(lGeo, this.appendageMat);
       lMesh.castShadow = true;
@@ -1924,7 +2028,7 @@ export class View {
       this.feet.push(foot);
 
       const talonSet = [];
-      for (let c = 0; c < 3; c++) {
+      for (let c = 0; c < 4; c++) {
         const tl = new THREE.Mesh(talonGeo, this.talonMat);
         tl.castShadow = true;
         this.cg.add(tl);
@@ -1932,6 +2036,61 @@ export class View {
       }
       this.claws.push(talonSet);
     }
+
+    // 5b) Bilateral Iridescent Translucent Patagium Gliding Wing-Membranes (stretching forelimb wrist/elbow -> flank segments 4..1)
+    this.patagia = [];
+    this.patagiumMat = new THREE.MeshPhysicalMaterial({
+      color: 0x3ef0d8,
+      emissive: 0x127898,
+      emissiveIntensity: 0.85,
+      roughness: 0.18,
+      transmission: 0.58,
+      thickness: 0.12,
+      ior: 1.38,
+      iridescence: 0.95,
+      iridescenceIOR: 1.85,
+      transparent: true,
+      opacity: 0.76,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    for (let side = 0; side < 2; side++) {
+      // 6 vertices: 0=seg4 flank, 1=seg3 flank, 2=seg2 flank, 3=forelimb hip, 4=forelimb knee/elbow, 5=forelimb wrist/wingtip
+      const pGeo = new THREE.BufferGeometry();
+      pGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6 * 3), 3));
+      pGeo.setIndex([0, 3, 4, 0, 4, 1, 1, 4, 5, 1, 5, 2]);
+      const pMesh = new THREE.Mesh(pGeo, this.patagiumMat);
+      pMesh.frustumCulled = false;
+      this.cg.add(pMesh);
+      this.patagia.push({ geo: pGeo, mesh: pMesh });
+    }
+
+    // 5c) Cranial Neural-Crest Bioluminescent Angler-Lure (Illicium Stalk + Refractive Photophore Esca Bulb + Dynamic PointLight)
+    const illGeo = makeTubeGeometry(10, 8);
+    const illMesh = new THREE.Mesh(illGeo, this.appendageMat);
+    illMesh.frustumCulled = false;
+    this.cg.add(illMesh);
+    this.anglerTube = {
+      geo: illGeo,
+      mesh: illMesh,
+      pts: Array.from({ length: 5 }, () => [0, 0, 0]),
+      radii: [0.028, 0.022, 0.017, 0.013, 0.018],
+    };
+    this.escaMat = new THREE.MeshPhysicalMaterial({
+      color: 0x7affea,
+      emissive: 0x38f8ff,
+      emissiveIntensity: 2.1,
+      roughness: 0.06,
+      transmission: 0.72,
+      ior: 1.46,
+      clearcoat: 1.0,
+      transparent: true,
+      opacity: 0.95,
+    });
+    this.anglerEsca = new THREE.Mesh(new THREE.SphereGeometry(0.056, 20, 16), this.escaMat);
+    this.cg.add(this.anglerEsca);
+    this.anglerLight = new THREE.PointLight(0x4cf8ff, 1.8, 4.2, 1.6);
+    this.cg.add(this.anglerLight);
 
     // 6) 2 Curved Muscular Eye Peduncle Tubes + Orbital Calyx Cups + 3 Foveal Iris Eyeballs + Wet Refractive Cornea Domes
     this.stalkTubes = [];
@@ -2133,10 +2292,23 @@ export class View {
     this.clock += dt;
     const t = this.clock;
 
-    // 1) Circadian Sky, Solar Ephemeris, Dynamic PMREM HDR Sky IBL & Crepuscular God-Ray Screen Projection
-    const day = cr.light ?? 1;
-    const sunAz = 0.8 + ((cr.hour ?? 12) / 24) * Math.PI * 2;
-    const sunEl = 0.14 + 0.92 * day;
+    // 1) Circadian Sky, Cinema Lighting Presets (auto / twilight / pandora / day), Dynamic PMREM HDR Sky IBL & God-Ray Projection
+    let day = cr.light ?? 1;
+    let sunAz = 0.8 + ((cr.hour ?? 12) / 24) * Math.PI * 2;
+    let sunEl = 0.14 + 0.92 * day;
+    if (this.lightingMode === 'twilight') {
+      day = 0.34;
+      sunAz = 0.62 + 0.04 * Math.sin(t * 0.08);
+      sunEl = 0.22;
+    } else if (this.lightingMode === 'pandora') {
+      day = 0.06;
+      sunAz = 2.4 + 0.05 * Math.sin(t * 0.06);
+      sunEl = 0.12;
+    } else if (this.lightingMode === 'day') {
+      day = 0.96;
+      sunAz = 1.05;
+      sunEl = 0.92;
+    }
     const sdx = Math.cos(sunAz) * Math.cos(sunEl);
     const sdy = Math.sin(sunEl);
     const sdz = Math.sin(sunAz) * Math.cos(sunEl);
@@ -2145,6 +2317,9 @@ export class View {
     this.skyU.t.value = t;
     this.skyU.sunDir.value.set(sdx, sdy, sdz).normalize();
     this.skyU.season.value = W.seasonPhase ?? 0;
+    if (this.mushroomCapMat) {
+      this.mushroomCapMat.emissiveIntensity = 0.65 + 1.45 * (1 - day);
+    }
 
     if (Math.abs(day - this._lastEnvDay) > 0.14) {
       this.bakeSkyEnvironment(day);
@@ -2321,8 +2496,8 @@ export class View {
 
     for (let m = 0; m < RING_M; m++) {
       const u = m / (RING_M - 1);
-      // Extend slightly past tail (s=0) and snout (s=NS-1) for rounded organic tapered caps
-      const f = -0.22 + u * ((NS - 1) + 0.44);
+      // Extend smoothly past tail (s=0) and snout (s=NS-1) for sleek rounded amphibian/dragon rostrum & tail caps
+      const f = -0.34 + u * ((NS - 1) + 0.72);
       const i = Math.max(0, Math.min(NS - 2, Math.floor(f)));
       const tt = Math.max(0, Math.min(1, f - i));
       const p0 = getClamped(segC, i - 1), p1 = getClamped(segC, i), p2 = getClamped(segC, i + 1), p3 = getClamped(segC, i + 2);
@@ -2334,16 +2509,21 @@ export class View {
       let cy = catmull1D(p0[1], p1[1], p2[1], p3[1], tt);
       let cz = catmull1D(p0[2], p1[2], p2[2], p3[2], tt);
 
-      // Smooth snout & tail-tip axial extension + hemispherical dome taper
+      // Smooth snout & tail-tip axial extension + organic elliptical dome taper
       let capScale = 1.0;
       if (f < 0) {
-        const ef = -f / 0.22;
-        cx -= fw1[0] * ef * 0.16; cy -= fw1[1] * ef * 0.16; cz -= fw1[2] * ef * 0.16;
-        capScale = Math.sqrt(Math.max(0.004, 1 - ef * ef));
+        const ef = Math.min(1, -f / 0.34);
+        const reach = Math.sin(ef * Math.PI * 0.5) * 0.28;
+        cx -= fw1[0] * reach; cy -= fw1[1] * reach; cz -= fw1[2] * reach;
+        capScale = Math.max(0.02, Math.cos(ef * Math.PI * 0.492));
       } else if (f > NS - 1) {
-        const ef = (f - (NS - 1)) / 0.22;
-        cx += fw2[0] * ef * 0.18; cy += fw2[1] * ef * 0.18; cz += fw2[2] * ef * 0.18;
-        capScale = Math.sqrt(Math.max(0.004, 1 - ef * ef));
+        const ef = Math.min(1, (f - (NS - 1)) / 0.38);
+        const reach = Math.sin(ef * Math.PI * 0.5) * 0.35;
+        const snoutTuck = ef * ef * 0.055;
+        cx += fw2[0] * reach - u2[0] * snoutTuck;
+        cy += fw2[1] * reach - u2[1] * snoutTuck;
+        cz += fw2[2] * reach - u2[2] * snoutTuck;
+        capScale = Math.max(0.02, Math.cos(ef * Math.PI * 0.492));
       }
 
       let ux = u1[0] * (1 - tt) + u2[0] * tt, uy = u1[1] * (1 - tt) + u2[1] * tt, uz = u1[2] * (1 - tt) + u2[2] * tt;
@@ -2462,8 +2642,8 @@ export class View {
       writeCatmullTube(ant.geo, ANT_RINGS, ANT_SIDES, ant.pts, ant.radii, fh.u);
     }
 
-    // 5) 8 Muscular Catmull-Rom Limbs + Webbed Autopod Pads + Curved Keratin Talons (4L / 6L / 8L Hox topologies!)
-    for (let k = 0; k < 8; k++) {
+    // 5) 10 Muscular Catmull-Rom Limbs + Webbed Autopod Pads + 4 Curved Keratin Talons (0L / 4L / 6L / 8L / 10L Clades!)
+    for (let k = 0; k < 10; k++) {
       const Lb = B.limbs[k];
       const showLimb = !!(Lb && !Lb.vestigial);
       const lt = this.limbTubes[k];
@@ -2471,7 +2651,7 @@ export class View {
       const clawSet = this.claws[k];
       lt.mesh.visible = showLimb;
       foot.visible = showLimb;
-      for (let c = 0; c < 3; c++) clawSet[c].visible = showLimb;
+      for (let c = 0; c < 4; c++) clawSet[c].visible = showLimb;
       if (!showLimb) continue;
 
       const sc = segC[Lb.s], fs = F[Lb.s];
@@ -2480,7 +2660,7 @@ export class View {
       const fx = X[Lb.foot], fy = Y[Lb.foot], fz = Z[Lb.foot];
 
       // Deep shoulder/hip girdle root inside trunk -> hip -> biceps/femur belly -> knee -> forearm/crus -> autopod
-      const xb = B.crossBridge ? B.crossBridge[k] : 0.25;
+      const xb = B.crossBridge ? (B.crossBridge[k % B.crossBridge.length] ?? 0.25) : 0.25;
       const girthM = (cr.gen.bodyGirth ?? 1.0) * (1.0 + 0.22 * xb);
       lt.pts[0][0] = sc[0] * 0.42 + hx * 0.58;
       lt.pts[0][1] = sc[1] * 0.42 + hy * 0.58;
@@ -2506,7 +2686,7 @@ export class View {
 
       writeCatmullTube(lt.geo, LIMB_RINGS, LIMB_SIDES, lt.pts, lt.radii, fs.u);
 
-      // Orient webbed foot pad & 3 curved talons along distal limb + forward ground tangent
+      // Orient webbed foot pad & 4 curved talons along distal limb + forward ground tangent
       let dx = fx - kx, dy = fy - ky, dz = fz - kz;
       let dn = Math.hypot(dx, dy, dz) || 1; dx /= dn; dy /= dn; dz /= dn;
       const tx = fs.f[0] * 0.65 + dx * 0.35;
@@ -2521,8 +2701,8 @@ export class View {
       foot.lookAt(this._tmpV1);
 
       const sgnLat = Lb.side === 1 ? -1 : 1;
-      for (let c = 0; c < 3; c++) {
-        const sp = (c - 1) * 0.42;
+      for (let c = 0; c < 4; c++) {
+        const sp = (c - 1.5) * 0.32;
         const tl = clawSet[c];
         const cxOff = tx * 0.05 + fs.s[0] * sp * 0.09;
         const czOff = tz * 0.05 + fs.s[2] * sp * 0.09;
@@ -2535,6 +2715,70 @@ export class View {
         tl.up.set(0, 1, 0);
         tl.lookAt(this._tmpV1);
       }
+    }
+
+    // 5b) Bilateral Patagium Gliding Wing-Membranes (active when patagium > 0.12 & forelimbs non-vestigial, or lateral fin fold on 0L)
+    const patSpan = B.hox?.patagium ?? 0.18;
+    const glideGlow = Math.min(1, (B.glideLift ?? 0) * 2.5);
+    this.patagiumMat.color.setHSL(((cr.gen.pigmentHue ?? 0.72) + 0.08) % 1, 0.88, 0.52);
+    this.patagiumMat.emissive.setHSL(((cr.gen.pigmentHue ?? 0.72) + 0.14) % 1, 0.95, 0.22 + 0.38 * glideGlow);
+    for (let side = 0; side < 2; side++) {
+      const pat = this.patagia[side];
+      const foreLb = B.limbs[2 + side];
+      const showPat = patSpan > 0.16 && !!(foreLb && !foreLb.vestigial);
+      pat.mesh.visible = showPat;
+      if (!showPat) continue;
+      const sgn = side === 0 ? -1 : 1;
+      const pArr = pat.geo.attributes.position.array;
+      const setV = (vi, vx, vy, vz) => { pArr[3 * vi] = vx; pArr[3 * vi + 1] = vy; pArr[3 * vi + 2] = vz; };
+      for (let si = 0; si < 3; si++) {
+        const segIdx = 4 - si;
+        const sc = segC[segIdx], fs = F[segIdx], rS = B.segRad[segIdx] * 0.82;
+        setV(si, sc[0] + fs.s[0] * sgn * rS, sc[1] + fs.s[1] * sgn * rS, sc[2] + fs.s[2] * sgn * rS);
+      }
+      const hx = X[foreLb.hip], hy = Y[foreLb.hip], hz = Z[foreLb.hip];
+      const kx = X[foreLb.knee], ky = Y[foreLb.knee], kz = Z[foreLb.knee];
+      const fx = X[foreLb.foot], fy = Y[foreLb.foot], fz = Z[foreLb.foot];
+      const spanScale = Math.min(1.45, 0.55 + 0.65 * patSpan);
+      const wx = hx + (fx - hx) * spanScale + F[4].u[0] * 0.05 * patSpan;
+      const wy = hy + (fy - hy) * 0.55 + 0.06 * patSpan;
+      const wz = hz + (fz - hz) * spanScale + F[4].u[2] * 0.05 * patSpan;
+      setV(3, hx, hy, hz);
+      setV(4, kx, ky + 0.02, kz);
+      setV(5, wx, wy, wz);
+      pat.geo.attributes.position.needsUpdate = true;
+      pat.geo.computeVertexNormals();
+    }
+
+    // 5c) Cranial Bioluminescent Angler-Lure (Illicium Stalk + Glowing Esca Bulb + Dynamic PointLight)
+    const lureSpan = B.hox?.anglerLure ?? 0.24;
+    if (lureSpan > 0.08) {
+      this.anglerTube.mesh.visible = true;
+      this.anglerEsca.visible = true;
+      this.anglerLight.visible = true;
+      const L = 0.24 + 0.42 * lureSpan;
+      const sway = Math.sin(t * 3.4) * 0.06 * (1 + lureSpan * 0.5);
+      for (let k = 0; k < 5; k++) {
+        const u = k / 4;
+        const fwd = headR * 0.32 + Math.pow(u, 0.85) * L * 0.92;
+        const lift = headR * 0.85 + Math.sin(u * Math.PI * 0.78) * L * 0.68 - u * u * L * 0.26;
+        const lat = sway * u * u;
+        this.anglerTube.pts[k][0] = hc[0] + fh.f[0] * fwd + fh.u[0] * lift + fh.s[0] * lat;
+        this.anglerTube.pts[k][1] = hc[1] + fh.f[1] * fwd + fh.u[1] * lift + fh.s[1] * lat;
+        this.anglerTube.pts[k][2] = hc[2] + fh.f[2] * fwd + fh.u[2] * lift + fh.s[2] * lat;
+      }
+      writeCatmullTube(this.anglerTube.geo, 10, 8, this.anglerTube.pts, this.anglerTube.radii, fh.u);
+      const tip = this.anglerTube.pts[4];
+      const pulse = 0.78 + 0.32 * Math.sin(t * 5.2) + 0.45 * (cr.vocalAmp ?? 0);
+      this.anglerEsca.position.set(tip[0], tip[1], tip[2]);
+      this.anglerEsca.scale.setScalar((0.72 + 0.48 * lureSpan) * (0.94 + 0.08 * Math.sin(t * 5.2)));
+      this.escaMat.emissiveIntensity = (1.5 + 1.4 * (1 - day)) * pulse;
+      this.anglerLight.position.set(tip[0], tip[1], tip[2]);
+      this.anglerLight.intensity = (0.85 + 2.4 * (1 - day)) * Math.min(1.5, lureSpan) * pulse;
+    } else {
+      this.anglerTube.mesh.visible = false;
+      this.anglerEsca.visible = false;
+      this.anglerLight.visible = false;
     }
 
     // 6) Curved Muscular Eye Peduncles + Wet Refractive Corneal Eyeballs + Microsaccadic Gaze
@@ -2675,21 +2919,29 @@ export class View {
       this.brainPts.geometry.attributes.color.needsUpdate = true;
     }
 
-    // 512 3D WCSPH + D3Q19 LBM Vascular Blood Corpuscles (oxygenated crimson -> venous cyan-violet)
+    // 1,024 3D WCSPH + D3Q19 LBM Blood Cells: 896 Erythrocytes (crimson->violet O2) + 128 Chemotactic Leukocytes (pearlescent cyan-white)
     if (cr.fluid?.initedPos) {
       this.bloodPts.visible = true;
       const fl = cr.fluid;
       const blP = this.bloodPts.geometry.attributes.position.array;
       const blC = this.bloodPts.geometry.attributes.color.array;
       const nBl = fl.px.length;
+      const pType = fl.pType, pAct = fl.pActivation;
       for (let i = 0; i < nBl; i++) {
         blP[3 * i] = fl.px[i];
         blP[3 * i + 1] = fl.py[i];
         blP[3 * i + 2] = fl.pz[i];
-        const o2 = Math.max(0, Math.min(1, (fl.pO2[i] - 0.55) / 0.42));
-        blC[3 * i] = 0.22 + 0.88 * o2;
-        blC[3 * i + 1] = 0.14 + 0.22 * (1 - o2);
-        blC[3 * i + 2] = 0.68 - 0.42 * o2;
+        if (pType && pType[i] === 1) {
+          const act = pAct ? pAct[i] : 0.3;
+          blC[3 * i] = 0.58 + 0.42 * act;
+          blC[3 * i + 1] = 0.92 + 0.08 * act;
+          blC[3 * i + 2] = 1.05;
+        } else {
+          const o2 = Math.max(0, Math.min(1, (fl.pO2[i] - 0.55) / 0.42));
+          blC[3 * i] = 0.22 + 0.88 * o2;
+          blC[3 * i + 1] = 0.12 + 0.22 * (1 - o2);
+          blC[3 * i + 2] = 0.68 - 0.42 * o2;
+        }
       }
       this.bloodPts.geometry.attributes.position.needsUpdate = true;
       this.bloodPts.geometry.attributes.color.needsUpdate = true;

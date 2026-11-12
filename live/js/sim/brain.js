@@ -1,31 +1,31 @@
-// Spiking substrate (pass 18: 8-compartment branched dendritic cable arbours + Fox-Lu stochastic Markov channel kinetics +
-// 7 scales S..GIGA up to 14,156,048 neurons — mouse-cortex neuron scale — & 56,624,192 plastic synapses).
+// Spiking substrate (pass 19: 16-compartment branched dendritic cable arbours + exact discrete integer Gillespie/binomial Markov-chain
+// ion-channel states + 7 scales S..GIGA up to 14,156,048 neurons — mouse-cortex neuron scale — & 1,132,483,840 [1.13B] plastic synapses).
 // 16 regions: the 14 reference regions + PROP (32 proprioceptive) + MN (122 sLTC motor neurons); STR has 42 MSNs (21 D1 "go" +
 // 21 D2 "no-go" covering 16 plant sites + 3 water pools + dropped snack + epistemic curiosity).
 // Seven brain scales (choose with ?brain=S|M|L|XL|XXL|MEGA|GIGA):
 //   S    =        436 neurons (compact reference wiring)
-//   M    =      3,268 neurons /   ~133k synapses:     48x48 8-comp branched HH+NMDA cortex,       512 place cells,     128 thalamus
-//   L    =     11,972 neurons /   ~531k synapses:     96x96 8-comp branched HH+NMDA cortex,     2,048 place cells,     384 thalamus
-//   XL   =     25,924 neurons /  ~1.18M synapses:   144x144 8-comp branched HH+NMDA cortex,     4,096 place cells,     768 thalamus
-//   XXL  =    104,904 neurons /  ~4.76M synapses:   290x290 8-comp branched HH+NMDA cortex,    16,384 place cells,   4,096 thalamus
-//   MEGA =  1,048,644 neurons /  16.78M synapses:   960x960 8-comp branched HH+NMDA cortex,    98,304 place cells,  28,416 thalamus
-//   GIGA = 14,156,048 neurons /  56.62M synapses: 3600x3600 mouse-cortex-scale laminar sheet, 1,048,576 place cells, 147,148 thalamus
+//   M    =      3,268 neurons /   ~133k synapses:     48x48 16-comp branched Markov-HH+NMDA cortex,    512 place cells,     128 thalamus
+//   L    =     11,972 neurons /   ~531k synapses:     96x96 16-comp branched Markov-HH+NMDA cortex,  2,048 place cells,     384 thalamus
+//   XL   =     25,924 neurons /  ~1.18M synapses:   144x144 16-comp branched Markov-HH+NMDA cortex,  4,096 place cells,     768 thalamus
+//   XXL  =    104,904 neurons /  ~4.76M synapses:   290x290 16-comp branched Markov-HH+NMDA cortex, 16,384 place cells,   4,096 thalamus
+//   MEGA =  1,048,644 neurons /  16.78M synapses:   960x960 16-comp branched Markov-HH+NMDA cortex, 98,304 place cells,  28,416 thalamus
+//   GIGA = 14,156,048 neurons /   1.13B synapses: 3600x3600 mouse-cortex laminar sheet (80 spines/cell across 8 plastic Int8 branch clusters!)
 //
-// Pass 18 neurobiology & whole-cortex scale upgrades:
-//  1) 8-Compartment Branched Dendritic Cable Arbours + Stochastic Single-Channel Markov Kinetics (Fox & Lu 1994):
-//       - Comp 0 (vAIS):     Axon Initial Segment with high-density Na_v (m_inf^3 * h_Na) + K_v (n_K^4) + Fox-Lu Langevin
-//                            stochastic subunit channel noise sqrt((alpha*(1-x)+beta*x)/N_ch) across finite AIS channel counts!
-//       - Comp 1 (v):        Perisomatic soma receiving PV+ fast-basket shunting inhibition & axial coupling to AIS/Basal/Trunk
-//       - Comp 2 (vBasalL):  Left basal dendritic branch with Jahr-Stevens Mg2+-unblocked regenerative local NMDA spikes!
-//       - Comp 3 (vBasalR):  Right basal dendritic branch with independent regenerative local NMDA plateau electrogenesis!
-//       - Comp 4 (vOblique): Proximal apical oblique collateral receiving L2/3 associative input & gating bAP invasion
-//       - Comp 5 (vTrunk):   Apical electrotonic trunk with Rush-Larsen HCN I_h hyperpolarization-activated cyclic-nucleotide sag
-//       - Comp 6 (vTuftA):   Distal L1 apical tuft sister branch A (contextual/hippocampal input + Larkum Ca_v BAC burst)
-//       - Comp 7 (vTuftB):   Distal L1 apical tuft sister branch B + Rush-Larsen SK Ca2+-activated K+ burst-terminating AHP!
-//  2) Mouse-Cortex-Scale GIGA Brain (14,156,048 neurons / 56,624,192 plastic Int8 + explicit CSR synapses):
-//       - Analytical O(1) laminar/topographic coordinate addressing eliminates static 140 MB coordinate tables.
-//       - Quantized Int16/Uint16 cable state + 56.62M individually mutable plastic Int8 small-world/laminar weights (`wGiga`)
-//         stepped via rotating impulse-invariant active microcolumn waves in Web Worker / CPU.
+// Pass 19 neurobiology & billion-synapse connectome upgrades:
+//  1) 16-Compartment Branched Dendritic Cable Arbours + Discrete Integer Gillespie/Binomial Markov-Chain Ion Channels:
+//       - Comp 0 (vAIS):         Axon Initial Segment with discrete 5-state Markov Na_v (C0-C1-C2-O-I, N_Na=600) & 4-state K_v (C0-C1-C2-O, N_K=400)!
+//       - Comp 1 (v):            Perisomatic soma receiving PV+ fast-basket shunting inhibition & axial coupling to AIS/Basal/Trunk/Collaterals
+//       - Comp 2..3 (vCollat0/1): Proximal & associative recurrent axon collaterals modulated by Schwann/oligodendrocyte myelinCond gene
+//       - Comp 4..5 (vBasal/L1): Left proximal & distal basal sister branches with discrete Mg2+-unblocked NMDA spine channels (N_NMDA=80)
+//       - Comp 6..7 (vBasalR/R1): Right proximal & distal basal sister branches with independent regenerative local NMDA plateau spikes
+//       - Comp 8..9 (vOblique/R): Bilateral proximal apical oblique collaterals receiving L2/3 associative input & gating bAP invasion
+//       - Comp 10 (vTrunk):      Proximal apical electrotonic trunk with Rush-Larsen HCN I_h hyperpolarization-activated sag
+//       - Comp 11 (vTrunkDist):  Distal apical nexus Ca2+ hot-zone with discrete 3-state Markov Ca_v (C-O-I, N_Ca=160) Larkum BAC burst!
+//       - Comp 12..13 (apical/A1): Distal L1 apical tuft sister branches A0 & A1 (contextual/hippocampal input)
+//       - Comp 14..15 (vTuftB/B1): Distal L1 apical tuft sister branches B0 & B1 + SK Ca2+-activated K+ burst-terminating AHP!
+//  2) 1.13-Billion-Synapse Mouse-Cortex-Scale GIGA Connectome (14,156,048 neurons / 1,132,483,840 synapses = 80 spines/neuron):
+//       - 113.25M individually mutable Int8 dendritic branch-cluster weights (`wGiga`, 8 clusters/cell x 10 laminar/horizontal spines/cluster)
+//         + 16-compartment structural spine-turnover bitmasks (`spineMaskGiga`) stepped via rotating microcolumn waves in Web Worker / CPU.
 import { mulberry, clamp, gauss } from './util.js';
 
 const VALID_SCALES = new Set(['S', 'M', 'L', 'XL', 'XXL', 'MEGA', 'GIGA']);
@@ -193,9 +193,19 @@ export function posYOf(i) {
 
 export const INHIB = (i) => typeOf(i) !== 0;
 
-// 12 local canonical laminar 2D offsets (dx, dy) for MEGA/GIGA procedural cortical/hippocampal sheet propagation
-const STENCIL_DX = new Int8Array([1, -1, 0, 0, 2, -2, 0, 0, 1, -1, 3, -3]);
-const STENCIL_DY = new Int8Array([0, 0, 1, -1, 0, 0, 2, -2, 1, -1, 2, -2]);
+// 16 local & laminar 2D offsets (dx, dy) for MEGA/GIGA procedural cortical/hippocampal spine-cluster propagation
+const STENCIL_DX = new Int8Array([1, -1, 0, 0, 2, -2, 0, 0, 1, -1, 3, -3, 2, -2, 4, -4]);
+const STENCIL_DY = new Int8Array([0, 0, 1, -1, 0, 0, 2, -2, 1, -1, 2, -2, -1, 1, 0, 0]);
+
+/** Fast exact-integer Binomial(n, p) transition count sampler for discrete Gillespie Markov ion channels */
+function sampleBinomialInt(n, p, u32) {
+  if (n <= 0 || p <= 0) return 0;
+  if (p >= 1) return n;
+  const mu = n * p;
+  const z = (((u32 & 0xff) + ((u32 >>> 8) & 0xff) + ((u32 >>> 16) & 0xff)) - 382.5) * (1 / 127.8);
+  const k = Math.round(mu + Math.sqrt(mu * (1 - p)) * z);
+  return k < 0 ? 0 : k > n ? n : k;
+}
 
 export class Brain {
   constructor(seed, scaleOverride, gen = null) {
@@ -210,13 +220,14 @@ export class Brain {
     this.sparseSheetExt = N > 200000;
     this.hipAllocGain = clamp(gen?.neuroHipAlloc ?? 1.0, 0.7, 1.45);
     this.ctxPlasticGain = clamp(gen?.neuroCtxPlastic ?? 1.0, 0.65, 1.5);
+    this.myelinGain = clamp(gen?.myelinCond ?? 1.0, 0.65, 1.45);
     this.inWorker = typeof DedicatedWorkerGlobalScope !== 'undefined' && globalThis instanceof DedicatedWorkerGlobalScope;
     this.sheetStride = (SCALE === 'S' || SCALE === 'M') ? 1 : SCALE === 'L' ? 2 : (this.inWorker && SCALE === 'XL') ? 2 : 8;
     this.subStepCtr = 0;
     this.gigaSlice = 0;
     this.gigaSlices = 64; // 14.16M / 64 = 221,188 neurons stepped per active microcolumn wave!
     this.backend = IS_GIGA
-      ? 'CPU-GigaInt8CableCSR'
+      ? 'CPU-Giga1.13BSpineClusterCSR'
       : this.procStencil
       ? 'CPU-ProceduralCSR32'
       : N > 65535
@@ -231,29 +242,40 @@ export class Brain {
     this.extDirty = new Uint32Array(16384);
     this.nExtDirty = 0;
 
-    // 8-compartment branched cable telemetry
-    this.nCompartments = SCALE === 'S' ? 1 : 8;
+    // 16-compartment branched cable + discrete integer Gillespie/Binomial Markov channel telemetry
+    this.nCompartments = SCALE === 'S' ? 1 : 16;
     this.plateauBursts = 0;
     this.nmdaSpikes = 0;
     this.ihSagMean = 0.24;
     this.ihMean = 0.24;
     this.skMean = 0.08;
     this.channelNoiseMean = 0.012;
+    this.markovOpenNaMean = 0;
+    this.markovOpenKMean = 0;
+    this.markovOpenCaMean = 0;
 
     if (IS_GIGA) {
       // Compact subcortical Float32 buffers (324 non-sheet neurons: SENS 0..15 and STR..MN R0.STR..N)
-      // plus lazy-allocated 14.16M-neuron quantized Int16 cable state + 56.62M plastic Int8 weights (`_ensureGigaState`)
-      // so a delegated main-thread Brain shell uses minimal memory while Worker holds the full 14.16M state!
+      // plus lazy-allocated 14.16M-neuron quantized Int16 16-comp cable state + 113.25M plastic Int8 spine-cluster weights
+      // representing 80 spines/neuron = 1,132,483,840 (1.13B) cortical/hippocampal synapses!
       const nSub = R0.THAL + (N - R0.STR);
       this.nSubCompact = nSub;
-      this.v = new Float32Array(4096); // representative window for p5 8-comp oscilloscope + subcortical mirror
+      this.v = new Float32Array(4096); // representative window for p5 16-comp oscilloscope + subcortical mirror
       this.vAIS = new Float32Array(4096);
+      this.vCollat0 = new Float32Array(4096);
+      this.vCollat1 = new Float32Array(4096);
       this.vBasal = new Float32Array(4096);
+      this.vBasalL1 = new Float32Array(4096);
       this.vBasalR = new Float32Array(4096);
+      this.vBasalR1 = new Float32Array(4096);
       this.vOblique = new Float32Array(4096);
+      this.vObliqueR = new Float32Array(4096);
       this.vTrunk = new Float32Array(4096);
+      this.vTrunkDist = new Float32Array(4096);
       this.apical = new Float32Array(4096);
+      this.vTuftA1 = new Float32Array(4096);
       this.vTuftB = new Float32Array(4096);
+      this.vTuftB1 = new Float32Array(4096);
       this.vBias = new Float32Array(4096);
       this.jolt = new Float32Array(N); // sparse jolts
 
@@ -277,22 +299,42 @@ export class Brain {
       this.nPrevSheetSpk = 0;
       this.vGiga = null;
       this.synGiga = null;
+      this.oblGiga = null;
       this.apGiga = null;
       this.gateGiga = null;
-      this.wGiga = null; // 56,624,192 plastic Int8 weights allocated on first active step!
+      this.spineMaskGiga = null;
+      this.wGiga = null; // 8 * N = 113,248,384 plastic Int8 spine-cluster weights -> 1,132,483,840 (1.13B) synapses!
     } else {
-      // Full 8-compartment branched Hodgkin-Huxley + NMDA + HCN + Ca_v + SK cable state vectors (S..MEGA)
-      this.v = new Float32Array(N);        // Comp 1: Perisomatic soma
-      this.vAIS = new Float32Array(N);     // Comp 0: Axon Initial Segment (stochastic Markov Na_v/K_v)
-      this.syn = new Float32Array(N);      // Perisomatic / subcortical conductance
-      this.vBasal = new Float32Array(N);   // Comp 2: Basal branch L (feedforward AMPA + local NMDA spike)
-      this.vBasalR = new Float32Array(N);  // Comp 3: Basal branch R (recurrent AMPA + local NMDA spike)
-      this.vOblique = new Float32Array(N); // Comp 4: Proximal apical oblique collateral
-      this.vTrunk = new Float32Array(N);   // Comp 5: Apical trunk electrotonic cable (HCN I_h sag)
-      this.apical = new Float32Array(N);   // Comp 6: Distal L1 apical tuft sister A (Ca_v BAC plateau)
-      this.vTuftB = new Float32Array(N);   // Comp 7: Distal L1 apical tuft sister B
-      this.hNa = new Float32Array(N).fill(0.86);  // Markov/Rush-Larsen HH Na_v inactivation gate h
-      this.nK = new Float32Array(N).fill(0.12);   // Markov/Rush-Larsen HH K_v delayed-rectifier gate n
+      // Full 16-compartment branched cable + discrete integer Gillespie Markov channel state vectors (S..MEGA)
+      this.v = new Float32Array(N);          // Comp 1: Perisomatic soma
+      this.vAIS = new Float32Array(N);       // Comp 0: Axon Initial Segment (discrete 5-state Na_v & 4-state K_v)
+      this.vCollat0 = new Float32Array(N);   // Comp 2: Proximal axon collateral
+      this.vCollat1 = new Float32Array(N);   // Comp 3: Associative axon collateral
+      this.syn = new Float32Array(N);        // Perisomatic / subcortical conductance
+      this.vBasal = new Float32Array(N);     // Comp 4: Left proximal basal dendrite (L4/THAL AMPA + discrete NMDA)
+      this.vBasalL1 = new Float32Array(N);   // Comp 5: Left distal basal sister branch
+      this.vBasalR = new Float32Array(N);    // Comp 6: Right proximal basal dendrite (recurrent AMPA + discrete NMDA)
+      this.vBasalR1 = new Float32Array(N);   // Comp 7: Right distal basal sister branch
+      this.vOblique = new Float32Array(N);   // Comp 8: Left proximal apical oblique collateral
+      this.vObliqueR = new Float32Array(N);  // Comp 9: Right proximal apical oblique collateral
+      this.vTrunk = new Float32Array(N);     // Comp 10: Proximal apical trunk electrotonic cable (HCN I_h sag)
+      this.vTrunkDist = new Float32Array(N); // Comp 11: Distal apical nexus Ca2+ hot-zone (3-state Markov Ca_v BAC)
+      this.apical = new Float32Array(N);     // Comp 12: Distal L1 apical tuft branch A0
+      this.vTuftA1 = new Float32Array(N);    // Comp 13: Distal L1 apical tuft terminal sister A1
+      this.vTuftB = new Float32Array(N);     // Comp 14: Distal L1 apical tuft branch B0
+      this.vTuftB1 = new Float32Array(N);    // Comp 15: Distal L1 apical tuft terminal sister B1 (SK AHP)
+
+      // Discrete integer Markov ion-channel populations:
+      //  - Na_v (5-state C0-C1-C2-O-I, N_Na = 600): `nNaI` inactivated channels, `nNaO` open channels
+      //  - K_v  (4-state C0-C1-C2-O,   N_K  = 400): `nKO` open delayed-rectifier channels
+      //  - Ca_v (3-state C-O-I,        N_Ca = 160): `nCaO` open nexus L/T-type Ca2+ channels, `nCaI` inactivated
+      this.nNaI = new Uint16Array(N).fill(84);   // 600 * (1 - 0.86) = 84 inactivated, 516 available
+      this.nNaO = new Uint16Array(N);
+      this.nKO = new Uint16Array(N).fill(2);
+      this.nCaO = new Uint8Array(N);
+      this.nCaI = new Uint8Array(N).fill(16);
+      this.hNa = new Float32Array(N).fill(0.86);  // Continuous readout mirror (1 - nNaI/600)
+      this.nK = new Float32Array(N).fill(0.12);   // Continuous readout mirror (nKO/400)^(1/4)
       this.hHCN = new Float32Array(N).fill(0.24); // Rush-Larsen apical trunk HCN (I_h) gate
       this.mSK = new Float32Array(N).fill(0.05);  // Rush-Larsen tuft SK Ca2+-activated K+ AHP gate
       this.ad = new Float32Array(N);
@@ -463,14 +505,15 @@ export class Brain {
                 J = r() < 0.60 ? nearCtxLayer(POSX[I], POSY[I], 0.05, 3) : nearCtxLayer(POSX[I], POSY[I], 0.03, 2);
               }
               if (J === I) continue;
-              // Route onto branched 8-compartment cable arbour (0=Soma, 1=BasalL, 3=BasalR, 4=Oblique, 2=TuftA, 5=TuftB)
+              // Route onto 16-compartment branched cable arbour:
+              //  0=Soma, 1=BasalL0, 6=BasalL1, 3=BasalR0, 7=BasalR1, 4=ObliqueL, 8=ObliqueR, 2=TuftA0, 9=TuftA1, 5=TuftB0, 10=TuftB1
               let comp = 0;
-              if (tp === 2) comp = (k & 1) ? 5 : 2;
+              if (tp === 2) comp = (k & 3) === 0 ? 5 : (k & 3) === 1 ? 10 : (k & 3) === 2 ? 2 : 9;
               else if (tp === 1) comp = 0;
-              else if (lay === 3 && LAYER[J] === 2) comp = (k & 1) ? 5 : 2;
-              else if (lay === 2 && LAYER[J] === 2 && (k & 3) === 0) comp = 4;
-              else if (lay === 1) comp = 1;
-              else comp = (k & 1) ? 3 : 1;
+              else if (lay === 3 && LAYER[J] === 2) comp = (k & 3) === 0 ? 5 : (k & 3) === 1 ? 10 : (k & 3) === 2 ? 2 : 9;
+              else if (lay === 2 && LAYER[J] === 2 && (k & 3) === 0) comp = (k & 4) ? 8 : 4;
+              else if (lay === 1) comp = (k & 1) ? 6 : 1;
+              else comp = (k & 3) === 0 ? 1 : (k & 3) === 1 ? 6 : (k & 3) === 2 ? 3 : 7;
               add(I, J, (inh ? wI() : wE()) * s, plastic, s, inh ? 0 : 1, comp);
             }
           }
@@ -638,7 +681,7 @@ export class Brain {
     const explicitS = synPtr;
     this.explicitS = explicitS;
     this.procS = IS_GIGA
-      ? (4 * N - explicitS) // 56,624,192 total synapses on 14.16M-neuron GIGA!
+      ? (80 * N - explicitS) // 1,132,483,840 (1.13 Billion!) synapses on 14.16M-neuron GIGA (80 spines/neuron across 8 plastic clusters)!
       : this.procStencil
       ? (16777216 - explicitS) // 16,777,216 (2^24) synapses on MEGA
       : 0;
@@ -673,7 +716,7 @@ export class Brain {
       this.wsc[idx] = bSc[k];
       this.struct[idx] = bSt[k];
       this.comp[idx] = bComp[k];
-      this.isApical[idx] = (bComp[k] === 2 || bComp[k] === 5) ? 1 : 0;
+      this.isApical[idx] = (bComp[k] === 2 || bComp[k] === 5 || bComp[k] === 9 || bComp[k] === 10) ? 1 : 0;
     }
     this.out0 = deg;
     this.buildInc();
@@ -739,11 +782,13 @@ export class Brain {
     const N = this.N;
     this.vGiga = new Int16Array(N);
     this.synGiga = new Int16Array(N);
+    this.oblGiga = new Int16Array(N);
     this.apGiga = new Int16Array(N);
-    this.gateGiga = new Uint16Array(N);
-    this.wGiga = new Int8Array(4 * N); // 56,624,192 plastic Int8 synaptic weights (64 == 1.0x)
+    this.gateGiga = new Uint16Array(N); // packed discrete Markov channel counts: [nNaI_8bit | nKO_8bit]
+    this.spineMaskGiga = new Uint16Array(N).fill(0xffff); // 16-compartment structural spine presence bitmask
+    this.wGiga = new Int8Array(8 * N); // 113,248,384 plastic Int8 branch-cluster weights x 10 spines/cluster = 1,132,483,840 synapses!
     this.wGiga.fill(64);
-    this.gateGiga.fill((220 << 8) | 30); // hNa ~= 0.86, nK ~= 0.12
+    this.gateGiga.fill((36 << 8) | 12); // discrete inactivated Na & open K channels
     for (let i = 0; i < N; i += 17) this.vGiga[i] = ((i * 1103515245) >>> 21) & 1023;
   }
 
@@ -941,8 +986,8 @@ export class Brain {
       this.subXpost[s] *= dtr;
     }
 
-    // 2) Step active rotating microcolumn slice across the 14.16M-neuron THAL+CTX+HIP sheet
-    let nSheetSpk = 0, nPlat = 0, nNmda = 0;
+    // 2) Step active rotating microcolumn slice across the 14.16M-neuron THAL+CTX+HIP sheet (1.132B spine-cluster synaptome!)
+    let nSheetSpk = 0, nPlat = 0, nNmda = 0, openNaSum = 0, openKSum = 0, openCnt = 0;
     if (!delegated) {
       const prev = this.prevSheetSpk, prevCnt = this.nPrevSheetSpk;
       for (let q = 0; q < prevCnt; q++) spk[prev[q]] = 0;
@@ -953,7 +998,8 @@ export class Brain {
       const dtG = Math.min(0.018, dt * 8);
       const drG = Math.exp(-dt * this.gigaSlices / 0.15);
       const inv15G = 1 / 0.15;
-      const vG = this.vGiga, synG = this.synGiga, apG = this.apGiga, gateG = this.gateGiga, wG = this.wGiga;
+      const vG = this.vGiga, synG = this.synGiga, oblG = this.oblGiga, apG = this.apGiga;
+      const gateG = this.gateGiga, maskG = this.spineMaskGiga, wG = this.wGiga;
       const sh0 = R0.THAL, sh1 = R0.STR, ctx0 = R0.CTX, ctx1 = R0.HIP;
       const achGain = 0.35 + 0.4 * nm.ACh;
       const dDA = nm.DA - 0.3;
@@ -968,93 +1014,129 @@ export class Brain {
 
         const vs = vG[i] * (1 / 4096);
         const bas = synG[i] * (1 / 2048);
+        const obl = oblG[i] * (1 / 2048);
         const ap = apG[i] * (1 / 2048);
         let isyn = bas;
 
         if (isPyr) {
-          // Local basal NMDA spike + apical HCN sag + Larkum Ca_v BAC burst
+          // Discrete basal NMDA spine-cluster electrogenesis + oblique collateral + apical HCN sag + Larkum Ca_v BAC burst
           let nmdaBoost = 0;
           if (bas > 0.14) {
-            nmdaBoost = 0.24 * (bas - 0.14) / (1 + 0.28 * Math.exp(-3.2 * bas));
-            nNmda++;
+            const pUnblock = 1 / (1 + 0.28 * Math.exp(-3.2 * bas));
+            const nOpenSpine = sampleBinomialInt(80, Math.min(0.95, (bas - 0.14) * pUnblock * 1.35), u32);
+            nmdaBoost = 0.20 * (nOpenSpine / 80);
+            if (nOpenSpine > 4) nNmda++;
           }
           const iHCN = 0.08 * (0.28 - ap);
           let bac = 0;
-          if ((bas > 0.12 || vs > 0.56) && ap > 0.05) {
-            bac = achGain * Math.min(0.85, 1.8 * (bas + 0.3 * ap));
+          if ((bas > 0.12 || obl > 0.09 || vs > 0.56) && ap > 0.05) {
+            bac = achGain * Math.min(0.85, 1.75 * (bas + 0.25 * obl + 0.3 * ap));
             if (bac > 0.05) nPlat++;
           }
-          isyn = (bas + nmdaBoost + 0.42 * (ap + iHCN) + bac) * G[rk];
+          isyn = (bas + 0.32 * obl + nmdaBoost + 0.42 * (ap + iHCN) + bac) * G[rk];
         } else {
           isyn = bas * G[rk];
         }
 
         const I = (SB[rk] + ext[i] + RB[rk] + isyn + nz) * gainNE;
-        // Unpack Markov Na_v/K_v gates + Fox-Lu finite-channel stochastic diffusion
+        // Unpack discrete integer Markov channel counts (255-scale AIS Na_v inactivated & K_v open pools)
         const gt = gateG[i];
-        let hNa = ((gt >>> 8) & 255) * (1 / 255);
-        let nK = (gt & 255) * (1 / 255);
-        const chanNz = (((u32 >>> 8) & 255) - 127.5) * 0.00028;
-        hNa = clamp(hNa + 0.28 * ((vs < 0.5 ? 0.86 : 0.22) - hNa) + chanNz, 0.04, 0.99);
-        nK = clamp(nK + 0.30 * ((vs > 0.45 ? 0.76 : 0.12) - nK) - chanNz, 0.02, 0.98);
-
+        let nNaI = (gt >>> 8) & 255;
+        let nKO = gt & 255;
+        const nAvailNa = 255 - nNaI;
         const mInf = isPyr ? (0.5 + 0.5 * ((vs - 0.64) * 5.5) / (1 + Math.abs((vs - 0.64) * 5.5))) : 0;
-        const iIon = isPyr ? (0.28 * mInf * mInf * mInf * hNa * (2.0 - vs) - 0.30 * nK * nK * nK * nK * (vs + 0.25)) : 0;
+        const nOpenNa = isPyr ? sampleBinomialInt(nAvailNa, mInf * mInf * mInf, u32) : 0;
+        const hTarget = vs < 0.5 ? 0.86 : 0.22;
+        const kTarget = vs > 0.45 ? 0.33 : 0.01;
+        nNaI = clamp(
+          nNaI + sampleBinomialInt(nAvailNa, (1 - hTarget) * 0.26, u32 >>> 3) - sampleBinomialInt(nNaI, hTarget * 0.26, u32 >>> 7),
+          3,
+          248
+        );
+        nKO = clamp(
+          nKO + sampleBinomialInt(255 - nKO, kTarget * 0.30, u32 >>> 5) - sampleBinomialInt(nKO, (1 - kTarget) * 0.30, u32 >>> 9),
+          0,
+          250
+        );
+        if (isPyr && (i & 1023) === 0) { openNaSum += nOpenNa * (600 / 255); openKSum += nKO * (400 / 255); openCnt++; }
+
+        const iIon = isPyr ? (0.28 * (nOpenNa / 255) * (2.0 - vs) - 0.30 * (nKO / 255) * (vs + 0.25)) : 0;
         const nv = vs + (dtG / 0.015) * (I + iIon - vs);
 
-        // Mirror representative cortical cell into oscilloscope preview buffer
+        // Mirror representative cortical cell across all 16 compartments into oscilloscope preview buffer
         if ((i & 4095) === 1024 && rk === 2) {
           const wIdx = (i >>> 12) & 4095;
           this.v[wIdx] = nv;
           this.vAIS[wIdx] = nv * 1.08;
+          this.vCollat0[wIdx] = nv * 0.72;
+          this.vCollat1[wIdx] = nv * 0.54;
           this.vBasal[wIdx] = bas;
+          this.vBasalL1[wIdx] = bas * 0.92;
           this.vBasalR[wIdx] = bas * 0.85;
-          this.vOblique[wIdx] = 0.5 * (bas + ap);
+          this.vBasalR1[wIdx] = bas * 0.78;
+          this.vOblique[wIdx] = obl;
+          this.vObliqueR[wIdx] = obl * 0.88;
           this.vTrunk[wIdx] = 0.65 * ap;
+          this.vTrunkDist[wIdx] = 0.82 * ap;
           this.apical[wIdx] = ap;
-          this.vTuftB[wIdx] = ap * 0.9;
+          this.vTuftA1[wIdx] = ap * 0.94;
+          this.vTuftB[wIdx] = ap * 0.90;
+          this.vTuftB1[wIdx] = ap * 0.84;
         }
 
         if (nv > 1.0) {
           vG[i] = 0;
-          hNa *= 0.38;
-          nK = Math.min(0.96, nK + 0.30);
+          nNaI = Math.min(248, nNaI + ((255 - nNaI) >> 1));
+          nKO = Math.min(245, nKO + 48);
           apG[i] = clamp((ap + 0.04) * 1650, -16384, 16383);
           spk[i] = 1;
           rate[i] = rate[i] * drG + inv15G;
           if (nSheetSpk < this.prevSheetSpk.length) this.prevSheetSpk[nSheetSpk++] = i;
           if (nSpk < spkList.length) spkList[nSpk++] = i;
 
-          // Deliver spike across 4 individually plastic Int8 synapses in `wGiga` (56.62M synapses total!)
-          const wBase = i * 4;
+          // Deliver spike across 8 plastic Int8 dendritic branch clusters x 10 laminar/horizontal spines = 80 spines/cell (1.13B total!)
+          const wBase = i * 8;
           const inh = typeOf(i) !== 0;
-          const sign = inh ? -26 : 18;
+          const sign = inh ? -13 : 9;
           const nSpan = sh1 - sh0;
-          for (let synK = 0; synK < 4; synK++) {
-            const wInt = wG[wBase + synK];
-            const dst = synK < 2
-              ? (sh0 + ((i - sh0 + (synK === 0 ? 1 : SIDE_CTX)) % nSpan))
-              : (sh0 + ((Math.imul(i + synK * 7919, 2654435761) >>> 7) % nSpan));
+          const sMask = maskG[i];
+          for (let cl = 0; cl < 8; cl++) {
+            if (((sMask >>> cl) & 1) === 0) continue;
+            const wInt = wG[wBase + cl];
+            let dst;
+            if (cl < 4) {
+              const stepOff = cl === 0 ? 1 : cl === 1 ? SIDE_CTX : cl === 2 ? (nSpan - 1) : (nSpan - SIDE_CTX);
+              dst = sh0 + ((i - sh0 + stepOff) % nSpan);
+            } else {
+              dst = sh0 + ((Math.imul(i + cl * 7919, 2654435761) >>> 7) % nSpan);
+            }
             const deltaQ = (sign * wInt) >> 4;
-            if (synK === 3 && !inh) apG[dst] = clamp(apG[dst] + deltaQ, -16384, 16383);
+            if ((cl === 6 || cl === 7) && !inh) apG[dst] = clamp(apG[dst] + deltaQ, -16384, 16383);
+            else if (cl === 4 || cl === 5) oblG[dst] = clamp(oblG[dst] + deltaQ, -16384, 16383);
             else synG[dst] = clamp(synG[dst] + deltaQ, -16384, 16383);
-            if (stdpOn && !inh && (synK === 2) && (i & 15) === 0) {
+
+            if (stdpOn && !inh && (cl === 4 || cl === 6) && (i & 31) === 0) {
               const postActive = rate[dst] > 7.5 ? 1 : -1;
               const nw = clamp(wInt + (dDA >= 0 ? postActive : -postActive), 12, 124);
-              if (nw !== wInt) { wG[wBase + synK] = nw; this.stdpEvents++; }
+              if (nw !== wInt) { wG[wBase + cl] = nw; this.stdpEvents++; }
             }
           }
         } else {
           vG[i] = clamp(nv * 4096, -6144, 4095);
           rate[i] *= drG;
           synG[i] = (synG[i] * 205) >> 8;
+          oblG[i] = (oblG[i] * 212) >> 8;
           apG[i] = (apG[i] * 226) >> 8;
         }
-        gateG[i] = (((hNa * 255) | 0) << 8) | ((nK * 255) | 0);
+        gateG[i] = (nNaI << 8) | nKO;
       }
       this.nPrevSheetSpk = nSheetSpk;
       this.plateauBursts = 0.9 * this.plateauBursts + 0.1 * nPlat;
       this.nmdaSpikes = 0.9 * this.nmdaSpikes + 0.1 * nNmda;
+      if (openCnt > 0) {
+        this.markovOpenNaMean = 0.9 * this.markovOpenNaMean + 0.1 * (openNaSum / openCnt);
+        this.markovOpenKMean = 0.9 * this.markovOpenKMean + 0.1 * (openKSum / openCnt);
+      }
     }
 
     // 3) Explicit CSR delivery (sensory -> thal, ctx/hip -> str/mot, str -> mot, etc.)
@@ -1087,18 +1169,20 @@ export class Brain {
   }
 
   /**
-   * One integration step of dt seconds (2 ms base; impulse-invariant multi-rate sheet step on L..MEGA; active-wave Int8 on GIGA).
-   * Integrates 8-compartment branched cable arbours (AIS + Soma + BasalL/R NMDA + Oblique + HCN Trunk + TuftA/B Ca_v/SK)
-   * with Fox-Lu (1994) stochastic single-channel Markov subunit Langevin diffusion!
+   * One integration step of dt seconds (2 ms base; impulse-invariant multi-rate sheet step on L..MEGA; 1.13B spine-cluster wave on GIGA).
+   * Integrates 16-compartment branched cable arbours (AIS + Soma + Collat0/1 + BasalL0/L1/R0/R1 + ObliqueL/R + TrunkProx/Dist + TuftA0/A1/B0/B1)
+   * with exact discrete integer Gillespie/binomial Markov-chain ion-channel state transitions (Na_v C0-C1-C2-O-I, K_v C0-C1-C2-O, Ca_v C-O-I)!
    */
   step(dt) {
     if (this.isGiga) {
       this._stepGiga(dt);
       return;
     }
-    const N = this.N, v = this.v, vAIS = this.vAIS, syn = this.syn;
-    const vBasalL = this.vBasal, vBasalR = this.vBasalR, vOblique = this.vOblique, vTrunk = this.vTrunk;
-    const vTuftA = this.apical, vTuftB = this.vTuftB;
+    const N = this.N, v = this.v, vAIS = this.vAIS, vCol0 = this.vCollat0, vCol1 = this.vCollat1, syn = this.syn;
+    const vBasalL0 = this.vBasal, vBasalL1 = this.vBasalL1, vBasalR0 = this.vBasalR, vBasalR1 = this.vBasalR1;
+    const vObliqueL = this.vOblique, vObliqueR = this.vObliqueR, vTrunk = this.vTrunk, vTrunkDist = this.vTrunkDist;
+    const vTuftA0 = this.apical, vTuftA1 = this.vTuftA1, vTuftB0 = this.vTuftB, vTuftB1 = this.vTuftB1;
+    const nNaI = this.nNaI, nNaO = this.nNaO, nKO = this.nKO, nCaO = this.nCaO, nCaI = this.nCaI;
     const hNa = this.hNa, nK = this.nK, hHCN = this.hHCN, mSK = this.mSK, ad = this.ad, ref = this.ref;
     const ext = this.ext, vBias = this.vBias, jolt = this.jolt, rate = this.rate, xpre = this.xpre, xpost = this.xpost;
     const spk = this.spk, spkList = this.spkList, tauM = this.tauM, adInc = this.adInc, nm = this.nm;
@@ -1122,20 +1206,20 @@ export class Brain {
     const doblS = Math.exp(-dtS / 0.010);
     const dtrkS = Math.exp(-dtS / 0.014);
     const dapS = Math.exp(-dtS / 0.018);
+    const dcolS = Math.exp(-dtS / (0.006 * this.myelinGain));
     const drS = stride === 1 ? dr : Math.exp(-dtS / 0.15);
     const dtrS = stride === 1 ? dtr : Math.exp(-dtS / 0.02);
     const daS = stride === 1 ? da : Math.exp(-dtS / 0.3);
 
-    // Exact Rush-Larsen exponential gating relaxation factors: AIS Na_v (5ms), K_v (4ms), Trunk HCN I_h (35ms), Tuft SK (45ms)
+    // Discrete Markov transition hazard factors over dtS: Na_v (5ms), K_v (4ms), Ca_v (12ms), Trunk HCN I_h (35ms), Tuft SK (45ms)
     const dHNa = Math.exp(-dtS / 0.005);
     const dNK = Math.exp(-dtS / 0.004);
+    const dCa = Math.exp(-dtS / 0.012);
     const dHCN = Math.exp(-dtS / 0.035);
     const dSK = Math.exp(-dtS / 0.045);
-
-    // Fox-Lu (1994) stochastic single-channel Markov subunit Langevin prefactors: sqrt(dtS / (tau_gate * N_channels))
-    // Finite AIS patch channel counts: N_Na = 480 channels, N_K = 320 channels
-    const markovScaleNa = Math.sqrt(dtS / (0.005 * 480)) * (1.7320508 / 255);
-    const markovScaleK = Math.sqrt(dtS / (0.004 * 320)) * (1.7320508 / 255);
+    const hazNa = 1 - dHNa;
+    const hazK = 1 - dNK;
+    const hazCa = 1 - dCa;
 
     const strideScale = stride === 2 ? 0.80 : 1;
     const kSynS = stride === 1 ? 1 : ((0.00606648 * (1 - dsS)) / dtS) * strideScale;
@@ -1154,6 +1238,7 @@ export class Brain {
 
     let rng = this.rngState | 0;
     let nSpk = 0, nSheetSpk = 0, nPlat = 0, nNmda = 0, sagSum = 0, skSum = 0, chNzSum = 0, sagCnt = 0;
+    let openNaSum = 0, openKSum = 0, openCaSum = 0;
     const prevSh = this.prevSheetSpk;
     const inv15 = 1 / 0.15, now = this.t;
 
@@ -1170,28 +1255,31 @@ export class Brain {
 
       let isyn;
       if (isPyr) {
-        // 8-compartment branched pyramidal dendritic cable tree:
-        //   Comp 2 & 3 (BasalL, BasalR): Independent local Jahr-Stevens Mg2+ unblock -> regenerative dendritic NMDA spikes!
-        const bL = vBasalL[i] * kBasS;
-        const bR = vBasalR[i] * kBasS;
+        // 16-Compartment Branched Pyramidal Dendritic Cable Arbour:
+        //   Comp 4..7 (BasalL0/L1, BasalR0/R1): 4 basal sister branches with discrete Mg2+-unblocked NMDA spine channels (N_NMDA = 80)
+        const bL = (vBasalL0[i] + vBasalL1[i]) * kBasS;
+        const bR = (vBasalR0[i] + vBasalR1[i]) * kBasS;
         let nmdaL = 0, nmdaR = 0;
         if (bL > 0.14) {
-          nmdaL = 0.22 * (bL - 0.14) / (1 + 0.28 * Math.exp(-3.4 * bL));
-          nNmda++;
+          const pMgL = 1 / (1 + 0.28 * Math.exp(-3.4 * bL));
+          const nOpenL = sampleBinomialInt(80, Math.min(0.96, (bL - 0.14) * pMgL * 1.4), u32);
+          nmdaL = 0.16 * (nOpenL / 80);
+          if (nOpenL > 3) nNmda++;
         }
         if (bR > 0.14) {
-          nmdaR = 0.22 * (bR - 0.14) / (1 + 0.28 * Math.exp(-3.4 * bR));
-          nNmda++;
+          const pMgR = 1 / (1 + 0.28 * Math.exp(-3.4 * bR));
+          const nOpenR = sampleBinomialInt(80, Math.min(0.96, (bR - 0.14) * pMgR * 1.4), u32 >>> 3);
+          nmdaR = 0.16 * (nOpenR / 80);
+          if (nOpenR > 3) nNmda++;
         }
         const bas = bL + bR + nmdaL + nmdaR;
 
-        //   Comp 4 (Oblique) + Comp 6 & 7 (TuftA, TuftB) -> Comp 5 (Apical Trunk electrotonic cable with HCN I_h sag + SK AHP)
-        const obl = vOblique[i] * kBasS;
-        const tA = vTuftA[i] * kApS;
-        const tB = vTuftB[i] * kApS;
-        const tuft = 0.55 * (tA + tB);
-        const trkPrev = vTrunk[i];
-        const trk = trkPrev * dtrkS + (1 - dtrkS) * (0.58 * tuft + 0.30 * obl + 0.12 * v[i]);
+        //   Comp 8..9 (ObliqueL/R) + Comp 12..15 (TuftA0/A1/B0/B1) -> Comp 11 (Distal Nexus Ca_v) -> Comp 10 (Proximal HCN Trunk)
+        const obl = (vObliqueL[i] + vObliqueR[i]) * kBasS;
+        const tuft = 0.55 * ((vTuftA0[i] + vTuftA1[i] + vTuftB0[i] + vTuftB1[i]) * kApS);
+        const trkDist = vTrunkDist[i] * dtrkS + (1 - dtrkS) * (0.68 * tuft + 0.22 * obl + 0.10 * v[i]);
+        vTrunkDist[i] = trkDist;
+        const trk = vTrunk[i] * dtrkS + (1 - dtrkS) * (0.64 * trkDist + 0.24 * obl + 0.12 * v[i]);
         vTrunk[i] = trk;
 
         const zHcn = (-0.10 - trk) * 3.8;
@@ -1200,22 +1288,40 @@ export class Brain {
         hHCN[i] = hc;
         const iHCN = 0.11 * hc * (0.30 - trk);
 
+        // Discrete 3-state Markov Ca_v (C <-> O <-> I, N_Ca = 160) in Distal Nexus (Comp 11)
         let bac = 0, caDrive = 0;
+        let curCaO = nCaO[i], curCaI = nCaI[i];
+        const curCaC = Math.max(0, 160 - curCaO - curCaI);
         if ((bas > 0.10 || obl > 0.08 || v[i] > 0.56) && tuft > 0.045) {
-          const zCa = (tuft + 0.28 * trk + 0.24 * v[i] - 0.17) * 5.0;
+          const zCa = (tuft + 0.28 * trkDist + 0.24 * v[i] - 0.17) * 5.0;
           const mCa = 0.5 + (0.5 * zCa) / (1 + (zCa < 0 ? -zCa : zCa));
-          caDrive = mCa * mCa;
+          const pCaOpen = mCa * mCa;
+          const dOpen = sampleBinomialInt(curCaC, pCaOpen * hazCa * 1.4, u32 >>> 2);
+          const dClose = sampleBinomialInt(curCaO, (1 - pCaOpen) * hazCa, u32 >>> 5);
+          const dInact = sampleBinomialInt(Math.max(0, curCaO - dClose), 0.12 * hazCa, u32 >>> 7);
+          curCaO = clamp(curCaO + dOpen - dClose - dInact, 0, 160);
+          curCaI = clamp(curCaI + dInact - sampleBinomialInt(curCaI, 0.20 * hazCa, u32 >>> 9), 0, 160 - curCaO);
+          caDrive = curCaO * (1 / 160);
           bac = achGain * Math.min(0.95, 2.25 * caDrive * (Math.max(0.02, bas - 0.06) + 0.26 * tuft));
           if (bac > 0.04) nPlat++;
+        } else {
+          const dClose = sampleBinomialInt(curCaO, 0.55 * hazCa, u32 >>> 4);
+          const dRec = sampleBinomialInt(curCaI, 0.28 * hazCa, u32 >>> 8);
+          curCaO = Math.max(0, curCaO - dClose);
+          curCaI = Math.max(0, curCaI - dRec);
+          caDrive = curCaO * (1 / 160);
         }
-        // Rush-Larsen SK Ca2+-activated K+ afterhyperpolarization channel (terminates prolonged dendritic Ca2+ plateaus)
+        nCaO[i] = curCaO;
+        nCaI[i] = curCaI;
+
+        // Rush-Larsen SK Ca2+-activated K+ afterhyperpolarization channel in TuftB1 (Comp 15)
         const skInf = caDrive / (caDrive + 0.35);
         const sk = skInf + (mSK[i] - skInf) * dSK;
         mSK[i] = sk;
         const iSK = 0.16 * sk * (trk + 0.35);
 
-        if ((i & 63) === 0) { sagSum += hc; skSum += sk; sagCnt++; }
-        const apEff = trk + 0.28 * obl + iHCN - iSK;
+        if ((i & 63) === 0) { sagSum += hc; skSum += sk; openCaSum += curCaO; sagCnt++; }
+        const apEff = trk + 0.28 * obl + iHCN - iSK + 0.05 * vCol0[i];
         isyn = (syn[i] * kSynS + bas + 0.46 * (apEff < -0.5 ? -0.5 : apEff) + bac) * G[rk];
       } else {
         isyn = syn[i] * (inSheet ? kSynS : 1) * G[rk];
@@ -1233,8 +1339,12 @@ export class Brain {
         v[i] = 0;
         if (isPyr) {
           vAIS[i] = 0;
-          hNa[i] = 0.88 + (hNa[i] - 0.88) * dHNa;
-          nK[i] = 0.12 + (nK[i] - 0.12) * dNK;
+          const dRecRef = sampleBinomialInt(nNaI[i], 0.88 * hazNa, u32 >>> 3);
+          nNaI[i] = Math.max(12, nNaI[i] - dRecRef);
+          nNaO[i] = 0;
+          nKO[i] = Math.max(1, nKO[i] - sampleBinomialInt(nKO[i], 0.85 * hazK, u32 >>> 6));
+          hNa[i] = 1 - nNaI[i] * (1 / 600);
+          nK[i] = Math.sqrt(Math.sqrt(nKO[i] * (1 / 400)));
         }
         spk[i] = 0;
       } else {
@@ -1253,31 +1363,48 @@ export class Brain {
         ref[i] = 0;
 
         if (isPyr) {
-          // Comp 0 (AIS) <-> Comp 1 (Soma) Rush-Larsen Hodgkin-Huxley + Fox-Lu (1994) stochastic Markov subunit diffusion
+          // Comp 0 (AIS) <-> Comp 1 (Soma): Exact Discrete Integer Gillespie/Binomial 5-State Na_v (C0-C1-C2-O-I, N=600)
+          // & 4-State K_v (C0-C1-C2-O, N=400) Markov Channel Kinetics!
           const vs = v[i], va = 0.64 * vs + 0.36 * vAIS[i];
           const zm = (va - 0.66) * 6.5;
           const mInf = 0.5 + (0.5 * zm) / (1 + (zm < 0 ? -zm : zm));
           const m3 = mInf * mInf * mInf;
-          const hn = hNa[i], nk = nK[i], nk2 = nk * nk;
-          const iNa = 0.34 * m3 * hn * (2.1 - va);
-          const iK = 0.38 * nk2 * nk2 * (va + 0.28);
+
+          let curNaI = nNaI[i];
+          const nAvailNa = 600 - curNaI;
+          const curNaO = sampleBinomialInt(nAvailNa, m3, u32);
+          nNaO[i] = curNaO;
+
+          let curKO = nKO[i];
+          const openFracNa = curNaO * (1 / 600);
+          const openFracK = curKO * (1 / 400);
+          const iNa = 0.34 * openFracNa * (2.1 - va);
+          const iK = 0.38 * openFracK * (va + 0.28);
 
           const zh = (0.50 - va) * 5.2;
           const hInf = 0.5 + (0.5 * zh) / (1 + (zh < 0 ? -zh : zh));
           const zn = (va - 0.46) * 4.8;
           const nInf = 0.5 + (0.5 * zn) / (1 + (zn < 0 ? -zn : zn));
+          const pKTgt = nInf * nInf * nInf * nInf;
 
-          // Stochastic Markov subunit variance: p*(1-p) + transition flux (alpha*(1-x) + beta*x) = hInf*(1-hn) + (1-hInf)*hn
-          const fluxH = Math.max(0.01, hInf * (1 - hn) + (1 - hInf) * hn);
-          const fluxN = Math.max(0.01, nInf * (1 - nk) + (1 - nInf) * nk);
-          const xiH = (((u32 >>> 8) & 0xff) + ((u32 >>> 16) & 0xff) - 255) * markovScaleNa;
-          const xiN = (((u32 >>> 24) & 0xff) + (u32 & 0xff) - 255) * markovScaleK;
-          const dhStoch = Math.sqrt(fluxH) * xiH;
-          const dnStoch = Math.sqrt(fluxN) * xiN;
-          if ((i & 63) === 0) chNzSum += Math.abs(dhStoch) + Math.abs(dnStoch);
+          // Discrete integer Markov transitions across C/O <-> I (Na_v) and C <-> O (K_v)
+          const dNaInact = sampleBinomialInt(nAvailNa, (1 - hInf) * hazNa, u32 >>> 4);
+          const dNaRec = sampleBinomialInt(curNaI, hInf * hazNa, u32 >>> 8);
+          const nextNaI = clamp(curNaI + dNaInact - dNaRec, 6, 588);
 
-          hNa[i] = clamp(hInf + (hn - hInf) * dHNa + dhStoch, 0.02, 0.995);
-          nK[i] = clamp(nInf + (nk - nInf) * dNK + dnStoch, 0.01, 0.99);
+          const dKOpen = sampleBinomialInt(400 - curKO, pKTgt * hazK, u32 >>> 6);
+          const dKClose = sampleBinomialInt(curKO, (1 - pKTgt) * hazK, u32 >>> 11);
+          const nextKO = clamp(curKO + dKOpen - dKClose, 0, 396);
+
+          if ((i & 63) === 0) {
+            chNzSum += Math.abs(nextNaI - curNaI) * (1 / 600) + Math.abs(nextKO - curKO) * (1 / 400);
+            openNaSum += curNaO;
+            openKSum += curKO;
+          }
+          nNaI[i] = nextNaI;
+          nKO[i] = nextKO;
+          hNa[i] = 1 - nextNaI * (1 / 600);
+          nK[i] = Math.sqrt(Math.sqrt(nextKO * (1 / 400)));
 
           const nv = vs + aMem * (I + 0.65 * (iNa - iK) - ad[i] - vs);
           const nva = va + Math.min(0.95, aMem * 1.25) * (I + iNa - iK - ad[i] - va);
@@ -1285,13 +1412,21 @@ export class Brain {
           if (nva > 1.0 || nv > 1.0) {
             v[i] = 0;
             vAIS[i] = -0.10;
-            hNa[i] *= 0.32;
-            nK[i] = Math.min(0.95, nK[i] + 0.34);
-            // Backpropagating AP (bAP) invades Apical Trunk -> Oblique & bifurcated L1 Tuft sisters!
+            nNaI[i] = clamp(nextNaI + Math.round((600 - nextNaI) * 0.65), 12, 592);
+            nKO[i] = Math.min(388, nextKO + 96);
+            hNa[i] = 1 - nNaI[i] * (1 / 600);
+            nK[i] = Math.sqrt(Math.sqrt(nKO[i] * (1 / 400)));
+            // Orthodromic invasion into Comp 2..3 (Axon Collaterals) + Backpropagating AP (bAP) up Trunk -> Nexus -> Obliques -> L1 Tufts!
+            vCol0[i] += 0.085 * this.myelinGain;
+            vCol1[i] += 0.055 * this.myelinGain;
             vTrunk[i] += 0.042;
-            vOblique[i] += 0.024;
-            vTuftA[i] += 0.028;
-            vTuftB[i] += 0.026;
+            vTrunkDist[i] += 0.035;
+            vObliqueL[i] += 0.014;
+            vObliqueR[i] += 0.012;
+            vTuftA0[i] += 0.015;
+            vTuftA1[i] += 0.013;
+            vTuftB0[i] += 0.014;
+            vTuftB1[i] += 0.012;
             ref[i] = 0.002;
             spk[i] = 1;
             spkList[nSpk++] = i;
@@ -1325,11 +1460,18 @@ export class Brain {
       if (inSheet) {
         ad[i] *= daS;
         syn[i] *= dsS;
-        vBasalL[i] *= dbasS;
-        vBasalR[i] *= dbasS;
-        vOblique[i] *= doblS;
-        vTuftA[i] *= dapS;
-        vTuftB[i] *= dapS;
+        vCol0[i] *= dcolS;
+        vCol1[i] *= dcolS;
+        vBasalL0[i] *= dbasS;
+        vBasalL1[i] *= dbasS;
+        vBasalR0[i] *= dbasS;
+        vBasalR1[i] *= dbasS;
+        vObliqueL[i] *= doblS;
+        vObliqueR[i] *= doblS;
+        vTuftA0[i] *= dapS;
+        vTuftA1[i] *= dapS;
+        vTuftB0[i] *= dapS;
+        vTuftB1[i] *= dapS;
         rate[i] *= drS;
         xpre[i] *= dtrS;
         xpost[i] *= dtrS;
@@ -1352,10 +1494,13 @@ export class Brain {
         this.ihMean = this.ihSagMean;
         this.skMean = 0.9 * this.skMean + 0.1 * (skSum / sagCnt);
         this.channelNoiseMean = 0.9 * this.channelNoiseMean + 0.1 * (chNzSum / sagCnt);
+        this.markovOpenNaMean = 0.9 * this.markovOpenNaMean + 0.1 * (openNaSum / sagCnt);
+        this.markovOpenKMean = 0.9 * this.markovOpenKMean + 0.1 * (openKSum / sagCnt);
+        this.markovOpenCaMean = 0.9 * this.markovOpenCaMean + 0.1 * (openCaSum / sagCnt);
       }
     }
 
-    // 1) Explicit CSR spike delivery across all 8 branched compartments + BCM STDP eligibility
+    // 1) Explicit CSR spike delivery across all 16 branched compartments + BCM STDP eligibility
     const stdpOn = !this.lesion.stdp, homeoOn = !this.lesion.homeo;
     const Ap = 0.01 * this.ctxPlasticGain, Am = 0.0102 * this.ctxPlasticGain;
     const out0 = this.out0, post = this.post, W = this.w, pl = this.plastic, comp = this.comp;
@@ -1366,11 +1511,16 @@ export class Brain {
       const a = out0[i], b = out0[i + 1];
       for (let s = a; s < b; s++) {
         const j = post[s], ws = W[s], c = comp[s];
-        if (c === 1) vBasalL[j] += ws;
-        else if (c === 3) vBasalR[j] += ws;
-        else if (c === 4) vOblique[j] += ws;
-        else if (c === 2) vTuftA[j] += ws;
-        else if (c === 5) vTuftB[j] += ws;
+        if (c === 1) vBasalL0[j] += ws;
+        else if (c === 6) vBasalL1[j] += ws;
+        else if (c === 3) vBasalR0[j] += ws;
+        else if (c === 7) vBasalR1[j] += ws;
+        else if (c === 4) vObliqueL[j] += ws;
+        else if (c === 8) vObliqueR[j] += ws;
+        else if (c === 2) vTuftA0[j] += ws;
+        else if (c === 9) vTuftA1[j] += ws;
+        else if (c === 5) vTuftB0[j] += ws;
+        else if (c === 10) vTuftB1[j] += ws;
         else syn[j] += ws;
 
         if (stdpOn && pl[s]) {
@@ -1407,11 +1557,12 @@ export class Brain {
   }
 
   /**
-   * Cache-free 16-synapse procedural canonical laminar + small-world propagation across 8-compartment arbours on MEGA.
+   * Cache-free 16-synapse procedural canonical laminar + small-world propagation across 16-compartment arbours on MEGA.
    */
   deliverProceduralStencil(nSpk, stdpOn) {
-    const spkList = this.spkList, vBasalL = this.vBasal, vBasalR = this.vBasalR, vOblique = this.vOblique;
-    const vTuftA = this.apical, vTuftB = this.vTuftB, syn = this.syn;
+    const spkList = this.spkList, vBasalL0 = this.vBasal, vBasalL1 = this.vBasalL1;
+    const vBasalR0 = this.vBasalR, vBasalR1 = this.vBasalR1, vObliqueL = this.vOblique, vObliqueR = this.vObliqueR;
+    const vTuftA0 = this.apical, vTuftA1 = this.vTuftA1, vTuftB0 = this.vTuftB, vTuftB1 = this.vTuftB1, syn = this.syn;
     const wProc = this.wProc, rate = this.rate, dDA = this.nm.DA - 0.3;
     const th0 = R0.THAL, ctx0 = R0.CTX, ctx1 = R0.CTX + RN.CTX, hip0 = R0.HIP, hip1 = R0.HIP + RN.HIP;
     const nCtx = RN.CTX, nHip = RN.HIP, sideCtx = SZ.side;
@@ -1426,7 +1577,7 @@ export class Brain {
         const ws = 0.26 * wp;
         for (let t = 0; t < 16; t++) {
           const J = ctx0 + ((base + t * 61) % nCtx);
-          vBasalL[J] += ws;
+          if (t & 1) vBasalL1[J] += ws; else vBasalL0[J] += ws;
         }
       } else if (i < ctx1) {
         const rel = i - ctx0;
@@ -1439,21 +1590,28 @@ export class Brain {
           if (ny < 0) ny += sideCtx; else if (ny >= sideCtx) ny -= sideCtx;
           const J = ctx0 + ny * sideCtx + nx;
           if (tp === 2 || (tp === 0 && lay === 3 && LAYER[J] === 2)) {
-            if (t & 1) vTuftB[J] += ws; else vTuftA[J] += ws;
+            if ((t & 3) === 0) vTuftA0[J] += ws;
+            else if ((t & 3) === 1) vTuftA1[J] += ws;
+            else if ((t & 3) === 2) vTuftB0[J] += ws;
+            else vTuftB1[J] += ws;
           } else if (tp === 1) {
             syn[J] += ws;
           } else if (t >= 8 && lay === 2) {
-            vOblique[J] += ws;
-          } else if (t & 1) {
-            vBasalR[J] += ws;
+            if (t & 1) vObliqueR[J] += ws; else vObliqueL[J] += ws;
+          } else if ((t & 3) === 0) {
+            vBasalL0[J] += ws;
+          } else if ((t & 3) === 1) {
+            vBasalL1[J] += ws;
+          } else if ((t & 3) === 2) {
+            vBasalR0[J] += ws;
           } else {
-            vBasalL[J] += ws;
+            vBasalR1[J] += ws;
           }
         }
         if (tp === 0) {
           for (let h = 1; h <= 3; h++) {
             const J = ctx0 + (((Math.imul(rel + h * 7919, 2654435761) >>> 8)) % nCtx);
-            vBasalR[J] += ws * 0.85;
+            if (h & 1) vBasalR0[J] += ws * 0.85; else vBasalR1[J] += ws * 0.85;
           }
           const Jh = hip0 + (((Math.imul(rel + 13, 1597334677) >>> 9)) % nHip);
           syn[Jh] += 0.055 * wp;
@@ -1474,7 +1632,10 @@ export class Brain {
           const cBase = Math.floor((rel / nHip) * nCtx);
           for (let h = 0; h < 4; h++) {
             const J = ctx0 + ((cBase + h * 241) % nCtx);
-            if (h & 1) vTuftB[J] += 0.058 * wp; else vTuftA[J] += 0.058 * wp;
+            if (h === 0) vTuftA0[J] += 0.058 * wp;
+            else if (h === 1) vTuftA1[J] += 0.058 * wp;
+            else if (h === 2) vTuftB0[J] += 0.058 * wp;
+            else vTuftB1[J] += 0.058 * wp;
           }
         }
       }
@@ -1597,18 +1758,27 @@ export class Brain {
     }
   }
 
-  /** Hebbian activity-dependent structural plasticity */
+  /** Hebbian activity-dependent structural plasticity (including 16-compartment dendritic spine-cluster turnover on GIGA!) */
   rewire() {
     if (this.isGiga) {
       if (!this.wGiga) return;
-      const ctx0 = R0.CTX, nCtx = RN.CTX, r = this.r, wG = this.wGiga;
+      const ctx0 = R0.CTX, nCtx = RN.CTX, r = this.r, wG = this.wGiga, maskG = this.spineMaskGiga;
       let changed = 0;
       for (let q = 0; q < 128; q++) {
         const i = ctx0 + Math.floor(r() * nCtx);
-        if (typeOf(i) === 0 && this.rate[i] > 8) {
-          const idx = i * 4 + (q & 3);
-          if (wG[idx] < 96) {
-            wG[idx] = Math.min(118, wG[idx] + 4);
+        if (typeOf(i) === 0) {
+          const cl = q & 7;
+          const idx = i * 8 + cl;
+          if (this.rate[i] > 8 && wG[idx] < 98) {
+            wG[idx] = Math.min(120, wG[idx] + 4);
+            if (maskG) maskG[i] |= (1 << cl);
+            this.pruned++;
+            this.grown++;
+            changed++;
+          } else if (this.rate[i] < 0.5 && wG[idx] < 24 && maskG) {
+            // Prune silent dendritic spine cluster & sprout replacement cluster
+            maskG[i] = (maskG[i] & ~(1 << cl)) | (1 << ((cl + 3) & 7));
+            wG[i * 8 + ((cl + 3) & 7)] = 64;
             this.pruned++;
             this.grown++;
             changed++;
@@ -1680,7 +1850,7 @@ export class Brain {
         const rI = this.rate[I];
         m += rI; k++;
         const J = ctx0 + ((idx + 1) % sideCtx) + Math.floor(idx / sideCtx) * sideCtx;
-        if (typeOf(J) === 0) { a += rI * this.rate[J] * (wG[I * 4] / 64); n++; }
+        if (typeOf(J) === 0) { a += rI * this.rate[J] * (wG[I * 8] / 64); n++; }
       }
       m /= k || 1;
       return n && m > 0 ? a / n / (m * m) : 1.0;

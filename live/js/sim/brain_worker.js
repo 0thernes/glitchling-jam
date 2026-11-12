@@ -28,7 +28,7 @@ self.onmessage = async (ev) => {
       if (gpu) { brain.gpu = gpu; brain.backend = 'Worker+WebGPU'; }
       else brain.backend = brain.procStencil ? 'WebWorker-ProceduralCSR32' : 'WebWorker-CSR';
     } else if (brain.isGiga) {
-      brain.backend = 'WebWorker-GigaInt8CableCSR';
+      brain.backend = 'WebWorker-Giga1.13BSpineClusterCSR';
     } else {
       brain.backend = brain.procStencil ? 'WebWorker-ProceduralCSR32' : 'WebWorker-CSR';
     }
@@ -142,6 +142,9 @@ self.onmessage = async (ev) => {
         nmdaSpikes: brain.nmdaSpikes || 0,
         skMean: brain.skMean || 0,
         channelNoiseMean: brain.channelNoiseMean || 0,
+        markovOpenNaMean: brain.markovOpenNaMean || 0,
+        markovOpenKMean: brain.markovOpenKMean || 0,
+        markovOpenCaMean: brain.markovOpenCaMean || 0,
         ihSagMean: brain.ihSagMean || 0.24,
         dwLast: brain.dwLast || 0,
         backend: brain.backend,

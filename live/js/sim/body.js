@@ -1,11 +1,12 @@
-// Soft body (Pass 18): 336–348-Element Anisotropic Fiber-Reinforced (I4) 3D Volumetric Neo-Hookean Finite-Element (FEM) Continuum +
-// 108-Gene Embryonic Hox-GRN Topological Body Plans (4/6/8 Limbs) + Huxley 2-State Ca2+-Troponin Actin-Myosin Sarcomere Histology +
-// Two-Way LBM/Biot Poroelastic Fluid-Structure Interaction (FSI).
+// Soft body (Pass 19): 336–360-Element Anisotropic Fiber-Reinforced (I4) 3D Volumetric Neo-Hookean Finite-Element (FEM) Continuum +
+// 128-Gene Zygote-Cleavage / Gastrulation / Hox-GRN 5-Clade Body Plans (0L Serpent, 4L Tetrapod, 6L Hexapod, 8L Octopod, 10L Decapod) +
+// Patagium Gliding Wing-Membrane Aerodynamics + 32-Fascicle Henneman Size-Principle Sarcomere Histology + Two-Way Biot-LBM FSI.
 import * as T from '../tsotchke/taylor.js';
 import { clamp } from './util.js';
 import { evalHoxGRN } from './genome.js';
 
 export const NS = 7; // body segments, 0 = tail ... 6 = head
+export const N_FASCICLES = 32; // cellular muscle fascicles (Type-I SO, Type-IIA FOG, Type-IIB FG)
 const SEG = 0.4;
 export const RAD = Array.from({ length: NS }, (_, i) =>
   0.17 + 0.11 * Math.sin((Math.PI * (i + 0.6)) / (NS + 0.4)) + (i === NS - 1 ? 0.06 : 0)
@@ -60,13 +61,15 @@ export class Body {
     const M = morph || {};
     const hox = evalHoxGRN(M);
     this.hox = hox;
-    this.limbPairs = hox.limbPairs; // 2 = quadruped (4 limbs), 3 = hexapod (6 limbs, starter), 4 = octopod (8 limbs)
+    this.limbPairs = hox.limbPairs; // 0 = 0L serpent, 2 = 4L tetrapod, 3 = 6L hexapod (starter), 4 = 8L octopod, 5 = 10L decapod
+    this.cladeName = hox.cladeName;
     const mLen = clamp(M.bodyLen ?? 1.0, 0.80, 1.25);
     const mTaper = clamp(M.bodyTaper ?? 0.0, -0.28, 0.28);
     const mGirth = clamp(M.bodyGirth ?? 1.0, 0.82, 1.22);
     const mFore = clamp(M.foreLimb ?? 1.0, 0.78, 1.30);
     const mHind = clamp(M.hindLimb ?? 1.0, 0.78, 1.30);
     const mStalk = clamp(M.stalkHeight ?? 1.0, 0.72, 1.40);
+    const baseScute = clamp(M.scuteAniso ?? 1.0, 0.65, 1.35) * (this.limbPairs === 0 ? 1.18 : 1.0);
     this.morph = {
       bodyLen: mLen,
       bodyTaper: mTaper,
@@ -76,13 +79,18 @@ export class Body {
       stalkHeight: mStalk,
       crestFin: clamp(M.crestFin ?? 0.65, 0.1, 1.6),
       tailFluke: clamp(M.tailFluke ?? 0.60, 0.1, 1.6),
-      scuteAniso: clamp(M.scuteAniso ?? 1.0, 0.65, 1.35),
+      scuteAniso: clamp(baseScute, 0.65, 1.55),
       fiberStiff: clamp(M.fiberStiff ?? 1.0, 0.65, 1.45),
       pigmentHue: clamp(M.pigmentHue ?? 0.52, 0, 1),
       limbPairs: hox.limbPairs,
+      cladeName: hox.cladeName,
       osteoderm: hox.osteoderm,
       gillFronds: hox.gillFronds,
       sarcomereVmax: hox.sarcomereVmax,
+      patagium: hox.patagium ?? 0.18,
+      anglerLure: hox.anglerLure ?? 0.24,
+      undulWave: hox.undulWave ?? 1.0,
+      fascicleRecruit: hox.fascicleRecruit ?? 1.0,
     };
 
     const segStep = SEG * mLen;
@@ -139,13 +147,14 @@ export class Body {
     }
 
     this.limbs = [];
+    const suppressAllLimbs = this.limbPairs === 0;
     const suppressMidLegs = this.limbPairs === 2;
     const limb = (s, side, kind, idx, extraPair = false) => {
       const sz = side === 1 ? -1 : 1;
       const fx = (s - (NS - 1) / 2) * segStep;
       const isArm = kind === 'arm';
-      const vestigial = !isArm && !extraPair && suppressMidLegs && s === 3;
-      const lMult = vestigial ? 0.22 : (isArm ? mFore : mHind);
+      const vestigial = suppressAllLimbs || (!isArm && !extraPair && suppressMidLegs && s === 3);
+      const lMult = vestigial ? 0.16 : (isArm ? mFore : mHind);
       const L1 = (isArm ? 0.38 : 0.34) * lMult;
       const rs = this.segRad[s];
       tagLimb = this.limbs.length;
@@ -231,10 +240,16 @@ export class Body {
       }
     }
 
-    // 3) Optional Hox-expressed 4th bilateral thoracic limb pair (octopod, limbPairs === 4) at segment s = 2 (nodes 85..88)
-    if (this.limbPairs === 4) {
+    // 3) Hox-expressed supernumerary thoracic limb pairs:
+    //    - limbPairs >= 4 (8L Octopod): 4th bilateral pair at segment s = 2
+    //    - limbPairs >= 5 (10L Decapod): 5th bilateral pair at segment s = 4 (360 continuum FEM tetrahedra total!)
+    if (this.limbPairs >= 4) {
       limb(2, 1, 'leg', 0, true);
       limb(2, 3, 'leg', 1, true);
+    }
+    if (this.limbPairs >= 5) {
+      limb(4, 1, 'leg', 2, true);
+      limb(4, 3, 'leg', 3, true);
     }
     this.activeLimbs = this.limbs.filter((L) => !L.vestigial).length;
 
@@ -332,6 +347,7 @@ export class Body {
     });
 
     this.tetOrd = Uint16Array.from(this.tets.keys());
+    this.nTets = this.tets.length;
 
     // Continuum FEM telemetry & biomechanical FSI coupling buffers
     this.lesionFEM = false;
@@ -350,6 +366,13 @@ export class Body {
     this.crossBridge = new Float64Array(CH.N);  // Huxley attached actin-myosin cross-bridge fraction [0..1]
     this.sarcomereForce = new Float64Array(CH.N); // Effective sarcomere active tension output [-1..1]
     this.prevStretch = new Float64Array(CH.N);
+    // 32 cellular muscle fascicles ordered by Henneman size-principle recruitment threshold:
+    //   0..11 = Type-I slow-oxidative (SO), 12..23 = Type-IIA fast oxidative-glycolytic (FOG), 24..31 = Type-IIB fast-glycolytic (FG)
+    this.fascicleAct = new Float32Array(N_FASCICLES);
+    this.fascicleATP = new Float32Array(N_FASCICLES).fill(1.0);
+    this.fascicleType = Uint8Array.from({ length: N_FASCICLES }, (_, f) => (f < 12 ? 0 : f < 24 ? 1 : 2));
+    this.recruitedFascicles = 0;
+    this.glideLift = 0;
     this.meanCrossBridge = 0;
     this.meanCaTroponin = 0;
     this.jawOpen = 0;
@@ -599,7 +622,54 @@ export class Body {
       Z[i] += vz + (gz + drag * (wz - vz / dt) + imFsi * fFz[i]) * dt * dt;
     }
 
+    // Patagium gliding wing-membrane aerodynamics when airborne & upright (Draco / sugar-glider lift + forward glide thrust)
+    const patSpan = this.morph?.patagium ?? 0;
+    this.glideLift = 0;
+    if (patSpan > 0.08 && F[3].u[1] > 0.35) {
+      let anyGround = false;
+      for (let i = 0; i < n; i++) if (this.contact[i]) { anyGround = true; break; }
+      if (!anyGround) {
+        const c3 = this.c[3];
+        const vyAir = (Y[c3] - OY[c3]) / dt;
+        const vxAir = (X[c3] - OX[c3]) / dt - wx, vzAir = (Z[c3] - OZ[c3]) / dt - wz;
+        if (vyAir < -0.25) {
+          const vSq = Math.min(18, vxAir * vxAir + vyAir * vyAir + vzAir * vzAir);
+          const liftAcc = Math.min(6.2, 0.42 * patSpan * F[3].u[1] * vSq);
+          const glideThrust = 0.24 * liftAcc;
+          this.glideLift = liftAcc;
+          for (let s = 1; s <= 5; s++) {
+            const uS = F[s].u, fS = F[s].f;
+            for (const pIdx of [this.c[s], this.ring[s][1], this.ring[s][3]]) {
+              X[pIdx] += (uS[0] * liftAcc + fS[0] * glideThrust) * dt * dt;
+              Y[pIdx] += (uS[1] * liftAcc + fS[1] * glideThrust) * dt * dt;
+              Z[pIdx] += (uS[2] * liftAcc + fS[2] * glideThrust) * dt * dt;
+            }
+          }
+        }
+      }
+    }
+
+    // 32-Fascicle Henneman Size-Principle Cellular Muscle Recruitment & ATP Fatigue Recovery
     const u = this.u, caT = this.caTroponin, xbArr = this.crossBridge, sf = this.sarcomereForce;
+    const fAct = this.fascicleAct, fATP = this.fascicleATP, fType = this.fascicleType;
+    const recSlope = this.morph?.fascicleRecruit ?? 1.0;
+    const undulGain = this.limbPairs === 0 ? Math.max(1.18, this.morph?.undulWave ?? 1.25) : 1.0;
+    let activeFasc = 0;
+    for (let f = 0; f < N_FASCICLES; f++) {
+      // Map fascicle f onto segmental longitudinal/limb muscle channels (0..50)
+      const chIdx = (f * 2) % 51;
+      const poolDrive = 0.5 * (Math.abs(u[chIdx]) + Math.abs(u[(chIdx + 1) % 51]));
+      const thr = (0.04 + 0.62 * ((f % 8) / 7)) / recSlope;
+      const rec = clamp((poolDrive - thr) * 3.2, 0, 1);
+      fAct[f] += Math.min(1, dt * 35) * (rec - fAct[f]);
+      const tp = fType[f]; // 0 = SO (fatigue resistant), 1 = FOG, 2 = FG (high burst, faster glycolytic fatigue)
+      const burn = tp === 0 ? 0.015 : tp === 1 ? 0.045 : 0.095;
+      const regen = tp === 0 ? 0.14 : tp === 1 ? 0.09 : 0.06;
+      fATP[f] = clamp(fATP[f] + dt * (regen * (1 - fATP[f]) - burn * fAct[f] * fATP[f]), 0.25, 1.0);
+      if (fAct[f] > 0.12) activeFasc++;
+    }
+    this.recruitedFascicles = activeFasc;
+
     const prevSt = this.prevStretch, curSt = this.stretch;
     const vMax = 3.2 * (this.morph?.sarcomereVmax ?? 1.0);
     let e = 0, xbSum = 0, caSum = 0;
@@ -610,7 +680,10 @@ export class Body {
         const o2 = this.segO2[Math.min(NS - 1, Math.max(0, s))];
         if (o2 < 0.55) o2Gain = clamp(0.35 + 1.18 * o2, 0.35, 1);
       }
-      const uDrive = lesionMuscles ? 0 : clamp(u[k] * o2Gain, -1, 1);
+      // 0L anguilliform serpents amplify lateral axial travelling-wave channels (odd j in CH.long)
+      const latBoost = (this.limbPairs === 0 && k < CH.radial && (k & 1) === 1) ? undulGain : 1.0;
+      const fascATP = fATP[k & 31];
+      const uDrive = lesionMuscles ? 0 : clamp(u[k] * o2Gain * latBoost * (0.88 + 0.12 * fascATP), -1, 1);
       u[k] = uDrive;
 
       // Huxley 2-state sarcoplasmic Ca2+-Troponin C binding & actin-myosin cross-bridge kinetics:

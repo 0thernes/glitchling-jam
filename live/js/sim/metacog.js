@@ -9,7 +9,7 @@
 import * as T from '../tsotchke/taylor.js';
 import { clamp, mulberry } from './util.js';
 import { weightSpaceDecomp, phasorQGT } from '../tsotchke/qgtl.js';
-import { spectralConsolidate, vidalMPS, mpsContract, meraRenormalize } from '../tsotchke/moonlab.js';
+import { spectralConsolidate, vidalMPS, mpsContract, meraRenormalize, MPSQuantumSimulator32Q } from '../tsotchke/moonlab.js';
 
 export const K_CHART = 8;
 
@@ -17,6 +17,7 @@ export class Metacognition {
   constructor(seed, nFeat = 96) {
     const r = mulberry(seed * 7919 + 29);
     this.nFeat = nFeat;
+    this.mps32q = new MPSQuantumSimulator32Q(32, 32);
     this.mu = new Float64Array(nFeat);
     // K_CHART x nFeat Oja projection matrix (rows orthonormalised)
     this.P = new Float64Array(K_CHART * nFeat);
@@ -159,18 +160,17 @@ export class Metacognition {
     this.exploreTemp = clamp(0.75 + 0.7 * (1 - this.confidence) + 0.45 * this.regret, 0.6, 1.8);
   }
 
-  /** Audit weight-space decomposition and perform sleep-time Moonlab SVD + Vidal canonical MPS (chi=24) & 4-layer 8-site MERA consolidation */
+  /** Audit weight-space decomposition and perform sleep-time Moonlab SVD + 32-Qubit (chi=32) Vidal MPS & 512-D Binary MERA consolidation */
   auditAndConsolidate(cr, doSleepConsolidate = false) {
     const mDec = weightSpaceDecomp(cr.Wc, cr.Wc0, cr.mnHomeo);
     const sDec = weightSpaceDecomp(cr.Wmot, cr.Wmot0, cr.motBias);
     let bDec = weightSpaceDecomp(cr.brain.w, cr.brain.w0, cr.brain.vBias, cr.brain.plastic);
     if (cr.brain.isGiga && cr.brain.wGiga) {
-      // Sample 56.62M Int8 plastic weights vs canonical initial +/-26, +/-42 stencil priors on GIGA
+      // Sample 1.13B-synapse Int8 branch-cluster plastic weights vs canonical initial 64.0 spine priors on GIGA
       const wg = cr.brain.wGiga, nG = wg.length, stG = Math.max(64, (nG / 8192) | 0);
       let n0 = 0, ndw = 0, sa = 0, sb = 0, fSum = 0;
       for (let i = 0; i < nG; i += stG) {
-        const tap = i & 3;
-        const w0 = tap < 3 ? 25.5 : -42.0;
+        const w0 = 64.0;
         const w = wg[i], dw = w - w0;
         n0 += w0 * w0; ndw += dw * dw;
         const aw = Math.abs(w), aw0 = Math.abs(w0);
@@ -186,30 +186,38 @@ export class Metacognition {
       };
     }
     const qgt = phasorQGT(cr.hdcFood.ax, cr.hdcFood.az, cr.hdcFood.re, cr.hdcFood.im);
-    // Construct 256-D (L = 8 sites) multimodal neural + visual + hippocampal cognitive state vector for chi=24 MPS & 4-layer Binary MERA
-    const extPsi = new Float64Array(256);
+    // Construct 512-D (L = 9 sites) multimodal neural + visual + hippocampal cognitive state vector for chi=32 MPS & 512-D Binary MERA
+    const extPsi = new Float64Array(512);
     const ret = cr.retina || cr.vision;
     for (let i = 0; i < 64; i++) {
       extPsi[i] = cr.z[i] || 0;
       extPsi[64 + i] = cr.zMean[i] || 0;
-      extPsi[128 + i] = ret?.itForm ? (ret.itForm[i % ret.itForm.length] || 0) : (ret?.itAct ? (ret.itAct[i % ret.itAct.length] || 0) : 0);
-      extPsi[192 + i] = ret?.v4 ? (ret.v4[i % ret.v4.length] || 0) : (cr.brain.regRate[i & 7] || 0);
+      extPsi[128 + i] = ret?.itForm ? (ret.itForm[i % ret.itForm.length] || 0) : 0;
+      extPsi[192 + i] = ret?.itColor ? (ret.itColor[i % ret.itColor.length] || 0) : 0;
+      extPsi[256 + i] = ret?.v4 ? (ret.v4[i % ret.v4.length] || 0) : (cr.brain.regRate[i & 7] || 0);
+      extPsi[320 + i] = cr.hippo?.ca1Rate ? (cr.hippo.ca1Rate[i % cr.hippo.ca1Rate.length] || 0) : 0;
+      extPsi[384 + i] = cr.hippo?.subRate ? (cr.hippo.subRate[i % cr.hippo.subRate.length] || 0) : 0;
+      extPsi[448 + i] = cr.wm?.zFlow ? (cr.wm.zFlow[i & 31] || 0) : 0;
     }
-    const mps = vidalMPS(extPsi, 8, 24);
-    const mera = meraRenormalize(extPsi, 8);
+    const mps = vidalMPS(extPsi, 8, 32);
+    const mera = meraRenormalize(extPsi, 9);
+    // Step 32-Qubit (2^32 = 4.29B Hilbert space, chi=32) Vidal Canonical MPS circuit driven by live 32-mode SSM angles
+    const thetas32 = new Float64Array(32);
+    for (let q = 0; q < 32; q++) thetas32[q] = 0.35 + 0.65 * Math.tanh(cr.z[q] || 0);
+    const mps32 = this.mps32q.runEntanglingCircuit(thetas32, doSleepConsolidate ? 3 : 2);
 
     if (doSleepConsolidate && !cr.lesion.metacog) {
       // Moonlab Jacobi SVD denoises rank-1 motor perturbation jitter in Wm (122 x 8) while keeping top-5 learned synergies
       const sv = spectralConsolidate(cr.Wm, cr.Wm0, cr.Wm.length >> 3, 8, 5, 0.35);
       this.ws.svdRank = sv.effRank;
-      // Vidal canonical MPS (bond chi = 24) compresses & denoises the 64-D SSM baseline mean zMean during NREM sleep
-      const zMps = vidalMPS(cr.zMean, 6, 24);
+      // Vidal canonical MPS (bond chi = 32) compresses & denoises the 64-D SSM baseline mean zMean during NREM sleep
+      const zMps = vidalMPS(cr.zMean, 6, 32);
       const zRec = mpsContract(zMps);
       for (let i = 0; i < 64; i++) cr.zMean[i] = 0.7 * cr.zMean[i] + 0.3 * zRec[i];
     }
 
     let wmNorm = 0;
-    for (const arr of [cr.wm.Wout, cr.wm.Wskip, cr.wm.Wvel, cr.wm.Wout5, cr.wm.Wout20, cr.wm.Wout60, cr.wm.WflowOut]) {
+    for (const arr of [cr.wm.Wout, cr.wm.Wskip, cr.wm.Wvel, cr.wm.Wout5, cr.wm.Wout20, cr.wm.Wout60, cr.wm.WvaeDec1, cr.wm.WvaeDec2, cr.wm.Wflow2]) {
       if (arr) for (let i = 0; i < arr.length; i++) wmNorm += arr[i] * arr[i];
     }
 
@@ -224,6 +232,9 @@ export class Metacognition {
     this.ws.mpsEntropy = mps.meanS;
     this.ws.mpsBond = mps.maxBond;
     this.ws.mpsFidelity = mps.keptFidelity;
+    this.ws.mps32MaxBond = mps32.maxBond;
+    this.ws.mps32Entropy = mps32.meanEntropy;
+    this.ws.mps32Fidelity = mps32.fidelity;
     this.ws.meraIrEntropy = mera.irEntropy;
     this.ws.meraScaleRatio = mera.scaleRatio;
     this.ws.meraScales = mera.scales;

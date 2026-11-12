@@ -38,9 +38,17 @@ export const HOX = {
   limbTopo: 0.50, osteoderm: 0.45, gillFronds: 0.68, sarcomereVmax: 1.0,
 };
 
-export const STARTER = { ...MOTOR, ...STEER, ...MORPH, ...HOX };
+export const ZYGOTE = {
+  bicoidAnt: 1.0, nanosPost: 1.0, dorsalVent: 1.0, chordinDors: 1.0,
+  cleavAsym: 0.0, cadhE: 1.0, cadhN: 1.0, nodalOrg: 1.0, leftyInh: 1.0,
+  hes7Clock: 1.0, notchWave: 1.0, tbxFore: 1.0, tbxHind: 1.0,
+  patagiumSpan: 0.18, anglerLure: 0.24, undulWave: 1.0, decapodBud: 0.50,
+  fascicleRecruit: 1.0, myelinCond: 1.0, speciationIso: 0.50,
+};
+
+export const STARTER = { ...MOTOR, ...STEER, ...MORPH, ...HOX, ...ZYGOTE };
 export const STARTER_INFO = {
-  source: 'two-stage multi-body CMA-ES + 108-gene Hox-GRN Evo-Devo morpho-neural specification (58 motor + 20 steering + 14 morpho/neuro + 16 Hox/morphogen GRN genes)',
+  source: 'two-stage multi-body CMA-ES + 128-gene Zygote-Cleavage / Gastrulation / Hox-GRN Evo-Devo specification (58 motor + 20 steering + 14 morpho/neuro + 16 Hox-GRN + 20 Zygote/Embryogenesis genes)',
   trainSeeds: [1, 2, 3, 9, 10, 11],
   motorGens: 16,
   steerGens: 12,

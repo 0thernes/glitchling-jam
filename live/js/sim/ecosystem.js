@@ -1,21 +1,36 @@
-// Open-Ended Multi-Agent A-Life Biosphere (pass 18):
-//  - Up to 32 Autonomous Conspecific Glitchlings (`peers`) with heritable 108-gene Hox + Morphogen Evo-Devo genomes
-//    (expressing variable 4-limb quadruped, 6-limb hexapod, and 8-limb octopod topologies + dorsal osteoderms),
-//    articulated 7-segment 3D bodies, chemotactic pheromone navigation, foraging, drinking, basking, courtship, and senescence.
-//  - Diploid Sexual Reproduction via Simulated Binary Crossover (SBX) + Polynomial Mutation across all 108 genes, producing
+// Open-Ended Multi-Agent & Multi-Species A-Life Biosphere (pass 19):
+//  - Up to 48 Autonomous Conspecific Glitchlings (`peers`) with heritable 128-gene Zygote-Cleavage + Hox + Morphogen Evo-Devo
+//    genomes radiating across 5 macro-evolutionary bauplan clades (`0L Serpent`, `4L Tetrapod`, `6L Hexapod`, `8L Octopod`,
+//    `10L Decapod`), aerodynamic Patagium gliding wing-membranes, cranial bioluminescent Angler-Lures (`esca`), and assortative
+//    sympatric speciation (`speciationIso` + `speciesCount` clade-diversity tracking).
+//  - Diploid Sexual Reproduction via Simulated Binary Crossover (SBX) + Polynomial Mutation across all 128 genes, producing
 //    physical 3D Bioluminescent Eggs (`eggs`) whose incubation speed depends on microclimate/vent warmth, hatching into
 //    neonates (`egg -> neonate -> juvenile -> adult -> elder`) and recording a live multi-generational `lineageTree`.
-//  - Mutualistic/Prey Photonic Bio-Mites (`mites`) coupled to the > 1.4M Saprotrophic/Phytoplankton Microbial Continuum.
+//  - Mutualistic/Prey Photonic Bio-Mites (`mites`) + 256 Embodied 3D Micro-Fauna coupled to > 5.2M Microbial Continuum.
 //  - Shadow-Leviathan Apex Predators (`predators`) that patrol the biosphere perimeter, testing alarm calls, Schreckstoff
-//    pheromone cascades, crystal-spire sheltering, chromatophore camouflage, and defensive curling.
+//    pheromone cascades, crystal-spire sheltering, chromatophore camouflage, patagium escape glides, and defensive curling.
 import { mulberry, clamp, gauss } from './util.js';
-import { FULL_GENES, evalHoxGRN } from './genome.js';
+import { FULL_GENES, evalHoxGRN, developZygoteEmbryo } from './genome.js';
 import { STARTER } from './starter_genome.js';
 import { WORLD, SITES } from './world.js';
 
 export const LIFE_STAGES = ['neonate', 'juvenile', 'adult', 'elder'];
 
-/** Diploid Simulated Binary Crossover (SBX) + bounded polynomial mutation over all 108 developmental & Hox GRN genes */
+/** Normalized genetic distance across key bauplan & pigment loci + assortative speciation gate */
+export function canAssortativeMate(genA, genB, hoxA, hoxB) {
+  const iso = 0.5 * ((genA.speciationIso ?? 0.35) + (genB.speciationIso ?? 0.35));
+  if (hoxA && hoxB && hoxA.limbPairs !== hoxB.limbPairs) {
+    const pairDiff = Math.abs(hoxA.limbPairs - hoxB.limbPairs);
+    // Strong assortative reproductive isolation blocks cross-clade mating when speciationIso is high
+    if (iso > 0.62 || (pairDiff >= 2 && iso > 0.44)) return false;
+  }
+  const dHue = Math.min(Math.abs((genA.pigmentHue ?? 0.5) - (genB.pigmentHue ?? 0.5)), 1 - Math.abs((genA.pigmentHue ?? 0.5) - (genB.pigmentHue ?? 0.5)));
+  const dBody = Math.abs((genA.bodyLen ?? 1.0) - (genB.bodyLen ?? 1.0));
+  const genDist = 0.6 * dHue + 0.4 * dBody;
+  return genDist <= (0.88 - 0.52 * iso);
+}
+
+/** Diploid Simulated Binary Crossover (SBX) + bounded polynomial mutation over all 128 developmental, Zygote & Hox GRN genes */
 export function crossoverGenomes(genA, genB, r, mutRate = 0.14, etaC = 4.0) {
   const child = {};
   for (let i = 0; i < FULL_GENES.length; i++) {
@@ -50,11 +65,13 @@ export function mutateStarterGenome(r, spread = 0.16) {
     const [nm, lo, hi] = FULL_GENES[i];
     const base = STARTER[nm] ?? (lo + hi) * 0.5;
     let u = (base - lo) / (hi - lo) + spread * (r() - 0.5);
-    // Give wild conspecifics rich morphological & pigment diversity right from generation 0
+    // Give wild conspecifics rich 5-clade macro-evolutionary, patagium, angler-lure & pigment diversity right from generation 0
     if (nm === 'pigmentHue') u = r();
     else if (nm === 'crestFin' || nm === 'tailFluke') u = clamp(0.15 + 0.75 * r(), 0.05, 0.95);
     else if (nm === 'bodyLen' || nm === 'bodyGirth' || nm === 'foreLimb' || nm === 'hindLimb') u = clamp(0.5 + 0.55 * (r() - 0.5), 0.1, 0.9);
-    else if (nm === 'limbTopo') u = clamp(0.06 + 0.88 * r(), 0.04, 0.96); // wild 4/6/8-limb clade radiation!
+    else if (nm === 'limbTopo' || nm === 'cladeGene') u = clamp(0.04 + 0.92 * r(), 0.03, 0.97); // wild 0L/4L/6L/8L/10L 5-clade radiation!
+    else if (nm === 'patagiumGene' || nm === 'anglerLure') u = clamp(0.08 + 0.84 * r(), 0.04, 0.96);
+    else if (nm === 'speciationIso') u = clamp(0.18 + 0.62 * r(), 0.10, 0.90);
     else if (nm === 'osteoderm' || nm === 'gillFronds') u = clamp(0.15 + 0.75 * r(), 0.05, 0.95);
     g[nm] = +(lo + clamp(u, 0.03, 0.97) * (hi - lo)).toFixed(4);
   }
@@ -69,17 +86,19 @@ export class Ecosystem {
     this.t = 0;
     this.nextId = 1;
 
-    this.maxPeers = opts.maxPeers ?? 32;
-    const initPeers = opts.peers ?? 8;
-    const initMites = opts.mites ?? 36;
+    this.maxPeers = opts.maxPeers ?? 48;
+    const initPeers = opts.peers ?? 12;
+    const initMites = opts.mites ?? 40;
     const initPreds = opts.predators ?? 1;
 
     this.peers = [];
     this.eggs = [];
     this.mites = [];
     this.predators = [];
+    this.cladeCounts = { '0L': 0, '4L': 0, '6L': 0, '8L': 0, '10L': 0 };
+    this.speciesCount = 1;
     this.lineageTree = [
-      { id: 0, parentA: -1, parentB: -1, gen: 0, t: 0, hue: 0.75, crestFin: 1.0, bodyLen: 1.0, limbPairs: 3, label: 'Focal-0' },
+      { id: 0, parentA: -1, parentB: -1, gen: 0, t: 0, hue: 0.75, crestFin: 1.0, bodyLen: 1.0, limbPairs: 3, clade: '6L Hexapod', label: 'Focal-0' },
     ];
     this.stats = {
       births: 0,
@@ -138,11 +157,16 @@ export class Ecosystem {
     }
 
     const hox = evalHoxGRN(g);
+    const embryo = developZygoteEmbryo(g);
     const peer = {
       id,
       gen: g,
       hox,
+      embryoBlastomeres: embryo.nBlastomeres,
       limbPairs: hox.limbPairs,
+      clade: hox.cladeName || `${hox.limbPairs * 2}L`,
+      patagium: hox.patagium || 0,
+      anglerLure: hox.anglerLure || 0,
       generation,
       parentA: meta.parentA ?? -1,
       parentB: meta.parentB ?? -1,
@@ -169,6 +193,7 @@ export class Ecosystem {
       segX, segY, segZ,
     };
     this.peers.push(peer);
+    this.updateCladeCensus();
     this.lineageTree.push({
       id,
       parentA: peer.parentA,
@@ -179,11 +204,26 @@ export class Ecosystem {
       crestFin: g.crestFin ?? 1.0,
       bodyLen: g.bodyLen ?? 1.0,
       limbPairs: hox.limbPairs,
+      clade: peer.clade,
+      patagium: +(peer.patagium.toFixed(2)),
+      anglerLure: +(peer.anglerLure.toFixed(2)),
       isFocalChild: peer.parentA === 0 || peer.parentB === 0,
     });
-    if (this.lineageTree.length > 96) this.lineageTree.shift();
+    if (this.lineageTree.length > 128) this.lineageTree.shift();
     if (generation > this.stats.maxGen) this.stats.maxGen = generation;
     return peer;
+  }
+
+  updateCladeCensus() {
+    const cc = { '0L': 0, '4L': 0, '6L': 0, '8L': 0, '10L': 0 };
+    for (let i = 0; i < this.peers.length; i++) {
+      const k = `${this.peers[i].limbPairs * 2}L`;
+      if (cc[k] !== undefined) cc[k]++;
+    }
+    this.cladeCounts = cc;
+    let sp = 0;
+    for (const k of Object.keys(cc)) if (cc[k] > 0) sp++;
+    this.speciesCount = Math.max(1, sp);
   }
 
   layEgg(x, z, genA, genB, idA, idB, genNum, focalInvolved = false) {
@@ -251,10 +291,11 @@ export class Ecosystem {
 
   setPopulationTargets({ peers, mites, predators }) {
     if (peers !== undefined) {
-      const tgt = clamp(Math.round(peers), 0, 32);
-      this.maxPeers = Math.max(this.maxPeers, Math.min(32, tgt + 4));
+      const tgt = clamp(Math.round(peers), 0, 48);
+      this.maxPeers = Math.max(this.maxPeers, Math.min(48, tgt + 6));
       while (this.peers.length < tgt) this.spawnPeer(null, null, true);
       while (this.peers.length > tgt) this.peers.pop();
+      this.updateCladeCensus();
     }
     if (mites !== undefined) {
       const tgt = clamp(Math.round(mites), 0, 80);
@@ -472,14 +513,18 @@ export class Ecosystem {
         let mateX = null, mateZ = null, mateRef = null, bd = 14.0;
         if (focalCreature && focalCreature.sleep.stage === 0 && focalCreature.metab.hunger() < 0.65 && (focalCreature.mateCooldown || 0) <= 0) {
           const df = Math.hypot(fHd[0] - p.x, fHd[2] - p.z);
-          if (df < bd) { bd = df; mateX = fHd[0]; mateZ = fHd[2]; mateRef = 'focal'; }
+          if (df < bd && canAssortativeMate(p.gen, focalCreature.gen, p.hox, focalCreature.body?.hox)) {
+            bd = df; mateX = fHd[0]; mateZ = fHd[2]; mateRef = 'focal';
+          }
         }
         for (let j = 0; j < this.peers.length; j++) {
           if (j === i) continue;
           const pj = this.peers[j];
           if (pj.stage !== 'adult' || pj.energy < 0.52 || pj.mateCooldown > 0) continue;
           const dj = Math.hypot(pj.x - p.x, pj.z - p.z);
-          if (dj < bd) { bd = dj; mateX = pj.x; mateZ = pj.z; mateRef = pj; }
+          if (dj < bd && canAssortativeMate(p.gen, pj.gen, p.hox, pj.hox)) {
+            bd = dj; mateX = pj.x; mateZ = pj.z; mateRef = pj;
+          }
         }
         if (mateX !== null) {
           p.goalX = mateX; p.goalZ = mateZ; p.goalType = 'mate';
@@ -496,7 +541,7 @@ export class Ecosystem {
               focalCreature.outcome(null, 0.95);
               focalCreature.vocalFreq = 0.5 * (p.vocalFreq + 440);
               focalCreature.vocalAmp = 0.75;
-              focalCreature.ev('courtship', `courted conspecific #${p.id} (${p.limbPairs * 2}L) — diploid 108-gene Hox egg laid!`);
+              focalCreature.ev('courtship', `courted conspecific #${p.id} (${p.clade}) — diploid 128-gene Zygote+Hox egg laid!`);
             } else if (mateRef && mateRef.id > p.id) {
               this.stats.courtships++;
               p.mateCooldown = 38;
@@ -527,7 +572,8 @@ export class Ecosystem {
       // Locomotion & articulated 7-segment gait kinematics
       const dx = p.goalX - p.x, dz = p.goalZ - p.z, dGoal = Math.hypot(dx, dz);
       const f0 = p.gen.f0 ?? 2.1;
-      const strideGain = (0.55 + 0.35 * (p.gen.legSw ?? 1.0)) * (0.65 + 0.35 * p.scale) * (1 - 0.7 * p.curl);
+      const patGlide = p.patagium > 0.3 ? (1 + 0.28 * p.patagium) : 1.0;
+      const strideGain = (0.55 + 0.35 * (p.gen.legSw ?? 1.0)) * (0.65 + 0.35 * p.scale) * patGlide * (1 - 0.7 * p.curl);
       if (dGoal > 0.45) {
         const targetHdg = Math.atan2(dz, dx);
         const dH = Math.atan2(Math.sin(targetHdg - p.hdg), Math.cos(targetHdg - p.hdg));
@@ -554,13 +600,15 @@ export class Ecosystem {
         }
       }
 
-      p.y = W.height(p.x, p.z) + 0.26 * p.scale;
+      const glideAlt = p.patagium > 0.35 && Math.hypot(p.vx, p.vz) > 0.65 ? 0.14 * p.patagium : 0;
+      p.y = W.height(p.x, p.z) + 0.26 * p.scale + glideAlt;
       p.gaitPh = (p.gaitPh + dt * f0 * Math.PI * 2) % (Math.PI * 2);
       const bLen = (p.gen.bodyLen ?? 1.0) * p.scale;
       const cf = Math.cos(p.hdg), sf = Math.sin(p.hdg);
+      const undulGain = p.limbPairs === 0 ? 1.95 : 1.0; // 0L Serpent anguilliform lateral traveling wave!
       for (let s = 0; s < 7; s++) {
         const axial = (s - 3) * 0.33 * bLen * (1 - 0.45 * p.curl);
-        const latWave = 0.075 * bLen * Math.sin(p.gaitPh - s * 0.75) * (1 - p.curl);
+        const latWave = 0.075 * undulGain * bLen * Math.sin(p.gaitPh - s * 0.75) * (1 - p.curl);
         const sx = p.x + cf * axial - sf * latWave;
         const sz = p.z + sf * axial + cf * latWave;
         p.segX[s] = sx;

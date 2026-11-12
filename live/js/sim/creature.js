@@ -1,11 +1,12 @@
-// Glitchling v2 "live" (pass 17 architecture):
-// Spiking 4-compartment HH laminar brain (S=436..MEGA=1,048,576 neurons / 16.78M synapses) + LTC CPG + 122 sLTC motor neurons +
-// 336-tet anisotropic 3D continuum FEM soft body + 63-voxel 3D Biot-Darcy FSI & 256-parcel 3D WCSPH hemodynamics +
-// metabolism + dual 64x32 log-polar foveated retinas (4,096 ch) -> LGN -> V1 -> V2 -> V4 -> 24-unit invariant IT + EKF-SLAM +
-// biophysical conductance-based spiking trisynaptic hippocampus (EC -> DG -> CA3 -> CA1 + Hollow-mDAE + James-Stein shrinkage) +
-// online RTRL selective SSM + Multimodal Causal RoPE SwiGLU Transformer-XL world model (std 148k .. ultra 2.76M, +0.1s/+0.5s/+2.0s BPTT + raw foveal RGB) +
-// open-ended multi-agent biosphere (conspecifics, diploid 92-gene crossover, 3D eggs, pheromones, mycelia, vents, bio-mites, predator) +
-// Tsotchke 12-qubit WASM Lindblad/QRNG, chi=16 Vidal MPS & Binary MERA + 1:1 biological real-time clock with waking SWRs.
+// Glitchling v2 "live" (pass 19 architecture):
+// Spiking 16-compartment discrete-Markov HH laminar brain (S=436..GIGA=14,156,048 neurons / 1.13B synapses) + LTC CPG + 122 sLTC motor neurons +
+// 128-gene zygote-cleavage/gastrulation 5-clade (0L..10L + patagium + angler-lure) 336..360-tet anisotropic FEM soft body & 32 Henneman muscle fascicles +
+// 64-vessel Murray's-Law vascular tree + 24x8x8 D3Q19 LBM + 1,024 WCSPH Erythrocytes & chemotactic Leukocytes +
+// dual 256x128 foveated retinas (65,536 receptors / 196,608 cone+rod & 6 RGC mosaics) -> V1 -> V2 -> V4 -> 65,536-concept Ontology-grounded IT/PRh + EKF-SLAM +
+// 32,768-neuron 14-population conductance-based spiking hippocampal-subicular loop (6 interneuron classes + Predictive Successor Representation) +
+// online RTRL selective SSM + Multimodal Transformer-XL world model (std .. omega 28.7M, 32x16x3 Patch-VAE + Flow + 5-min +300s HTN+MCTS planner) +
+// 48-peer multi-clade biosphere + 256 embodied 3D micro-fauna + >5.2M microbial continuum +
+// Tsotchke 16Q WASM / 18Q WebGPU + 32Q chi=32 Vidal MPS + 5-layer Binary MERA + pulse-level qutrit Transmon DRAG + PEC/ZNE.
 import { mulberry, clamp, gauss, betaIG, IG0 } from './util.js';
 import { World, SITES } from './world.js';
 import { Body, CH, NS } from './body.js';
@@ -20,7 +21,7 @@ import { STARTER, STARTER_INFO } from './starter_genome.js';
 import { Brain, R0, RN, NSTR_OPT } from './brain.js';
 import { CPG, NCPG } from './cpg.js';
 import { Metab } from './metab.js';
-import { SelectiveSSM, WorldModel, Sleep, PredictiveCoding, N_VIS_PATCH } from './mind.js';
+import { SelectiveSSM, WorldModel, Sleep, PredictiveCoding, HTNPlanner, N_VIS_PATCH } from './mind.js';
 import { Skin } from './skin.js';
 import { Ecosystem } from './ecosystem.js';
 
@@ -46,9 +47,12 @@ const NMN = CH.N * 2, NPHI = 20, NY = 25, NZ = 64 + 8;
 export class Creature {
   constructor(seed = 1, opts = {}) {
     this.seed = seed;
+    const mEval0 = !!opts.motorEval;
     const r = (this.r = mulberry(seed));
     this.gr = mulberry(seed * 9973 + 7);
-    this.qrng = new TsotchkeQRNG(seed);
+    this.qrng = mEval0
+      ? { uniform: () => this.gr(), gauss: () => 0, evolve: () => {}, initWebGPU18Q: async () => false, initWebGPU16Q: async () => false }
+      : new TsotchkeQRNG(seed);
     this.flaws = JSON.parse(JSON.stringify(opts.flaws || DEFAULT_FLAWS));
 
     this.world = new World(seed);
@@ -56,7 +60,9 @@ export class Creature {
     const gn = this.gen;
     const initHdg = r() * Math.PI * 2;
     this.body = new Body(this.world, 0, 0, initHdg, gn);
-    this.fluid = new Hemodynamics(seed);
+    this.fluid = mEval0
+      ? { segO2: new Float64Array(7).fill(0.97), step: () => {} }
+      : new Hemodynamics(seed);
     this.body.segO2 = this.fluid.segO2;
     this.brain = new Brain(seed, opts.brainScale || null, gn);
     this.eco = opts.eco ? new Ecosystem(this.world, seed, typeof opts.eco === 'object' ? opts.eco : {}) : null;
@@ -92,6 +98,7 @@ export class Creature {
     this.metacog = mEval
       ? { achGain: 1, exploreTemp: 1, step: () => {}, auditAndConsolidate: () => {} }
       : new Metacognition(seed, 96);
+    this.htn = mEval ? null : new HTNPlanner(seed, NSTR_OPT);
     this.metaFeat = new Float64Array(96);
     this.ofcApp = new Float32Array(NSTR_OPT);
     this.ofcAv = new Float32Array(NSTR_OPT);
@@ -695,8 +702,46 @@ export class Creature {
   drawGauss() { return this.lesion.qrng ? gauss(this.r) : this.qrng.gauss(); }
 
   startRace(exclude = new Set()) {
+    let htnPrior = null;
+    if (this.htn && !this.lesion.wm && !this.lesion.efe) {
+      const hd = this.body.head();
+      let bestSite = 0, bestSc = -1e9, mostUnc = 0, maxUnc = -1e9;
+      for (let k = 0; k < SITES; k++) {
+        const sp = this.retina.sitePos(k, this.world);
+        const d = Math.hypot(sp.x - hd[0], sp.z - hd[2]);
+        const meanY = this.bA[k] / (this.bA[k] + this.bB[k]);
+        const sc = (meanY * this.wSite[k]) / (1 + 0.12 * d);
+        if (sc > bestSc) { bestSc = sc; bestSite = k; }
+        const unc = (1 - sp.conf) + 1 / (this.bA[k] + this.bB[k]);
+        if (unc > maxUnc) { maxUnc = unc; mostUnc = k; }
+      }
+      let bestPool = 0, bestPD = 1e9;
+      for (let p = 0; p < this.world.pools.length; p++) {
+        const Wp = this.world.pools[p];
+        const d = Math.hypot(Wp.x - hd[0], Wp.z - hd[2]);
+        if (d < bestPD) { bestPD = d; bestPool = p; }
+      }
+      htnPrior = this.htn.plan({
+        hunger: this.metab.hunger(),
+        thirst: this.metab.thirst,
+        tempErr: Math.abs((this.gen.thermOpt ?? 24.0) - (this.bodyTemp ?? 24.0)) / 10.0,
+        uncert: clamp(this.retina.egoVar * 0.25, 0.05, 1.0),
+        kinFit: clamp((this.retina.socialSeen || 0) * 0.25, 0, 1),
+        predatorLoom: this.retina.predatorLoom || 0,
+        hasSnack: this.world.snacks.length > 0,
+        socialDrive: this.pherMate || 0.2,
+        peerNear: this.retina.socialSeen || 0,
+        bestYieldSite: bestSite,
+        mostUncertSite: mostUnc,
+        bestPool,
+      }, this.wm);
+    }
     const terms = [];
-    for (let k = 0; k < NSTR_OPT; k++) terms.push(exclude.has(k) ? null : this.efe(k));
+    for (let k = 0; k < NSTR_OPT; k++) {
+      const t = exclude.has(k) ? null : this.efe(k);
+      if (t && htnPrior) t.G -= 0.05 * htnPrior[k];
+      terms.push(t);
+    }
     this.race = { terms, cnt: new Float64Array(NSTR_OPT), cntD2: new Float64Array(NSTR_OPT), t: 0, exclude };
     this.stats.races++;
   }
@@ -924,9 +969,17 @@ export class Creature {
   updateCarry(dt) {
     const B = this.body, W = this.world;
     if (B.limbs.length < 6) return;
-    const fL = B.limbs[4].foot, fR = B.limbs[5].foot;
-    const gx = 0.5 * (B.x[fL] + B.x[fR]), gy = 0.5 * (B.y[fL] + B.y[fR]), gz = 0.5 * (B.z[fL] + B.z[fR]);
-    const gripDrive = Math.max(B.u[CH.arm + 2], B.u[CH.arm + 5], this.motRate[5]);
+    let gx, gy, gz, gripDrive;
+    if (B.limbs[4].vestigial) {
+      // 0L Serpent clade uses prehensile jaws/snout for item caching & brood transport
+      const hd = B.head(), Fh = B.F[NS - 1];
+      gx = hd[0] + 0.32 * Fh.f[0]; gy = hd[1] + 0.08; gz = hd[2] + 0.32 * Fh.f[2];
+      gripDrive = Math.max(this.motRate[5], (B.jawOpen || 0) * 0.8);
+    } else {
+      const fL = B.limbs[4].foot, fR = B.limbs[5].foot;
+      gx = 0.5 * (B.x[fL] + B.x[fR]); gy = 0.5 * (B.y[fL] + B.y[fR]); gz = 0.5 * (B.z[fL] + B.z[fR]);
+      gripDrive = Math.max(B.u[CH.arm + 2], B.u[CH.arm + 5], this.motRate[5]);
+    }
     if (this.heldItem) {
       const it = this.heldItem.ref;
       it.x = gx; it.y = Math.max(W.height(gx, gz) + 0.16, gy); it.z = gz;

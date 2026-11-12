@@ -322,6 +322,32 @@ h1 span {
   color: #fff;
 }
 
+.clade-wrap { margin: 0.45rem 0 0.55rem; }
+.clade-wrap small { display: block; color: var(--text-muted); font-size: 0.65rem; margin-bottom: 0.25rem; }
+.clade-bar { display: flex; flex-wrap: wrap; gap: 0.28rem; margin: 0.32rem 0 0.5rem; }
+.clade-bar button {
+  background: rgba(16, 28, 48, 0.82);
+  color: #dff2ff;
+  border: 1px solid rgba(110, 195, 255, 0.28);
+  border-radius: 999px;
+  padding: 0.28rem 0.54rem;
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, box-shadow 0.14s;
+}
+.clade-bar button:hover {
+  background: rgba(34, 68, 114, 0.85);
+  border-color: var(--accent-cyan);
+}
+.clade-bar button.on {
+  background: linear-gradient(135deg, rgba(28, 130, 185, 0.78), rgba(112, 58, 195, 0.78));
+  border-color: var(--accent-emerald);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(52, 245, 166, 0.28);
+}
+
 /* Live Event Stream Toast Feed */
 .events {
   position: fixed;

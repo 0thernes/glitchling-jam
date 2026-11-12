@@ -1,42 +1,67 @@
-// Ultra-Acuity Log-Polar Foveated Binocular Visual Hierarchy (Dual 128x64 Retinas = 16,384 Photoreceptors / 49,152 L/M/S Cone Channels
-// -> Parvo/Magno/Konio LGN -> V1 Gabor -> V2 Curvature/Junctions -> V4 Scale-Tolerant Max-Pooling -> 4,096-Concept Compositional IT/PRh + MT Flow + EKF-SLAM).
+// Primate-Acuity Log-Polar Foveated Binocular Visual Hierarchy (Dual 256x128 Retinas = 65,536 Photoreceptors / 196,608 L/M/S+Rod Channels
+// -> 6 Retinal Ganglion Cell Mosaics -> Parvo/Magno/Konio LGN -> V1 Gabor -> V2 Curvature/Junctions -> V4 32x16 Max-Pooling
+// -> 65,536-Concept Compositional IT/PRh grounded in a 4-Tier Symbolic Hypernym & Relational Affordance Ontology + MT Flow + EKF-SLAM).
 //
-// Pass 18 upgrades:
-//  1) 4x higher photoreceptor count (28.4x over pass 16): Dual 128x64 Left/Right sheets (8,192 per eye = 16,384 receptors /
-//     49,152 L/M/S cone signals + inverse-depth) with primate log-polar foveal magnification (~4.2x finer central foveal acuity)
-//     and physiological 4 Hz ocular microsaccadic tremor + efference-copy stabilization preventing Troxler adaptation fade.
-//  2) 3-pathway Retinogeniculate LGN (24,576 relay units) + 5-stage Ventral/Perirhinal Hierarchy:
-//       - LGN (128x64 x 3): Magnocellular (M, transient broadband DoG), Parvocellular (P, sustained L-M red-green),
-//         and Koniocellular (K, S - (L+M) short-wavelength bistratified blue-yellow).
-//       - V1  (64x32x4 = 8,192 units): 5x5 zero-DC quadrature Gabor Simple & Complex cells + binocular stereo disparity.
-//       - V2  (32x16x4 = 2,048 units): cross-orientation corner/junction, acute vertex, and end-stopped curvature detectors.
-//       - V4  (16x8x8  = 1,024 units): spatial & scale-tolerant C2 max-pooling over V2 shape + opponent hue/iridescence bands,
-//         plus a 16x8x3 = 384-D high-acuity foveal RGB patch (`fovealPatch`) for conditional flow-matching video world modeling.
-//       - IT + Perirhinal (PRh) Compositional Product-Quantized Cortex: 64 3D-form prototypes (`WitShape`) x 64 chromatic/surface/
-//         animacy attribute prototypes (`WitAttr`) = 4,096 compositional zero-shot visual concepts, refined online via Foldiak /
-//         Wallis-Rolls slow temporal-trace Hebbian learning!
+// Pass 19 upgrades:
+//  1) 4x higher photoreceptor count over pass 18 (113.8x over pass 16): Dual 256x128 Left/Right sheets (32,768 per eye = 65,536 receptors /
+//     196,608 L/M/S cone + scotopic rod signals + inverse-depth) with primate log-polar foveal magnification and 4 Hz microsaccades.
+//  2) 6 Explicit Primate Retinal Ganglion Cell (RGC) Mosaics (196,608 RGC channels):
+//       - P-ON & P-OFF Midget RGCs (sustained L-M / M-L chromatic acuity),
+//       - M-ON & M-OFF Parasol RGCs (transient broadband increment/looming decrement DoG),
+//       - Small Bistratified Koniocellular RGCs (S - (L+M) blue-yellow opponency),
+//       - Intrinsically photosensitive Melanopsin ipRGCs (480 nm ambient irradiance / circadian drive).
+//  3) High-res 32x16x8 V4 + 32x16x3 (1,536-D) foveal RGB patch (`fovealPatch`) feeding the 2-Stage Spatial-Pyramid Patch-VAE + Flow World Model.
+//  4) 256 Shape x 256 Attribute = 65,536 Compositional IT/Perirhinal Concepts grounded in a 4-Tier Symbolic Hypernym & Relational
+//     Affordance Ontology DAG (`ONTOLOGY_DAG`: Root -> Domain -> Taxon -> Morphotype + proto-lexical symbols & Subject-Predicate-Object scene triples).
 import { clamp, gauss, mulberry } from './util.js';
 import { NS, CH } from './body.js';
 
 export const NBINS = 32;
-export const W_RET = 128;
-export const H_RET = 64;
+export const W_RET = 256;
+export const H_RET = 128;
+export const W_LGN = 128;
+export const H_LGN = 64;
 export const W_V1 = 64;
 export const H_V1 = 32;
 export const W_V2 = 32;
 export const H_V2 = 16;
-export const W_V4 = 16;
-export const H_V4 = 8;
+export const W_V4 = 32;
+export const H_V4 = 16;
 export const N_ORI = 4; // 0, 45, 90, 135 deg
-export const N_IT = 64; // 64 cortical IT columns (32 form + 32 attribute marginals; product space = 64 x 64 = 4,096 concepts!)
-export const N_IT_SHAPE = 64;
-export const N_IT_ATTR = 64;
-export const N_IT_CONCEPTS = N_IT_SHAPE * N_IT_ATTR; // 4,096 compositional zero-shot visual concepts
-export const N_VIS_PATCH = W_V4 * H_V4 * 3; // 384-D (16x8x3) foveal RGB pixel patch for generative world model
+export const N_IT = 64; // 64 cortical IT summary columns (32 form + 32 attribute marginals; product space = 256 x 256 = 65,536 concepts!)
+export const N_IT_SHAPE = 256;
+export const N_IT_ATTR = 256;
+export const N_IT_CONCEPTS = N_IT_SHAPE * N_IT_ATTR; // 65,536 compositional zero-shot visual concepts
+export const N_VIS_PATCH = W_V4 * H_V4 * 3; // 1,536-D (32x16x3) foveal RGB pixel patch for Patch-VAE + Flow world model
 export const FOV = (260 * Math.PI) / 180;
 export const VFOV = (110 * Math.PI) / 180;
 export const STEREO_RANGE = 9.0;
 export const HORIZON_RANGE = 26;
+
+// 4-Tier Grounded Symbolic Hypernym & Relational Affordance Ontology DAG:
+// Affordance vector order: [edible, potable, hazard, social, shelter, graspable]
+export const ONTOLOGY_DAG = {
+  tiers: ['Root', 'Domain', 'Taxon', 'Morphotype'],
+  affordanceAxes: ['edible', 'potable', 'hazard', 'social', 'shelter', 'graspable'],
+  synsets: [
+    { id: 0,  lexeme: 'MINT-BULB',        hypernyms: ['Entity', 'Biotic.Autotroph',   'Flora.NectarBearing',   'Morph.SpheroidBulb'],   aff: [0.94, 0.18, 0.02, 0.00, 0.15, 0.38] },
+    { id: 1,  lexeme: 'MAGENTA-CHALICE',  hypernyms: ['Entity', 'Biotic.Autotroph',   'Flora.NectarBearing',   'Morph.PrismChalice'],   aff: [0.91, 0.22, 0.04, 0.00, 0.20, 0.34] },
+    { id: 2,  lexeme: 'CYAN-FROND',       hypernyms: ['Entity', 'Biotic.Autotroph',   'Flora.NectarBearing',   'Morph.SpireFrond'],     aff: [0.88, 0.25, 0.03, 0.00, 0.28, 0.30] },
+    { id: 3,  lexeme: 'AMBER-STARPOD',    hypernyms: ['Entity', 'Biotic.Autotroph',   'Flora.NectarBearing',   'Morph.ThornStarpod'],   aff: [0.92, 0.12, 0.14, 0.00, 0.14, 0.36] },
+    { id: 4,  lexeme: 'DORMANT-STALK',    hypernyms: ['Entity', 'Biotic.Autotroph',   'Flora.Vegetative',      'Morph.WoodyStalk'],     aff: [0.22, 0.06, 0.02, 0.00, 0.35, 0.42] },
+    { id: 5,  lexeme: 'KIN-CONSPECIFIC',  hypernyms: ['Entity', 'Biotic.Heterotroph', 'Agent.Conspecific',     'Morph.CladePeer'],      aff: [0.00, 0.00, 0.10, 0.95, 0.12, 0.05] },
+    { id: 6,  lexeme: 'RIVAL-MORPH',      hypernyms: ['Entity', 'Biotic.Heterotroph', 'Agent.Conspecific',     'Morph.DivergentClade'], aff: [0.00, 0.00, 0.28, 0.72, 0.05, 0.04] },
+    { id: 7,  lexeme: 'EGG-CLUTCH',       hypernyms: ['Entity', 'Biotic.Heterotroph', 'Agent.Brood',           'Morph.AmnioticOvoid'],  aff: [0.08, 0.00, 0.02, 0.84, 0.06, 0.55] },
+    { id: 8,  lexeme: 'APEX-PREDATOR',    hypernyms: ['Entity', 'Biotic.Heterotroph', 'Agent.ApexPredator',    'Morph.LeviathanHunter'],aff: [0.00, 0.00, 0.98, 0.08, 0.00, 0.00] },
+    { id: 9,  lexeme: 'SYMBIOTIC-MITE',   hypernyms: ['Entity', 'Biotic.Heterotroph', 'Agent.MicroFauna',      'Morph.PelagicMite'],    aff: [0.46, 0.04, 0.05, 0.18, 0.00, 0.62] },
+    { id: 10, lexeme: 'BENTHIC-ISOPOD',   hypernyms: ['Entity', 'Biotic.Heterotroph', 'Agent.MicroFauna',      'Morph.Detritivore'],    aff: [0.52, 0.05, 0.04, 0.12, 0.00, 0.68] },
+    { id: 11, lexeme: 'LIPID-MORSEL',     hypernyms: ['Entity', 'Biotic.Detritus',    'Resource.NutrientSnack','Morph.LipidGlobule'],   aff: [0.97, 0.08, 0.01, 0.00, 0.00, 0.88] },
+    { id: 12, lexeme: 'SPRING-POOL',      hypernyms: ['Entity', 'Abiotic.Geosphere',  'Hydrology.FreshPool',   'Morph.ThermalBasin'],   aff: [0.04, 0.99, 0.08, 0.16, 0.30, 0.00] },
+    { id: 13, lexeme: 'BASALT-MONOLITH',  hypernyms: ['Entity', 'Abiotic.Geosphere',  'Lithology.Obstacle',    'Morph.BasaltBoulder'],  aff: [0.00, 0.00, 0.42, 0.00, 0.78, 0.25] },
+    { id: 14, lexeme: 'FUMAROLE-VENT',    hypernyms: ['Entity', 'Abiotic.Geosphere',  'Geothermal.BlackSmoker','Morph.SulfideChimney'], aff: [0.00, 0.10, 0.56, 0.05, 0.64, 0.00] },
+    { id: 15, lexeme: 'OPEN-TERRAIN',     hypernyms: ['Entity', 'Abiotic.Geosphere',  'Topography.Horizon',    'Morph.RegolithPlain'],  aff: [0.02, 0.02, 0.03, 0.00, 0.10, 0.08] },
+  ],
+};
 
 const HUE_RGB = [
   [0.22, 1.0, 0.62],
@@ -106,24 +131,37 @@ export class Retina {
     this.nSites = nSites;
     this.nPools = nPools;
 
-    // 1) Dual 128x64 Log-Polar Foveated Photoreceptor/Ganglion Sheets (8,192 L + 8,192 R = 16,384 receptors / 49,152 L/M/S cone channels)
-    const NPX = W_RET * H_RET;
-    this.nReceptors = NPX * 2;
-    this.nConeChannels = NPX * 6;
+    // 1) Dual 256x128 Log-Polar Foveated Photoreceptor Sheets (32,768 L + 32,768 R = 65,536 receptors / 196,608 L/M/S+Rod channels)
+    const NPX = W_RET * H_RET; // 32,768 per eye
+    const NLGN = W_LGN * H_LGN; // 8,192 pooled thalamic relay cells per pathway
+    this.nReceptors = NPX * 2;        // 65,536 photoreceptors
+    this.nConeChannels = NPX * 6;     // 196,608 L/M/S cone + scotopic rod signals
+    this.nGanglionAxons = NPX * 6;    // 196,608 retinal ganglion cell (RGC) output channels across 6 mosaics
     this.retL = new Float32Array(NPX * 3);
     this.retR = new Float32Array(NPX * 3);
     this.invDL = new Float32Array(NPX);
     this.invDR = new Float32Array(NPX);
+    this.scotopicRod = new Float32Array(NPX);
     this.microPhase = 0;
     this.microsaccadeAz = 0;
     this.microsaccadeEl = 0;
 
-    // 2) Thalamic LGN (128x64 x 3 Magnocellular / Parvocellular / Koniocellular relay sheets = 24,576 units)
+    // 2) 6 Primate Retinal Ganglion Cell (RGC) Mosaics (256x128 each = 196,608 RGC channels) + 128x64 Thalamic LGN Relay
     this.lumCur = new Float32Array(NPX);
     this.lum2DPrev = new Float32Array(NPX);
-    this.lgnMag = new Float32Array(NPX); // Magnocellular M: transient L+M broadband DoG
-    this.lgnRG = new Float32Array(NPX);  // Parvocellular P: sustained L-M red-green opponency
-    this.lgnBY = new Float32Array(NPX);  // Koniocellular K: short-wavelength S - 0.5*(L+M) bistratified opponency
+    this.rgcMidgetON = new Float32Array(NPX);  // P-ON sustained L-M red-green center-surround
+    this.rgcMidgetOFF = new Float32Array(NPX); // P-OFF sustained M-L green-red center-surround
+    this.rgcParasolON = new Float32Array(NPX); // M-ON transient broadband luminance increment DoG
+    this.rgcParasolOFF = new Float32Array(NPX);// M-OFF transient broadband luminance decrement / looming DoG
+    this.rgcBistrat = new Float32Array(NPX);   // Koniocellular S - 0.5*(L+M) short-wavelength blue-yellow
+    this.rgcIpRGC = new Float32Array(NPX);     // Melanopsin 480nm intrinsically photosensitive ambient irradiance
+    this.ipRgcLux = 0.25;
+    this.lgnMag = new Float32Array(NPX);       // Signed M-ON - M-OFF full-res 256x128 Magnocellular sheet
+    this.lgnMag128 = new Float32Array(NLGN);   // 2x2 anti-aliased 128x64 LGN relay sheet driving V1 Gabor hypercolumns
+    this.lumLgn128 = new Float32Array(NLGN);
+    this.lumLgn128Prev = new Float32Array(NLGN);
+    this.lgnRG = this.rgcMidgetON;             // Parvocellular compatibility alias
+    this.lgnBY = this.rgcBistrat;              // Koniocellular compatibility alias
 
     // 3) V1 (64x32x4 = 8,192 orientation hypercolumns)
     const NV1 = W_V1 * H_V1;
@@ -135,39 +173,47 @@ export class Retina {
     const NV2 = W_V2 * H_V2;
     this.v2Cells = new Float32Array(NV2 * 4);
 
-    // 5) V4 (16x8x8 = 1,024 scale/translation-tolerant max-pooled part descriptors) + 384-D (16x8x3) Foveal RGB Patch
+    // 5) V4 (32x16x8 = 4,096 scale/translation-tolerant max-pooled part descriptors) + 1,536-D (32x16x3) Foveal RGB Patch
     const NV4 = W_V4 * H_V4;
     this.v4Map = new Float32Array(NV4 * 8);
     this.v4Orient = new Float32Array(N_ORI);
     this.v4Fovea = new Float32Array(8);
-    this.v4 = this.v4Map; // alias for downstream multimodal tensor contraction
-    this.fovealPatch = new Float32Array(N_VIS_PATCH); // 16x8x3 RGB pixel tensor for conditional flow-matching world model
+    this.v4 = this.v4Map;
+    this.fovealPatch = new Float32Array(N_VIS_PATCH); // 32x16x3 (1,536-D) RGB pixel tensor for Patch-VAE + Flow WorldModel
 
-    // 6) Compositional Product-Quantized Ventral IT + Perirhinal (PRh) Cortex:
-    //    64 3D-form prototypes (WitShape) x 64 chromatic/surface/animacy attribute prototypes (WitAttr) = 4,096 zero-shot concepts!
+    // 6) Compositional Product-Quantized Ventral IT + Perirhinal (PRh) Cortex (256 Shape x 256 Attr = 65,536 Concepts!)
+    //    Grounded in the 4-Tier Symbolic Hypernym & Relational Affordance Ontology (`ONTOLOGY_DAG`)
     this.itShapeFeat = new Float32Array(16);
     this.itAttrFeat = new Float32Array(16);
     this.itFeat = new Float32Array(16);
     this.WitShape = new Float32Array(N_IT_SHAPE * 16);
     this.WitAttr = new Float32Array(N_IT_ATTR * 16);
-    this.Wit = this.WitShape; // backward-compatible inspector alias
+    this.Wit = this.WitShape;
     this.itShapeAct = new Float32Array(N_IT_SHAPE);
     this.itAttrAct = new Float32Array(N_IT_ATTR);
     this.itShapeTrace = new Float32Array(N_IT_SHAPE);
     this.itAttrTrace = new Float32Array(N_IT_ATTR);
-    this.itAct = new Float32Array(N_IT); // 64-column cortical output (32 pooled form + 32 pooled attribute channels)
+    this.itAct = new Float32Array(N_IT); // 64-column cortical summary (32 pooled form + 32 pooled attribute channels)
     this.itTrace = this.itShapeTrace;
     this._initITPrototypes();
-    this.itConceptCapacity = N_IT_CONCEPTS; // 4,096 compositional concepts
+    this.itConceptCapacity = N_IT_CONCEPTS; // 65,536 compositional concepts
     this.itActiveConcept = -1;
     this.itObservedConcepts = new Uint8Array(N_IT_CONCEPTS);
     this.itUniqueConceptsSeen = 0;
     this.itTopShape = -1;
     this.itTopAttr = -1;
     this.itTopCat = -1;
-    this.itInvariance = 0.85; // rolling cosine stability across distance/angle changes on fixated object
+    this.itInvariance = 0.85;
     this._prevItVec = new Float32Array(N_IT);
     this._prevTopId = -1;
+
+    // Grounded 4-Tier Symbolic Hypernym & Relational Affordance Ontology state
+    this.ontologyDAG = ONTOLOGY_DAG;
+    this.ontologySynset = ONTOLOGY_DAG.synsets[15];
+    this.activeLexeme = 'OPEN-TERRAIN#c00000';
+    this.hypernymPath = 'Entity > Abiotic.Geosphere > Topography.Horizon > Morph.RegolithPlain';
+    this.affordanceVec = new Float32Array(ONTOLOGY_DAG.synsets[15].aff); // [edible, potable, hazard, social, shelter, graspable]
+    this.sceneGraphTriples = [];
 
     // Dorsal MT 2D optic flow (on 64x32 V1 grid)
     this.mtFlowX = new Float32Array(NV1);
@@ -204,18 +250,19 @@ export class Retina {
     this.seenCount = 0;
     this.loopClosures = 0;
     this.socialSeen = 0;
+    this.microSeen = 0;
     this.predatorLoom = 0;
   }
 
   _initITPrototypes() {
-    // Seed 64 3D-form prototypes (WitShape) and 64 chromatic/surface/animacy attribute prototypes (WitAttr) -> 4,096 compositional concepts
+    // Seed 256 3D-form prototypes (WitShape) and 256 chromatic/surface/animacy attribute prototypes (WitAttr) -> 65,536 concepts
     for (let k = 0; k < N_IT_SHAPE; k++) {
       const off = k * 16;
-      const ori = k & 3, junc = (k >> 2) & 3, aspect = (k >> 4) & 3;
-      this.WitShape[off + ori] = 0.52;
-      this.WitShape[off + 4 + junc] = 0.72;
-      this.WitShape[off + 8 + aspect] = 0.45;
-      this.WitShape[off + 12 + ((ori + junc) & 3)] = 0.35 + 0.08 * (k % 3);
+      const ori = k & 3, junc = (k >> 2) & 3, aspect = (k >> 4) & 3, fine = (k >> 6) & 3;
+      this.WitShape[off + ori] = 0.52 + 0.04 * fine;
+      this.WitShape[off + 4 + junc] = 0.72 - 0.03 * fine;
+      this.WitShape[off + 8 + aspect] = 0.45 + 0.05 * ((k >> 5) & 1);
+      this.WitShape[off + 12 + ((ori + junc + fine) & 3)] = 0.34 + 0.07 * (k % 3);
       let n2 = 0;
       for (let j = 0; j < 16; j++) n2 += this.WitShape[off + j] ** 2;
       const inv = 1 / (Math.sqrt(n2) || 1);
@@ -223,11 +270,11 @@ export class Retina {
     }
     for (let k = 0; k < N_IT_ATTR; k++) {
       const off = k * 16;
-      const hue = k & 3, opp = (k >> 2) & 3, anim = (k >> 4) & 3;
-      this.WitAttr[off + hue] = 0.74;
-      this.WitAttr[off + 4 + opp] = 0.54;
-      this.WitAttr[off + 8 + anim] = 0.44;
-      this.WitAttr[off + 12 + ((hue + anim) & 3)] = 0.32 + 0.08 * (k % 3);
+      const hue = k & 3, opp = (k >> 2) & 3, anim = (k >> 4) & 3, surf = (k >> 6) & 3;
+      this.WitAttr[off + hue] = 0.74 - 0.03 * surf;
+      this.WitAttr[off + 4 + opp] = 0.54 + 0.04 * surf;
+      this.WitAttr[off + 8 + anim] = 0.44 + 0.05 * ((k >> 5) & 1);
+      this.WitAttr[off + 12 + ((hue + anim + surf) & 3)] = 0.32 + 0.07 * (k % 3);
       let n2 = 0;
       for (let j = 0; j < 16; j++) n2 += this.WitAttr[off + j] ** 2;
       const inv = 1 / (Math.sqrt(n2) || 1);
@@ -313,36 +360,50 @@ export class Retina {
     }
   }
 
-  /** Run Parvo/Magno/Konio LGN -> V1 Gabor -> V2 Curvature/Junctions -> V4 Max-Pooling -> 4,096-Concept Compositional IT/PRh + MT Flow */
+  /** Run 6 RGC Mosaics -> Parvo/Magno/Konio LGN -> V1 Gabor -> V2 Junctions -> V4 32x16 Max-Pool -> 65,536-Concept Ontology-Grounded IT/PRh */
   processVisualCortex(lesionVision) {
     const NPX = W_RET * H_RET;
     if (lesionVision) {
-      this.lgnMag.fill(0); this.lgnRG.fill(0); this.lgnBY.fill(0);
+      this.rgcMidgetON.fill(0); this.rgcMidgetOFF.fill(0);
+      this.rgcParasolON.fill(0); this.rgcParasolOFF.fill(0);
+      this.rgcBistrat.fill(0); this.rgcIpRGC.fill(0); this.scotopicRod.fill(0);
+      this.lgnMag.fill(0); this.lgnMag128.fill(0);
       this.v1Simple.fill(0); this.v1Complex.fill(0); this.v1Disparity.fill(0);
       this.v2Cells.fill(0); this.v4Map.fill(0); this.v4Orient.fill(0); this.v4Fovea.fill(0);
       this.itAct.fill(0); this.itShapeAct.fill(0); this.itAttrAct.fill(0); this.fovealPatch.fill(0);
       this.mtFlowX.fill(0); this.mtFlowY.fill(0);
-      this.mtDiv = 0; this.v1EnergyMean = 0;
+      this.mtDiv = 0; this.v1EnergyMean = 0; this.ipRgcLux = 0;
+      this.sceneGraphTriples = [];
       return;
     }
 
-    // 1) Binocular cyclopean L/M/S cone fusion + Parvocellular (L-M) & Koniocellular (S - 0.5*(L+M)) opponency
+    // 1) Binocular cyclopean L/M/S cone + scotopic rod transduction & Midget/Bistratified/Melanopsin-ipRGC mosaics (256x128 = 32,768/mosaic)
     const lum = this.lumCur, rL = this.retL, rR = this.retR;
+    let ipSum = 0;
     for (let i = 0; i < NPX; i++) {
       const p3 = i * 3;
-      const R = 0.5 * (rL[p3] + rR[p3]);
-      const G = 0.5 * (rL[p3 + 1] + rR[p3 + 1]);
-      const B = 0.5 * (rL[p3 + 2] + rR[p3 + 2]);
-      lum[i] = 0.30 * R + 0.55 * G + 0.15 * B;
-      this.lgnRG[i] = R - G;              // Parvocellular P sustained L-M
-      this.lgnBY[i] = B - 0.5 * (R + G);  // Koniocellular K bistratified S-(L+M)
+      const Lc = 0.5 * (rL[p3] + rR[p3]);
+      const Mc = 0.5 * (rL[p3 + 1] + rR[p3 + 1]);
+      const Sc = 0.5 * (rL[p3 + 2] + rR[p3 + 2]);
+      const photopic = 0.30 * Lc + 0.55 * Mc + 0.15 * Sc;
+      const rod = Math.sqrt(Math.max(0, 0.12 * Lc + 0.52 * Mc + 0.36 * Sc)) * 0.35; // 498 nm rhodopsin scotopic rod signal
+      this.scotopicRod[i] = rod;
+      lum[i] = photopic + 0.18 * rod;
+      const rg = Lc - Mc;
+      this.rgcMidgetON[i] = rg;                     // P-ON Midget (also aliased as this.lgnRG)
+      this.rgcMidgetOFF[i] = Math.max(0, -rg);      // P-OFF Midget M-L center
+      this.rgcBistrat[i] = Sc - 0.5 * (Lc + Mc);    // Koniocellular Small Bistratified S - (L+M)
+      const ip = 0.18 * Mc + 0.82 * Sc;             // 480 nm Melanopsin ipRGC ambient irradiance
+      this.rgcIpRGC[i] = ip;
+      ipSum += ip;
     }
+    this.ipRgcLux = 0.92 * this.ipRgcLux + 0.08 * (ipSum / NPX);
 
-    // Extract central 64x32 foveal region pooled 4x4 into 16x8x3 (384-D) pixel tensor for Conditional Flow-Matching WorldModel
+    // Extract central 128x64 foveal region pooled 4x4 into 32x16x3 (1,536-D) pixel tensor for 2-Stage Spatial-Pyramid Patch-VAE + Flow WorldModel
     for (let py = 0; py < H_V4; py++) {
-      const yBase = 16 + py * 4;
+      const yBase = 32 + py * 4;
       for (let px = 0; px < W_V4; px++) {
-        const xBase = 32 + px * 4;
+        const xBase = 64 + px * 4;
         let sr = 0, sg = 0, sb = 0;
         for (let dy = 0; dy < 4; dy++) {
           const row = (yBase + dy) * W_RET + xBase;
@@ -360,7 +421,7 @@ export class Retina {
       }
     }
 
-    // 2) Thalamic LGN Magnocellular (M) Difference-of-Gaussians + physiological microsaccadic transient refresh
+    // 2) M-ON / M-OFF Parasol RGC Difference-of-Gaussians (256x128) + 2x2 Pooled Thalamic Magnocellular LGN Relay (128x64)
     const microGain = 1 + 8.0 * Math.hypot(this.microsaccadeAz, this.microsaccadeEl);
     for (let y = 0; y < H_RET; y++) {
       const ym = Math.max(0, y - 1) * W_RET, yc = y * W_RET, yp = Math.min(H_RET - 1, y + 1) * W_RET;
@@ -373,22 +434,34 @@ export class Retina {
           0.10 * (lum[ym + xm] + lum[ym + xp] + lum[yp + xm] + lum[yp + xp])
         );
         const trans = 0.14 * (c - this.lum2DPrev[idx]);
-        this.lgnMag[idx] = (c - surr) * microGain + trans;
+        const dog = (c - surr) * microGain + trans;
+        this.lgnMag[idx] = dog;
+        this.rgcParasolON[idx] = dog > 0 ? dog : 0;
+        this.rgcParasolOFF[idx] = dog < 0 ? -dog : 0;
+      }
+    }
+    for (let yl = 0; yl < H_LGN; yl++) {
+      const rA = (yl * 2) * W_RET, rB = (yl * 2 + 1) * W_RET;
+      const oL = yl * W_LGN;
+      for (let xl = 0; xl < W_LGN; xl++) {
+        const xA = xl * 2, xB = xA + 1;
+        this.lgnMag128[oL + xl] = 0.25 * (this.lgnMag[rA + xA] + this.lgnMag[rA + xB] + this.lgnMag[rB + xA] + this.lgnMag[rB + xB]);
+        this.lumLgn128[oL + xl] = 0.25 * (lum[rA + xA] + lum[rA + xB] + lum[rB + xA] + lum[rB + xB]);
       }
     }
 
     // 3) V1 (64x32x4 = 8,192 units): Unrolled 5x5 Quadrature Gabor Simple/Complex + Binocular Disparity + MT 2D Optic Flow
     this.v4Orient.fill(0);
     let totE = 0, divSum = 0;
-    const lgnM = this.lgnMag;
+    const lgnM = this.lgnMag128, lum128 = this.lumLgn128, lum128Prv = this.lumLgn128Prev;
     for (let vy = 0; vy < H_V1; vy++) {
       const cy = vy * 2 + 1;
-      const r0 = Math.max(0, cy - 2) * W_RET, r1 = Math.max(0, cy - 1) * W_RET, r2 = cy * W_RET;
-      const r3 = Math.min(H_RET - 1, cy + 1) * W_RET, r4 = Math.min(H_RET - 1, cy + 2) * W_RET;
+      const r0 = Math.max(0, cy - 2) * W_LGN, r1 = Math.max(0, cy - 1) * W_LGN, r2 = cy * W_LGN;
+      const r3 = Math.min(H_LGN - 1, cy + 1) * W_LGN, r4 = Math.min(H_LGN - 1, cy + 2) * W_LGN;
       for (let vx = 0; vx < W_V1; vx++) {
         const cx = vx * 2 + 1;
         const x0 = Math.max(0, cx - 2), x1 = Math.max(0, cx - 1), x2 = cx;
-        const x3 = Math.min(W_RET - 1, cx + 1), x4 = Math.min(W_RET - 1, cx + 2);
+        const x3 = Math.min(W_LGN - 1, cx + 1), x4 = Math.min(W_LGN - 1, cx + 2);
         const vIdx = vy * W_V1 + vx;
         const vOff = vIdx * N_ORI;
 
@@ -419,12 +492,13 @@ export class Retina {
           totE += energy;
         }
 
-        const pC = r2 + x2;
-        this.v1Disparity[vIdx] = 0.5 * (this.invDL[pC] + this.invDR[pC]);
+        const pRet = (cy * 2) * W_RET + (cx * 2);
+        this.v1Disparity[vIdx] = 0.5 * (this.invDL[pRet] + this.invDR[pRet]);
 
-        const ix = 0.5 * (lum[r2 + x3] - lum[r2 + x1]);
-        const iy = 0.5 * (lum[r3 + x2] - lum[r1 + x2]);
-        const it = lum[pC] - this.lum2DPrev[pC];
+        const pC = r2 + x2;
+        const ix = 0.5 * (lum128[r2 + x3] - lum128[r2 + x1]);
+        const iy = 0.5 * (lum128[r3 + x2] - lum128[r1 + x2]);
+        const it = lum128[pC] - lum128Prv[pC];
         const denom = ix * ix + iy * iy + 0.025;
         const fx = -ix * it / denom, fy = -iy * it / denom;
         this.mtFlowX[vIdx] = 0.75 * this.mtFlowX[vIdx] + 0.25 * fx;
@@ -463,19 +537,21 @@ export class Retina {
       }
     }
 
-    // 5) V4 (16x8x8 = 1,024 units): HMAX C2 Scale- & Position-Tolerant Max-Pooling + Parvo/Konio Opponent Hue Bands
+    // 5) V4 (32x16x8 = 4,096 units): 3x3 HMAX C2 Scale/Position-Tolerant Max-Pooling + Parvo/Konio Opponent Hue Bands
     this.v4Fovea.fill(0);
     const maxV2 = new Float32Array(4);
     const maxHue = new Float32Array(4);
     const quadShape = new Float32Array(4);
     let nFov = 0, maxDisp = 0;
     for (let y4 = 0; y4 < H_V4; y4++) {
+      const ym = Math.max(0, y4 - 1), yp = Math.min(H_V2 - 1, y4 + 1);
       for (let x4 = 0; x4 < W_V4; x4++) {
+        const xm = Math.max(0, x4 - 1), xp = Math.min(W_V2 - 1, x4 + 1);
         const o4 = (y4 * W_V4 + x4) * 8;
         let c0 = 0, c1 = 0, c2 = 0, c3 = 0;
-        for (let dy = 0; dy < 2; dy++) {
-          for (let dx = 0; dx < 2; dx++) {
-            const o2 = ((y4 * 2 + dy) * W_V2 + (x4 * 2 + dx)) * 4;
+        for (let yy = ym; yy <= yp; yy++) {
+          for (let xx = xm; xx <= xp; xx++) {
+            const o2 = (yy * W_V2 + xx) * 4;
             if (this.v2Cells[o2] > c0) c0 = this.v2Cells[o2];
             if (this.v2Cells[o2 + 1] > c1) c1 = this.v2Cells[o2 + 1];
             if (this.v2Cells[o2 + 2] > c2) c2 = this.v2Cells[o2 + 2];
@@ -493,7 +569,7 @@ export class Retina {
         this.v4Map[o4] = c0; this.v4Map[o4 + 1] = c1; this.v4Map[o4 + 2] = c2; this.v4Map[o4 + 3] = c3;
         this.v4Map[o4 + 4] = hMint; this.v4Map[o4 + 5] = hMag; this.v4Map[o4 + 6] = hCyan; this.v4Map[o4 + 7] = hAmb;
 
-        if (x4 >= 4 && x4 <= 11 && y4 >= 2 && y4 <= 5) {
+        if (x4 >= 8 && x4 <= 23 && y4 >= 4 && y4 <= 11) {
           if (c0 > maxV2[0]) maxV2[0] = c0;
           if (c1 > maxV2[1]) maxV2[1] = c1;
           if (c2 > maxV2[2]) maxV2[2] = c2;
@@ -502,14 +578,14 @@ export class Retina {
           if (hMag > maxHue[1]) maxHue[1] = hMag;
           if (hCyan > maxHue[2]) maxHue[2] = hCyan;
           if (hAmb > maxHue[3]) maxHue[3] = hAmb;
-          const qIdx = (y4 >= 4 ? 2 : 0) + (x4 >= 8 ? 1 : 0);
+          const qIdx = (y4 >= 8 ? 2 : 0) + (x4 >= 16 ? 1 : 0);
           quadShape[qIdx] = Math.max(quadShape[qIdx], c0 + c1 + c2 + c3);
           const disp = 0.5 * (this.invDL[rPy] + this.invDR[rPy]);
           if (disp > maxDisp) maxDisp = disp;
           for (let o = 0; o < 4; o++) this.v4Fovea[o] += this.v4Map[o4 + o];
-          this.v4Fovea[4] += Math.max(0, this.lgnRG[rPy]);
-          this.v4Fovea[5] += Math.max(0, -this.lgnRG[rPy]);
-          this.v4Fovea[6] += Math.max(0, this.lgnBY[rPy]);
+          this.v4Fovea[4] += Math.max(0, this.rgcMidgetON[rPy]);
+          this.v4Fovea[5] += this.rgcMidgetOFF[rPy];
+          this.v4Fovea[6] += Math.max(0, this.rgcBistrat[rPy]);
           this.v4Fovea[7] += lum[rPy];
           nFov++;
         }
@@ -517,7 +593,7 @@ export class Retina {
     }
     for (let k = 0; k < 8; k++) this.v4Fovea[k] /= Math.max(1, nFov);
 
-    // 6) Compositional Product-Quantized Ventral IT + Perirhinal (PRh) Cortex (64 Shape x 64 Attribute = 4,096 Concepts!)
+    // 6) Compositional Product-Quantized Ventral IT + Perirhinal (PRh) Cortex (256 Shape x 256 Attribute = 65,536 Concepts!)
     const fs = this.itShapeFeat, fa = this.itAttrFeat;
     const nOri = Math.hypot(this.v4Orient[0], this.v4Orient[1], this.v4Orient[2], this.v4Orient[3]) + 1e-5;
     const nV2 = Math.hypot(maxV2[0], maxV2[1], maxV2[2], maxV2[3]) + 1e-5;
@@ -533,7 +609,7 @@ export class Retina {
       fa[i] = (maxHue[i] / nHue) * 0.78;
       fa[4 + i] = clamp(this.v4Fovea[4 + i] * 2.2, 0, 1) * 0.50;
     }
-    const animCue = clamp(this.socialSeen * 0.35 + this.predatorLoom * 0.8, 0, 1);
+    const animCue = clamp(this.socialSeen * 0.35 + this.predatorLoom * 0.8 + this.microSeen * 0.12, 0, 1);
     fa[8] = animCue * 0.45;
     fa[9] = clamp(Math.abs(this.mtDiv), 0, 1) * 0.35;
     fa[10] = clamp(maxDisp * 0.35, 0, 1) * 0.30;
@@ -569,21 +645,69 @@ export class Retina {
         if (act > bestAVal) { bestAVal = act; bestA = k; }
       }
 
-      // 64-column cortical readout (32 max-pooled form columns + 32 max-pooled attribute columns)
+      // 64-column cortical readout (32 max-pooled form columns [8 prototypes/col] + 32 max-pooled attribute columns [8 prototypes/col])
       for (let c = 0; c < 32; c++) {
-        this.itAct[c] = Math.max(this.itShapeAct[2 * c], this.itShapeAct[2 * c + 1]);
-        this.itAct[32 + c] = Math.max(this.itAttrAct[2 * c], this.itAttrAct[2 * c + 1]);
+        let mS = 0, mA = 0;
+        const base = c * 8;
+        for (let q = 0; q < 8; q++) {
+          if (this.itShapeAct[base + q] > mS) mS = this.itShapeAct[base + q];
+          if (this.itAttrAct[base + q] > mA) mA = this.itAttrAct[base + q];
+        }
+        this.itAct[c] = mS;
+        this.itAct[32 + c] = mA;
       }
 
-      const conceptId = bestS * N_IT_ATTR + bestA; // 0 .. 4,095 Perirhinal compositional concept!
+      const conceptId = bestS * N_IT_ATTR + bestA; // 0 .. 65,535 Perirhinal compositional concept!
       this.itActiveConcept = conceptId;
       this.itTopShape = bestS;
       this.itTopAttr = bestA;
-      this.itTopCat = ((bestS >> 2) * 4 + (bestA & 3)) % N_IT;
+      this.itTopCat = ((bestS >> 4) * 4 + (bestA & 3)) % N_IT;
       if (!this.itObservedConcepts[conceptId]) {
         this.itObservedConcepts[conceptId] = 1;
         this.itUniqueConceptsSeen++;
       }
+
+      // Ground visual concept in the 4-Tier Symbolic Hypernym & Relational Affordance Ontology (`ONTOLOGY_DAG`)
+      let synIdx = 15;
+      if (this.predatorLoom > 0.20) synIdx = 8;
+      else if (this.socialSeen > 0 && animCue > 0.28) synIdx = (bestA & 1) ? 6 : 5;
+      else if (this.microSeen > 0 && maxDisp > 0.25 && nHue < 0.08) synIdx = (bestS & 1) ? 10 : 9;
+      else if (this.obstAhead > 0.35 && nHue < 0.12) synIdx = 13;
+      else if (maxHue[2] > 0.35 && maxV2[0] > maxV2[2]) synIdx = 12;
+      else if (nHue > 0.08) {
+        let topHue = 0;
+        for (let h = 1; h < 4; h++) if (maxHue[h] > maxHue[topHue]) topHue = h;
+        synIdx = topHue; // 0: MINT-BULB, 1: MAGENTA-CHALICE, 2: CYAN-FROND, 3: AMBER-STARPOD
+      } else if (nV2 > 0.10) {
+        synIdx = 4; // DORMANT-STALK
+      }
+      const syn = ONTOLOGY_DAG.synsets[synIdx];
+      this.ontologySynset = syn;
+      this.activeLexeme = `${syn.lexeme}#c${String(conceptId).padStart(5, '0')}`;
+      this.hypernymPath = syn.hypernyms.join(' > ');
+      for (let a = 0; a < 6; a++) this.affordanceVec[a] = 0.85 * this.affordanceVec[a] + 0.15 * syn.aff[a];
+
+      // Build grounded Subject --[Predicate:Affordance]--> Object relational scene-graph triples
+      const triples = [];
+      triples.push([
+        'SELF',
+        syn.aff[0] > 0.5 ? `forages:edible(${syn.aff[0].toFixed(2)})`
+          : syn.aff[1] > 0.5 ? `seeks:potable(${syn.aff[1].toFixed(2)})`
+          : syn.aff[2] > 0.5 ? `evades:hazard(${syn.aff[2].toFixed(2)})`
+          : syn.aff[3] > 0.5 ? `attends:social(${syn.aff[3].toFixed(2)})`
+          : `inspects:shelter(${syn.aff[4].toFixed(2)})`,
+        `${syn.hypernyms[2]}:${syn.lexeme}`,
+      ]);
+      if (this.predatorLoom > 0.08) {
+        triples.push(['Agent.ApexPredator:APEX-PREDATOR', `loomsAt:hazard(${this.predatorLoom.toFixed(2)})`, 'SELF']);
+      }
+      if (this.socialSeen > 0) {
+        triples.push(['SELF', `cohabitsWith:kin(${this.socialSeen})`, 'Agent.Conspecific:KIN-CONSPECIFIC']);
+      }
+      if (this.obstAhead > 0.15) {
+        triples.push(['Lithology.Obstacle:BASALT-MONOLITH', `occludesPath:prox(${this.obstAhead.toFixed(2)})`, 'SELF']);
+      }
+      this.sceneGraphTriples = triples;
 
       // Measure view/scale invariance as cosine stability of 64-D IT population vector while approaching fixated object
       let dotPrev = 0, nCur = 0, nPrv = 0;
@@ -599,7 +723,7 @@ export class Retina {
       this._prevItVec.set(this.itAct);
       this._prevTopId = this.itTopCat;
 
-      // Online Foldiak / Wallis-Rolls slow temporal-trace Hebbian learning on both Shape & Attribute codebooks
+      // Online Foldiak / Wallis-Rolls slow temporal-trace Hebbian learning on both 256-entry Shape & Attribute codebooks
       for (let k = 0; k < N_IT_SHAPE; k++) this.itShapeTrace[k] = 0.88 * this.itShapeTrace[k] + 0.12 * (k === bestS ? 1 : 0);
       for (let k = 0; k < N_IT_ATTR; k++) this.itAttrTrace[k] = 0.88 * this.itAttrTrace[k] + 0.12 * (k === bestA ? 1 : 0);
       const etaS = 0.004 * this.itShapeTrace[bestS];
@@ -629,6 +753,7 @@ export class Retina {
     }
 
     this.lum2DPrev.set(lum);
+    this.lumLgn128Prev.set(this.lumLgn128);
   }
 
   /**
@@ -904,7 +1029,8 @@ export class Retina {
       }
     }
 
-    // 5) Project A-Life Ecosystem entities (conspecifics, eggs, bio-mites, predators) onto retinas!
+    // 5) Project A-Life Ecosystem entities (conspecifics, eggs, bio-mites, predators & embodied micro-fauna) onto retinas!
+    this.microSeen = 0;
     const eco = world.eco;
     if (eco && !lesionVision) {
       for (const peer of eco.peers) {
@@ -923,6 +1049,7 @@ export class Retina {
       for (let m = 0; m < eco.mites.length; m += 2) {
         const mt = eco.mites[m];
         if (Math.hypot(mt.x - ex, mt.z - ez) < 9) {
+          this.microSeen++;
           projectBinocular2D(mt.x, mt.y, mt.z, 0.10, 3, 0.45, 1.0, 0.82);
         }
       }
@@ -931,6 +1058,15 @@ export class Retina {
         if (d < 22) {
           projectBinocular2D(pred.x, pred.y, pred.z, 1.15, 5, 1.15, 0.15, 0.28);
           this.predatorLoom = Math.max(this.predatorLoom, clamp(1 - d / 14));
+        }
+      }
+    }
+    if (world.microFauna && !lesionVision) {
+      for (let m = 0; m < world.microFauna.length; m += 4) {
+        const mf = world.microFauna[m];
+        if (Math.hypot(mf.x - ex, mf.z - ez) < 7.5) {
+          this.microSeen++;
+          projectBinocular2D(mf.x, mf.y, mf.z, 0.08, mf.guild === 1 ? 3 : 0, mf.r, mf.g, mf.b);
         }
       }
     }

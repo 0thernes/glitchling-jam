@@ -1,13 +1,14 @@
-// In-page 108-gene Hox + Morphogen Evo-Devo body + brain co-evolution (upgraded in pass 18): supports BOTH
+// In-page 128-gene Zygote-Cleavage + Gastrulation + Hox-GRN Evo-Devo body + brain co-evolution (upgraded in pass 19): supports BOTH
 //  A) Local variance-reduced Active Mirrored Separable CMA-ES refinement ('refine', default 6 gens from current/starter genome), AND
-//  B) True 108-Gene Evo-Devo De-Novo Co-Evolution From Pure Uniform Random [0.05, 0.95]^108 Weights ('denovo', default 12 gens:
+//  B) True 128-Gene Evo-Devo De-Novo Co-Evolution From Pure Uniform Random [0.05, 0.95]^128 Weights ('denovo', default 12 gens:
 //     14-member Stratified Latin-Hypercube primordial screen + Archive-Backed Diagonal-Quadratic Surrogate Pre-Screened
 //     Active Mirrored Separable CMA-ES with CSA & CRN elitist verification),
 // simultaneously co-evolving:
 //   - 58 innate CPG / motor / posture / gaze / synergy weights
 //   - 20 sense -> MOT closed-loop steering & boulder-avoidance weights
 //   - 14 3D Evo-Devo body morphology, collagen fiber stiffness, dorsal crest/fluke, thermal & neural-allocation genes
-//   - 16 Embryonic Hox + Morphogen (Shh/Fgf/Bmp/Wnt) GRN genes governing variable 4/6/8-limb body plans & osteoderms!
+//   - 16 Embryonic Hox + Morphogen (Shh/Fgf/Bmp/Wnt) GRN genes
+//   - 20 Single-cell zygote cleavage, Spemann-Mangold gastrulation, Hes7 somitogenesis & 5-clade (0L/4L/6L/8L/10L + patagium/lure) genes!
 import { FULL_GENES, evalHoxGRN } from './sim/genome.js';
 
 const LAMBDA = 8, SECS = 5, LHS_POP = 14, SURR_PAIRS = 12;
@@ -214,6 +215,9 @@ export class Lineage {
     return {
       limbs: hox.limbPairs * 2,
       limbPairs: hox.limbPairs,
+      clade: hox.cladeName,
+      patagium: +(hox.patagium ?? 0.18).toFixed(2),
+      anglerLure: +(hox.anglerLure ?? 0.24).toFixed(2),
       bodyLen: g.bodyLen,
       foreLimb: g.foreLimb,
       hindLimb: g.hindLimb,

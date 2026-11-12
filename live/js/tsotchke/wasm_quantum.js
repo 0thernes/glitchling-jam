@@ -1,6 +1,6 @@
-// Zero-build inline W3C WebAssembly f64 quantum statevector kernel (up to 14 qubits, DIM = 16,384) +
-// Optional 16-Qubit (DIM = 65,536) WebGPU WGSL Compute-Shader Statevector Coprocessor (Pass 18).
-// Assembles a valid compact WASM binary module in memory at startup and instantiates it over 8-page (512 KB) shared
+// Zero-build inline W3C WebAssembly f64 quantum statevector kernel (up to 16 qubits, DIM = 65,536) +
+// Optional 18-Qubit (DIM = 262,144) WebGPU WGSL Compute-Shader Statevector Coprocessor (Pass 19).
+// Assembles a valid compact WASM binary module in memory at startup and instantiates it over 32-page (2.0 MB) shared
 // WebAssembly.Memory so Hadamard layers, Rz(theta) + Ising-ZZ(phi) unitary phase evolutions, CNOT ring entanglers, and
 // Born norm reductions execute in native V8/browser JIT machine code (with automatic JS fallback if WebAssembly is unavailable).
 
@@ -41,16 +41,17 @@ function strBytes(s) {
 
 const I32 = 0x7f, F64 = 0x7c;
 
-// Memory layout (byte offsets in 8-page = 512 KB WebAssembly.Memory, enough for up to 14 qubits / DIM = 16,384):
-//   0       .. 131,071 : re[0..16383]       (Float64Array)
-//   131,072 .. 262,143 : im[0..16383]       (Float64Array)
-//   262,144 .. 393,215 : phaseCos[0..16383] (Float64Array)
-//   393,216 .. 524,287 : phaseSin[0..16383] (Float64Array)
-export const MAX_WASM_DIM = 16384;
+// Memory layout (byte offsets in 32-page = 2,097,152 B = 2.0 MB WebAssembly.Memory, up to 16 qubits / DIM = 65,536):
+//   0         ..   524,287 : re[0..65535]       (Float64Array)
+//   524,288   .. 1,048,575 : im[0..65535]       (Float64Array)
+//   1,048,576 .. 1,572,863 : phaseCos[0..65535] (Float64Array)
+//   1,572,864 .. 2,097,151 : phaseSin[0..65535] (Float64Array)
+export const MAX_WASM_NQ = 16;
+export const MAX_WASM_DIM = 65536;
 export const OFF_RE = 0;
-export const OFF_IM = 131072;
-export const OFF_COS = 262144;
-export const OFF_SIN = 393216;
+export const OFF_IM = 524288;
+export const OFF_COS = 1048576;
+export const OFF_SIN = 1572864;
 
 function buildQuantumWasmBytes() {
   // Function 0: hadamardStep(halfBytes: i32, dimBytes: i32, invS2: f64) -> void
@@ -157,7 +158,7 @@ function buildQuantumWasmBytes() {
     ...uleb(1),
     ...strBytes('env'),
     ...strBytes('mem'),
-    0x02, 0x00, ...uleb(8), // memory min = 8 pages (512 KB, supports up to 14 qubits / DIM = 16,384 f64)
+    0x02, 0x00, ...uleb(32), // memory min = 32 pages (2.0 MB, supports up to 16 qubits / DIM = 65,536 f64)
   ];
   const funcs = [...uleb(3), 0x00, 0x01, 0x02];
   const exportsSec = [
@@ -189,11 +190,11 @@ function buildQuantumWasmBytes() {
 let CACHED_MOD = null;
 let WASM_SUPPORTED = true;
 
-export function createWasmQuantumKernel(dim = 16384) {
+export function createWasmQuantumKernel(dim = 65536) {
   if (!WASM_SUPPORTED || typeof WebAssembly === 'undefined' || dim > MAX_WASM_DIM) return null;
   try {
     if (!CACHED_MOD) CACHED_MOD = new WebAssembly.Module(buildQuantumWasmBytes());
-    const mem = new WebAssembly.Memory({ initial: 8 });
+    const mem = new WebAssembly.Memory({ initial: 32 });
     const inst = new WebAssembly.Instance(CACHED_MOD, { env: { mem } });
     const buf = mem.buffer;
     return {
@@ -221,20 +222,25 @@ export function createWasmQuantumKernel(dim = 16384) {
 }
 
 /**
- * Optional 16-Qubit (DIM = 65,536) WebGPU WGSL Compute-Shader Quantum Statevector Coprocessor.
+ * Optional 18-Qubit (DIM = 262,144) WebGPU WGSL Compute-Shader Quantum Statevector Coprocessor.
  * Executes Hadamard butterfly layers, parameterized Rz(theta_q) + Ising ZZ(phi) unitary diagonal evolutions,
- * and 16-qubit CNOT ring gates directly on GPU storage buffers (`vec2<f32>` complex amplitudes).
+ * and 18-qubit CNOT ring gates directly on GPU storage buffers (`vec2<f32>` complex amplitudes = 2.0 MB).
  */
-export const WGSL_QUANTUM_16Q = /* wgsl */ `
+export const WGSL_QUANTUM_18Q = /* wgsl */ `
 struct GateParams {
   mode: u32,      // 0 = Hadamard qubit q, 1 = Diagonal Rz + Ising ZZ, 2 = CNOT(cMask, tMask)
   qBit: u32,
   tMask: u32,
   zzPhi: f32,
+  nQ: u32,
+  dim: u32,
+  pad0: u32,
+  pad1: u32,
   thetas0: vec4<f32>,
   thetas1: vec4<f32>,
   thetas2: vec4<f32>,
   thetas3: vec4<f32>,
+  thetas4: vec4<f32>,
 };
 
 @group(0) @binding(0) var<storage, read_write> state: array<vec2<f32>>;
@@ -244,16 +250,17 @@ fn thetaAt(q: u32) -> f32 {
   if (q < 4u) { return params.thetas0[q]; }
   if (q < 8u) { return params.thetas1[q - 4u]; }
   if (q < 12u) { return params.thetas2[q - 8u]; }
-  return params.thetas3[q - 12u];
+  if (q < 16u) { return params.thetas3[q - 12u]; }
+  return params.thetas4[q - 16u];
 }
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let idx = gid.x;
-  let dim = 65536u;
+  let dim = params.dim;
+  let halfDim = dim >> 1u;
   if (params.mode == 0u) {
-    // Butterfly pair over dim/2 = 32,768 threads
-    if (idx >= 32768u) { return; }
+    if (idx >= halfDim) { return; }
     let half = params.qBit;
     let lo = idx & (half - 1u);
     let hi = (idx ^ lo) << 1u;
@@ -268,10 +275,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (idx >= dim) { return; }
     var ang = 0.0f;
     var aligned = 0.0f;
-    for (var q = 0u; q < 16u; q = q + 1u) {
+    let nQ = params.nQ;
+    for (var q = 0u; q < nQ; q = q + 1u) {
       let bq = (idx >> q) & 1u;
       if (bq == 1u) { ang = ang + thetaAt(q); }
-      let nq = (q + 1u) & 15u;
+      let nq = select(q + 1u, 0u, q + 1u == nQ);
       let bq1 = (idx >> nq) & 1u;
       aligned = aligned + select(-1.0f, 1.0f, bq == bq1);
     }
@@ -291,9 +299,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
 }
 `;
+export const WGSL_QUANTUM_16Q = WGSL_QUANTUM_18Q;
 
 export class WebGPUQuantumStatevector {
-  constructor(nQ = 16) {
+  constructor(nQ = 18) {
     this.nQ = nQ;
     this.dim = 1 << nQ;
     this.ready = false;
@@ -312,14 +321,14 @@ export class WebGPUQuantumStatevector {
       const adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return false;
       const device = await adapter.requestDevice();
-      const mod = device.createShaderModule({ code: WGSL_QUANTUM_16Q });
+      const mod = device.createShaderModule({ code: WGSL_QUANTUM_18Q });
       const pipeline = device.createComputePipeline({
         layout: 'auto',
         compute: { module: mod, entryPoint: 'main' },
       });
-      const byteSize = this.dim * 8; // vec2<f32> * 65,536 = 512 KB
+      const byteSize = this.dim * 8; // vec2<f32> * 262,144 = 2.0 MB
       const initAmp = new Float32Array(this.dim * 2);
-      initAmp[0] = 1.0; // |0>^{⊗16}
+      initAmp[0] = 1.0; // |0>^{⊗18}
       const stateBuf = device.createBuffer({
         size: byteSize,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
@@ -327,7 +336,7 @@ export class WebGPUQuantumStatevector {
       device.queue.writeBuffer(stateBuf, 0, initAmp);
 
       const paramBuf = device.createBuffer({
-        size: 80, // 4 u32/f32 (16B) + 4 vec4<f32> (64B) = 80B
+        size: 112, // 8 u32/f32 (32B) + 5 vec4<f32> (80B) = 112B
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
       const readBuf = device.createBuffer({
@@ -355,13 +364,15 @@ export class WebGPUQuantumStatevector {
     }
   }
 
-  async stepLayer(thetas16, zzPhi = 0.085) {
+  async stepLayer(thetas, zzPhi = 0.085) {
     if (!this.ready) return null;
     const dev = this.device;
-    const uBuf = new ArrayBuffer(80);
-    const u32 = new Uint32Array(uBuf, 0, 4);
+    const uBuf = new ArrayBuffer(112);
+    const u32 = new Uint32Array(uBuf, 0, 8);
     const f32 = new Float32Array(uBuf);
-    for (let i = 0; i < 16; i++) f32[4 + i] = thetas16[i % thetas16.length] || 0;
+    u32[4] = this.nQ;
+    u32[5] = this.dim;
+    for (let i = 0; i < this.nQ; i++) f32[8 + i] = thetas[i % thetas.length] || 0;
     f32[3] = zzPhi;
 
     const dispatchMode = (mode, qBit, tMask, groups) => {
@@ -376,9 +387,11 @@ export class WebGPUQuantumStatevector {
       dev.queue.submit([enc.finish()]);
     };
 
-    for (let q = 0; q < 16; q++) dispatchMode(0, 1 << q, 0, 128);
-    dispatchMode(1, 0, 0, 256);
-    for (let q = 0; q < 16; q++) dispatchMode(2, 1 << q, 1 << ((q + 1) & 15), 256);
+    const halfGroups = Math.max(1, (this.dim >> 1) / 256);
+    const fullGroups = Math.max(1, this.dim / 256);
+    for (let q = 0; q < this.nQ; q++) dispatchMode(0, 1 << q, 0, halfGroups);
+    dispatchMode(1, 0, 0, fullGroups);
+    for (let q = 0; q < this.nQ; q++) dispatchMode(2, 1 << q, 1 << ((q + 1) % this.nQ), fullGroups);
 
     const enc = dev.createCommandEncoder();
     enc.copyBufferToBuffer(this.stateBuf, 0, this.readBuf, 0, 4096);

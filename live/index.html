@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark"><meta name="theme-color" content="#05070f">
 <title>Glitchling v2 · Live 3D A-Life Bio-Observatory</title>
-<meta name="description" content="Glitchling v2: an open-ended 3D soft-bodied A-Life biosphere with 8-compartment HH+NMDA+SK spiking neurons (up to 14.16M GIGA mouse-cortex scale), 4,608-neuron hippocampal-subicular loop, 128x64 P/M/K fovea & 4,096 compositional IT concepts, 11.12M-param Titan Flow-Matching + 60s hierarchical world model, 108-gene Hox 4/6/8-limb Evo-Devo, D3Q19 Lattice-Boltzmann FSI, 1.4M+ microbial continuum, and 14-qubit WASM + ZNE.">
+<meta name="description" content="Glitchling v2: an open-ended 3D soft-bodied A-Life biosphere with 16-compartment discrete Markov spiking neurons (up to 14.16M neurons &amp; 1.13B synapses in GIGA), 32,768-neuron hippocampal-subicular circuit + Successor Representation, 256x128 / 196k-RGC fovea &amp; 65,536 grounded semantic ontology concepts, 29.06M-param Omega 32x16 Flow-VAE + 300s symbolic HTN-MCTS planner, 128-gene Zygote blastula &amp; 5-clade (0L/4L/6L/8L/10L + Patagium + Angler Esca) Evo-Devo, 64-vessel Murray vascular tree + 1,024 RBC/WBC + 256 micro-fauna + 8.4M microbes, and 16Q WASM / 18Q WebGPU + Transmon DRAG/PEC/ZNE + 32Q MPS + 512-D MERA.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%2338e8ff'/%3E%3Ccircle cx='5.8' cy='6.8' r='1.5' fill='%2305070f'/%3E%3Ccircle cx='10.4' cy='6.2' r='1.2' fill='%2305070f'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 <script src="vendor/p5/p5.min.js"></script>
@@ -19,6 +19,7 @@
 <nav class="tools" aria-label="Interaction tools">
   <button data-tool="orbit" class="on" title="Orbit / zoom the camera">🎥<span>Look</span></button>
   <button id="cam-btn" title="Cycle camera mode: Orbit -> Creature Eye POV -> Auto-Director -> Overhead (C)">👁<span id="cam-lbl">Orbit</span></button>
+  <button id="light-btn" title="Cycle atmosphere lighting: Auto -> Golden Twilight -> Pandora Night -> Crystal Day (L)">🌅<span id="light-lbl">Auto</span></button>
   <button data-tool="food" title="Tap the ground to drop food">🍬<span>Food</span></button>
   <button data-tool="poke" title="Tap the creature to poke it">👉<span>Poke</span></button>
   <button data-tool="rock" title="Tap the ground to spawn a basalt-geode boulder">🪨<span>Rock</span></button>
@@ -35,22 +36,32 @@
     <button role="tab" data-tab="brain" aria-selected="true">Brain</button><button role="tab" data-tab="body">Body</button><button role="tab" data-tab="eco">Ecology</button><button role="tab" data-tab="flaws">Flaws</button><button role="tab" data-tab="world">World</button><button role="tab" data-tab="lab">Lesions</button><button role="tab" data-tab="about">Real?</button>
   </div>
   <section data-pane="brain">
-    <div class="row"><b>Spikes</b> <small id="spk-label">3,268 8-comp HH+NMDA+SK neurons, rows by region</small></div>
+    <div class="row"><b>Spikes</b> <small id="spk-label">3,268 16-comp Discrete-Markov neurons, rows by region</small></div>
     <canvas id="raster" width="360" height="213"></canvas>
     <div id="regions" class="legend"></div>
     <div class="grid2"><div><b>Neuromodulators</b><div id="nm"></div></div><div><b>MOT (8)</b><div id="mot"></div></div></div>
-    <div class="row"><b>128×64 P/M/K Fovea &amp; PQ-IT</b> <small>16,384 cones · V1→V2→V4→4,096 IT concepts · SLAM</small></div><canvas id="retina" width="360" height="58"></canvas>
+    <div class="row"><b>256×128 Fovea &amp; 65,536 Ontology IT</b> <small>196k RGC · V1→V2→V4→65k DAG lexemes · SLAM</small></div><canvas id="retina" width="360" height="58"></canvas>
     <div class="row"><b>Striatal race (21)</b> <small>16 sites · 3 pools · snack · explore/bask (D1 / D2)</small></div><canvas id="race" width="360" height="70"></canvas>
-    <div class="row"><b>LTC pattern generator</b> <small>24 liquid neurons + Hox phase bias</small></div><canvas id="cpg" width="360" height="60"></canvas>
+    <div class="row"><b>LTC pattern generator</b> <small>24 liquid neurons + 5-clade Zygote/Hox phase</small></div><canvas id="cpg" width="360" height="60"></canvas>
     <div class="row"><b>Selective SSM (RTRL)</b> <small>32 modes |h|, Δ (online diagonal RTRL)</small></div><canvas id="ssm" width="360" height="40"></canvas>
-    <div class="row"><b>Hierarchical Flow + +60s WM</b> <small>+0.1s / +0.5s / +2s BPTT / +60s macro + 16×8 Flow RGB</small></div><canvas id="wm" width="360" height="50"></canvas>
-    <div class="row"><b>Thought curvature &amp; MERA/MPS</b> <small>Eshkol κ(t), τ(t), χ=24 Vidal MPS &amp; 4-Layer MERA</small></div><canvas id="metacog" width="360" height="44"></canvas>
+    <div class="row"><b>32×16 Flow-VAE + +300s HTN WM</b> <small>+0.1s / +2s BPTT / +60s / +300s HTN-MCTS + 32×16 Flow</small></div><canvas id="wm" width="360" height="50"></canvas>
+    <div class="row"><b>Thought curvature, 32Q MPS &amp; MERA</b> <small>Eshkol κ(t), τ(t), 32Q χ=32 MPS &amp; 512-D MERA</small></div><canvas id="metacog" width="360" height="44"></canvas>
     <div id="mindstats" class="stats"></div>
   </section>
   <section data-pane="body" hidden><div id="bodystats" class="stats"></div><canvas id="meta" width="360" height="90"></canvas></section>
   <section data-pane="eco" hidden>
-    <p class="small">Open-ended 5-tier A-Life biosphere: up to <b>32 embodied conspecific Glitchlings</b> express heritable <b>108-gene Hox 4/6/8-limb genomes</b>, court, lay thermally incubated 3D eggs, follow wind-advected <code>64×64×3</code> pheromone plumes, couple to a <b>1.4M+ saprotrophic soil microbe &amp; bioluminescent phytoplankton continuum</b> + <code>32×32</code> mycelial network, hunt photonic bio-mites, and evade the patrolling Shadow-Leviathan.</p>
-    <label>Conspecific population (<span id="eco-peers-val">8</span>) <input type="range" id="eco-peers" min="0" max="32" step="1" value="8"></label>
+    <p class="small">Open-ended multi-trophic A-Life biosphere: up to <b>48 embodied conspecific Glitchlings</b> radiate across <b>5 heritable clades (0L Serpent, 4L Tetrapod, 6L Hexapod, 8L Octopod, 10L Decapod + Patagium wings + Angler Esca)</b> via <b>128-gene Zygote cleavage &amp; gastrulation</b>, undergo sympatric speciation, incubate 3D eggs, couple to <b>256 discrete 3D micro-fauna</b> + a <b>&gt;8.4M saprotrophic soil microbe &amp; phytoplankton continuum</b> + <code>32×32</code> mycelia, and evade the patrolling Shadow-Leviathan.</p>
+    <div class="clade-wrap">
+      <small>Instant 128-gene focal clade morph (0L–10L + Patagium + Esca):</small>
+      <div class="clade-bar">
+        <button data-clade="0L" title="Limbless undulatory 0L Serpent clade">🐍 0L Serpent</button>
+        <button data-clade="4L" title="Quadruped 4L Tetrapod clade">🦎 4L Tetrapod</button>
+        <button data-clade="6L" title="Hexapod 6L Glider with Patagium wings &amp; glowing Angler Esca">🦇 6L Glider+Esca</button>
+        <button data-clade="8L" title="Arachnid/Octopod 8L clade">🕷 8L Octopod</button>
+        <button data-clade="10L" title="93-node / 360-tet 10-limb Decapod clade">🦀 10L Decapod</button>
+      </div>
+    </div>
+    <label>Conspecific population (<span id="eco-peers-val">10</span>) <input type="range" id="eco-peers" min="0" max="48" step="1" value="10"></label>
     <label>Photonic bio-mites (<span id="eco-mites-val">36</span>) <input type="range" id="eco-mites" min="0" max="80" step="2" value="36"></label>
     <label>Shadow-Leviathan predators (<span id="eco-preds-val">1</span>) <input type="range" id="eco-preds" min="0" max="3" step="1" value="1"></label>
     <label>Season cycle <select id="eco-season"><option value="auto" selected>Auto 4-season cycle</option><option value="spring">Spring (bloom)</option><option value="summer">Summer (warm)</option><option value="autumn">Autumn (amber)</option><option value="winter">Winter (vent basking)</option></select></label>
@@ -71,15 +82,16 @@
   </section>
   <section data-pane="world" hidden>
     <label>Camera mode <select id="cam-mode"><option value="orbit" selected>Orbit follow</option><option value="pov">Creature Eye POV (binocular gaze)</option><option value="director">Auto-Director cinema</option><option value="overhead">Biosphere overhead</option></select></label>
+    <label>Atmosphere lighting <select id="light-mode"><option value="auto" selected>Auto solar + Pandora cycle</option><option value="twilight">Golden Crepuscular Twilight</option><option value="pandora">Bioluminescent Pandora Night (Aurora)</option><option value="day">Crystal High-Sun Day</option></select></label>
     <label>Gravity tilt X <input type="range" id="gx" min="-0.5" max="0.5" step="0.01" value="0"></label>
     <label>Gravity tilt Z <input type="range" id="gz" min="-0.5" max="0.5" step="0.01" value="0"></label>
     <label>Gravity strength <input type="range" id="gs" min="2" max="20" step="0.5" value="9.8"></label>
     <label>Sim speed <select id="speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></label>
     <label>Biological clock <select id="clock-mode"><option value="realtime" selected>1× biological real-time (24-hr day · default)</option><option value="wall">1× local wall-clock solar sync</option><option value="ultradian">60× ultradian (24-min day)</option><option value="circadian">240× fast demo (6-min day)</option></select></label>
-    <label>Quality / 4K HDR <select id="quality"><option value="auto" selected>auto (Ultra HiDPI HDR16F + IBL)</option><option value="0">low</option><option value="1">medium</option><option value="2">high (HDR16F + GTAO + IBL)</option><option value="3">ultra (HiDPI + Shadows + CAS + IBL)</option><option value="4">Fixed 4K UHD (3840×2160 · HDR16F)</option></select></label>
-    <label>Brain scale <select id="brain-scale"><option value="S">S (436 neurons)</option><option value="M" selected>M (3,268 · 8-comp default)</option><option value="L">L (11,972 · 531k syn)</option><option value="XL">XL (25,924 · 1.18M syn)</option><option value="XXL">XXL (104,904 · 4.74M syn)</option><option value="MEGA">MEGA (1,048,644 · 16.78M syn)</option><option value="GIGA">GIGA (14,156,048 · 56.62M syn · mouse cortex)</option></select></label>
+    <label>Quality / 4K HDR <select id="quality"><option value="auto" selected>auto (Ultra HiDPI HDR16F + IBL)</option><option value="0">low</option><option value="1">medium</option><option value="2">high (HDR16F + GTAO + IBL)</option><option value="3">ultra (HiDPI + 4096 Shadows + CAS + IBL)</option><option value="4">Fixed 4K UHD (3840×2160 · HDR16F)</option></select></label>
+    <label>Brain scale <select id="brain-scale"><option value="S">S (436 neurons)</option><option value="M" selected>M (3,268 · 16-comp Markov default)</option><option value="L">L (11,972 · 531k syn)</option><option value="XL">XL (25,924 · 1.18M syn)</option><option value="XXL">XXL (104,904 · 4.74M syn)</option><option value="MEGA">MEGA (1,048,644 · 16.78M syn)</option><option value="GIGA">GIGA (14,156,048 · 1.13B syn · mouse cortex)</option></select></label>
     <label>Brain backend <select id="brain-backend"><option value="auto" selected>Auto (CPU S/M · Worker L–GIGA)</option><option value="cpu">Main thread (Typed CSR)</option><option value="worker">Web Worker (off-thread)</option><option value="webgpu">WebGPU compute shader</option></select> <small id="backend-status"></small></label>
-    <label>World model <select id="wm-scale"><option value="std" selected>Standard (261k · Flow + 60s)</option><option value="large">Large (815k · Flow + 60s)</option><option value="xl">XL (1.55M · Flow + 60s)</option><option value="ultra">Ultra (4.16M · Flow + 60s)</option><option value="titan">Titan (11.12M · 8L d=320 Flow + 60s)</option></select></label>
+    <label>World model <select id="wm-scale"><option value="std" selected>Standard (797k · 32×16 Flow + 300s HTN)</option><option value="large">Large (1.82M · 32×16 Flow + 300s HTN)</option><option value="xl">XL (3.15M · 32×16 Flow + 300s HTN)</option><option value="ultra">Ultra (7.28M · 32×16 Flow + 300s HTN)</option><option value="titan">Titan (16.48M · 8L d=320 Flow + 300s HTN)</option><option value="omega">Omega (29.06M · 10L d=448 32×16 Flow + 300s HTN)</option></select></label>
     <div class="btns"><button id="qrng-fetch" title="Fetch live photonic/vacuum-fluctuation quantum random bits over HTTPS (4 CORS beacons: LFDR / NIST / Drand / ANU) with NIST SP 800-90B health tests">Fetch live photonic QRNG</button> <small id="qrng-status"></small></div>
     <div class="btns"><button id="rain">Rain</button><button id="gust">Gust</button><button id="sleepy">Make sleepy</button><button id="wake">Wake</button><button id="follow">Camera: follow</button><button id="reset">New seed</button></div>
     <label>Seed <input type="number" id="seed" min="1" max="999999" value="1"></label>
@@ -88,9 +100,16 @@
     <p class="small">Lesions cut real pathways. Watch what stops working.</p>
     <div id="lesions" class="lesions"></div>
     <div id="lesionlog" class="stats"></div>
-    <h3>Lineage (108-gene Hox + Morphogen Evo-Devo co-evolution)</h3>
-    <p class="small">All innate motor, synergy, gaze, roll-damping, steering, 14 morphological/neuro-allocation traits, AND <b>16 embryonic Hox + Shh/Fgf/Bmp/Wnt GRN genes</b> (governing variable <b>4-limb quadruped, 6-limb hexapod, and 8-limb octopod</b> topologies, dorsal osteoderm armor, antennal gill barbules, and sarcomere Vmax) grow from a <b>108-gene genome</b>. "Refine starter" runs 6-generation Surrogate-Assisted Active Mirrored CMA-ES; "De-novo 108-gene" initializes purely from uniform random <code>[0.05, 0.95]^108</code> weights and co-evolves 3D topology + locomotion + steering over 12 generations in Web Workers.</p>
-    <div class="btns"><button id="evo-run">Refine starter (6 gens)</button><button id="evo-denovo">De-novo 108-gene (12 gens)</button><button id="evo-adopt" disabled>Adopt lineage</button><button id="evo-undo" disabled>Previous genome</button><button id="evo-reset">Starter genome</button></div>
+    <h3>Lineage (128-gene Single-Cell Zygote + Gastrulation + 5-Clade Hox Evo-Devo)</h3>
+    <p class="small">All innate motor, synergy, gaze, steering, morphological traits, <b>16 embryonic Hox + Shh/Fgf/Bmp/Wnt GRN genes</b>, AND <b>20 single-cell zygote cleavage (1→128 blastomeres), Spemann-Mangold gastrulation, Hes7 somitogenesis &amp; macro-bauplan genes</b> (governing <b>0L Serpent, 4L Tetrapod, 6L Hexapod, 8L Octopod, and 10L Decapod</b> clades, Patagium gliding wing-membranes, and cranial bioluminescent Angler Esca) grow from a <b>128-gene genome</b>. "Refine starter" runs 6-gen Active Mirrored CMA-ES; "De-novo 128-gene" initializes purely from uniform random <code>[0.05, 0.95]^128</code> weights over 12 generations in Web Workers.</p>
+    <div class="clade-bar">
+      <button data-clade="0L">🐍 0L Serpent</button>
+      <button data-clade="4L">🦎 4L Tetrapod</button>
+      <button data-clade="6L">🦇 6L Glider+Esca</button>
+      <button data-clade="8L">🕷 8L Octopod</button>
+      <button data-clade="10L">🦀 10L Decapod</button>
+    </div>
+    <div class="btns"><button id="evo-run">Refine starter (6 gens)</button><button id="evo-denovo">De-novo 128-gene (12 gens)</button><button id="evo-adopt" disabled>Adopt lineage</button><button id="evo-undo" disabled>Previous genome</button><button id="evo-reset">Starter genome</button></div>
     <div id="evo-log" class="stats"></div>
   </section>
   <section data-pane="about" hidden>
@@ -98,7 +117,7 @@
     <p class="small">This is a <b>simulation that runs in your browser</b>. All numbers on this page are computed live by the code in <code>live/js/sim/</code> and <code>live/js/tsotchke/</code>. It makes no claim of awareness, feelings, sentience or consciousness.</p>
     <h3>Computed for real, every frame</h3><ul class="small" id="real-list"></ul>
     <h3>Simplified or designed by hand</h3><ul class="small" id="simp-list"></ul>
-    <p class="small">Graphics: rendered by WebGL2 (three.js r170 + p5.js v1.11.3, both bundled locally) with live PMREM HDR sky environment reflections, 16-bit HalfFloat HDR16F render targets, 12-tap spiral GTAO + volumetric god-rays, UnrealBloom, Contrast-Adaptive Sharpening (CAS), ACES Filmic tonemapping, and Display-P3 wide gamut when supported, plus selectable Fixed 4K UHD (<code>3840×2160</code>, <code>?q=4k</code>) &amp; 4K PNG export. Source and change log: <a href="https://github.com/0thernes/glitchling-jam/tree/main/live">github.com/0thernes/glitchling-jam/live</a>.</p>
+    <p class="small">Graphics: rendered by WebGL2 (three.js r170 + p5.js v1.11.3, both bundled locally) with live PMREM HDR sky environment reflections, <code>4096×4096</code> PCF soft shadows, 16-bit HalfFloat HDR16F render targets, <code>96×48</code> Catmull-Rom dermal subsurface scattering + osteoderms + Patagium wing-membranes + dynamic Angler Esca PointLight, 12-tap spiral GTAO + volumetric god-rays, UnrealBloom, Contrast-Adaptive Sharpening (CAS), ACES Filmic tonemapping, and Display-P3 wide gamut, plus selectable Fixed 4K UHD (<code>3840×2160</code>, <code>?q=4k</code>) &amp; 4K PNG export. Source and change log: <a href="https://github.com/0thernes/glitchling-jam/tree/main/live">github.com/0thernes/glitchling-jam/live</a>.</p>
   </section>
 </aside>
 <div id="p5-studio" class="p5-studio" aria-label="p5.js live A-Life telemetry studio"></div>

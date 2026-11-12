@@ -1,4 +1,5 @@
 import { Creature, DEFAULT_FLAWS, MOT_NAMES, CLOCK_MODES } from './sim/creature.js';
+import { STARTER } from './sim/starter_genome.js';
 import { REGIONS, R0, RN, NNEU, BRAIN_SCALE, NSTR_OPT } from './sim/brain.js';
 import { STAGES } from './sim/mind.js';
 import { NBINS, W_RET, H_RET, W_V1, H_V1, N_ORI } from './sim/vision.js';
@@ -11,8 +12,18 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let seed = +(Q.get('seed') || 1) || 1;
 $('seed').value = seed;
 let clockMode = CLOCK_MODES[Q.get('clock')] ? Q.get('clock') : 'realtime';
-let wmScale = ['std', 'large', 'xl', 'ultra', 'titan'].includes(Q.get('wm')) ? Q.get('wm') : 'std';
+let wmScale = ['std', 'large', 'xl', 'ultra', 'titan', 'omega'].includes(Q.get('wm')) ? Q.get('wm') : 'std';
 let cameraMode = ['orbit', 'pov', 'director', 'overhead'].includes(Q.get('cam')) ? Q.get('cam') : 'orbit';
+let lightingMode = ['auto', 'twilight', 'pandora', 'day'].includes(Q.get('light')) ? Q.get('light') : 'auto';
+
+const CLADE_PRESETS = {
+  '0L': { limbTopo: 0.05, decapodBud: 0.30, undulWave: 1.55, patagiumSpan: 0.08, anglerLure: 0.45, pigmentHue: 0.44, osteoderm: 0.62 },
+  '4L': { limbTopo: 0.24, decapodBud: 0.50, undulWave: 0.92, patagiumSpan: 0.14, anglerLure: 0.28, pigmentHue: 0.10, osteoderm: 0.52 },
+  '6L': { limbTopo: 0.50, decapodBud: 0.50, undulWave: 1.00, patagiumSpan: 1.25, anglerLure: 1.25, pigmentHue: 0.56, osteoderm: 0.45 },
+  '8L': { limbTopo: 0.76, decapodBud: 0.50, undulWave: 1.05, patagiumSpan: 0.34, anglerLure: 0.78, pigmentHue: 0.78, osteoderm: 0.68 },
+  '10L': { limbTopo: 0.94, decapodBud: 0.92, undulWave: 1.12, patagiumSpan: 0.58, anglerLure: 0.98, pigmentHue: 0.88, osteoderm: 0.74 },
+};
+let activeCladeOverride = CLADE_PRESETS[Q.get('clade')] ? Q.get('clade') : null;
 
 const flaws = JSON.parse(JSON.stringify(DEFAULT_FLAWS));
 for (const k of (Q.get('flaws') || '').split(',').filter(Boolean)) if (flaws[k]) flaws[k].on = true;
@@ -29,17 +40,20 @@ try {
   }
   lineageStack = JSON.parse(localStorage.getItem(LIN_STACK_KEY) || '[]') || [];
 } catch (e) { /* storage blocked */ }
+if (activeCladeOverride) {
+  globalThis.TW = { ...(globalThis.TW || {}), genome: { ...STARTER, ...(globalThis.TW?.genome || {}), ...CLADE_PRESETS[activeCladeOverride] } };
+}
 
 function currentEcoOpts() {
   if (Q.get('eco') === '0') return null;
-  const peers = $('eco-peers') ? +$('eco-peers').value : +(Q.get('peers') ?? 8);
+  const peers = $('eco-peers') ? +$('eco-peers').value : +(Q.get('peers') ?? 10);
   const mites = $('eco-mites') ? +$('eco-mites').value : 36;
   const predators = $('eco-preds') ? +$('eco-preds').value : 1;
-  return { peers, mites, predators, maxPeers: 32 };
+  return { peers, mites, predators, maxPeers: 48 };
 }
 
 let cr = new Creature(seed, { flaws, clockMode, wmScale, eco: currentEcoOpts() });
-cr.qrng.initWebGPU16Q?.().catch(() => {});
+cr.qrng.initWebGPU18Q?.().catch(() => {});
 
 let view = null;
 let p5Layer = null;
@@ -59,8 +73,9 @@ try {
   const initP5Mode = Q.get('p5') || (innerWidth < 720 ? 'off' : 'pip');
   p5Layer.setMode(['pip', 'split', 'off'].includes(initP5Mode) ? initP5Mode : 'pip');
   if (Q.get('p5tab') !== null) p5Layer.setView(+Q.get('p5tab') || 0);
-  view = new View($('gl'), cr, { reduced, quality: initQuality, p5Layer, cameraMode });
+  view = new View($('gl'), cr, { reduced, quality: initQuality, p5Layer, cameraMode, lightingMode });
   view.setCameraMode(cameraMode);
+  view.setLightingMode(lightingMode);
 } catch (e) {
   console.error(e);
   $('glfail').hidden = false;
@@ -82,6 +97,7 @@ if ($('brain-scale')) $('brain-scale').value = BRAIN_SCALE;
 if ($('clock-mode')) $('clock-mode').value = clockMode;
 if ($('wm-scale')) $('wm-scale').value = wmScale;
 if ($('cam-mode')) $('cam-mode').value = cameraMode;
+if ($('light-mode')) $('light-mode').value = lightingMode;
 
 const CAM_LABELS = { orbit: 'Orbit', pov: 'POV', director: 'Cinema', overhead: 'Map' };
 const CAM_ORDER = ['orbit', 'pov', 'director', 'overhead'];
@@ -97,6 +113,25 @@ function applyCameraMode(mode) {
   if ($('cam-lbl')) $('cam-lbl').textContent = CAM_LABELS[cameraMode] || 'Orbit';
 }
 applyCameraMode(cameraMode);
+
+const LIGHT_LABELS = { auto: 'Auto', twilight: 'Dusk', pandora: 'Night', day: 'Day' };
+const LIGHT_ORDER = ['auto', 'twilight', 'pandora', 'day'];
+function applyLightingMode(mode) {
+  lightingMode = LIGHT_ORDER.includes(mode) ? mode : 'auto';
+  if (view) view.setLightingMode(lightingMode);
+  if ($('light-mode')) $('light-mode').value = lightingMode;
+  if ($('light-lbl')) $('light-lbl').textContent = LIGHT_LABELS[lightingMode] || 'Auto';
+  if ($('light-btn')) $('light-btn').classList.toggle('on', lightingMode !== 'auto');
+}
+applyLightingMode(lightingMode);
+
+function syncCladeButtons() {
+  const cur = `${cr.body.activeLimbs}L`;
+  document.querySelectorAll('[data-clade]').forEach((b) => {
+    b.classList.toggle('on', b.dataset.clade === cur);
+  });
+}
+syncCladeButtons();
 
 const qMax = coarse ? 2 : 3;
 const qAutoFloor = coarse ? 0 : 2;
@@ -293,6 +328,30 @@ if ($('cam-mode')) {
     urlSync();
   };
 }
+if ($('light-btn')) {
+  $('light-btn').addEventListener('click', () => {
+    const nxt = LIGHT_ORDER[(LIGHT_ORDER.indexOf(lightingMode) + 1) % LIGHT_ORDER.length];
+    applyLightingMode(nxt);
+    urlSync();
+  });
+}
+if ($('light-mode')) {
+  $('light-mode').onchange = () => {
+    applyLightingMode($('light-mode').value);
+    urlSync();
+  };
+}
+document.querySelectorAll('[data-clade]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const clade = btn.dataset.clade;
+    const preset = CLADE_PRESETS[clade];
+    if (!preset) return;
+    activeCladeOverride = clade;
+    globalThis.TW = { ...(globalThis.TW || {}), genome: { ...STARTER, ...preset } };
+    restart();
+    cr.ev('evo-devo', `morphed focal 128-gene zygote into ${clade} (${cr.body.hox?.cladeName || clade}, ${cr.body.n} nodes, ${cr.body.nTets} tets)`);
+  });
+});
 if ($('p5-btn')) {
   $('p5-btn').classList.toggle('on', p5Layer?.mode !== 'off');
   $('p5-btn').addEventListener('click', () => {
@@ -321,6 +380,7 @@ addEventListener('keydown', (e) => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
   if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); $('pause').click(); }
   else if (e.code === 'KeyC') $('cam-btn')?.click();
+  else if (e.code === 'KeyL') $('light-btn')?.click();
   else if (e.code === 'KeyP') $('p5-btn')?.click();
   else if (e.code === 'KeyM') $('audio-btn')?.click();
   else if (p5Layer && p5Layer.mode !== 'off' && /^Digit[1-5]$/.test(e.code)) {
@@ -361,7 +421,7 @@ $('gl').addEventListener('pointerdown', (e) => {
 // ---------------------------------------------------------------- Ecology tab controls
 function syncEcoSliders() {
   if (!cr.eco) return;
-  const peers = +($('eco-peers')?.value ?? 8);
+  const peers = +($('eco-peers')?.value ?? 10);
   const mites = +($('eco-mites')?.value ?? 36);
   const predators = +($('eco-preds')?.value ?? 1);
   if ($('eco-peers-val')) $('eco-peers-val').textContent = String(peers);
@@ -380,13 +440,13 @@ if ($('eco-season')) {
 if ($('eco-spawn-peer')) {
   $('eco-spawn-peer').onclick = () => {
     if (!cr.eco) return;
-    cr.eco.maxPeers = Math.min(32, Math.max(cr.eco.maxPeers, cr.eco.peers.length + 2));
+    cr.eco.maxPeers = Math.min(48, Math.max(cr.eco.maxPeers, cr.eco.peers.length + 2));
     const p = cr.eco.spawnPeer(null, null, true);
     if ($('eco-peers')) {
-      $('eco-peers').value = String(Math.min(32, cr.eco.peers.length));
+      $('eco-peers').value = String(Math.min(48, cr.eco.peers.length));
       if ($('eco-peers-val')) $('eco-peers-val').textContent = String(cr.eco.peers.length);
     }
-    if (p) cr.ev('biosphere', `spawned conspecific #${p.id} (${p.limbPairs * 2}L 108-gene Hox variant)`);
+    if (p) cr.ev('biosphere', `spawned conspecific #${p.id} (${p.cladeName || (p.limbPairs * 2 + 'L')} 128-gene variant)`);
   };
 }
 if ($('eco-lay-egg')) {
@@ -397,7 +457,7 @@ if ($('eco-lay-egg')) {
     const mateId = cr.eco.peers[0]?.id ?? 0;
     const genNum = (cr.generation || 0) + 1;
     const eg = cr.eco.layEgg(com[0] + 0.45, com[2] + 0.35, cr.gen, mateGen, 0, mateId, genNum, true);
-    if (eg) cr.ev('egg', `laid fertilized diploid 108-gene Hox egg #${eg.id} (gen ${genNum})`);
+    if (eg) cr.ev('egg', `laid fertilized diploid 128-gene Zygote egg #${eg.id} (gen ${genNum})`);
   };
 }
 if ($('eco-pred-btn')) {
@@ -440,6 +500,8 @@ function urlSync() {
   clockMode !== 'realtime' ? u.searchParams.set('clock', clockMode) : u.searchParams.delete('clock');
   wmScale !== 'std' ? u.searchParams.set('wm', wmScale) : u.searchParams.delete('wm');
   cameraMode !== 'orbit' ? u.searchParams.set('cam', cameraMode) : u.searchParams.delete('cam');
+  lightingMode !== 'auto' ? u.searchParams.set('light', lightingMode) : u.searchParams.delete('light');
+  activeCladeOverride ? u.searchParams.set('clade', activeCladeOverride) : u.searchParams.delete('clade');
   qMode === '4' ? u.searchParams.set('q', '4k') : qMode !== 'auto' ? u.searchParams.set('q', qMode) : u.searchParams.delete('q');
   history.replaceState(null, '', u);
 }
@@ -472,7 +534,7 @@ if ($('qrng-fetch')) {
     if (st) {
       st.textContent = r.ok
         ? `${r.source}: ${r.bytes * 8} bits (SP 800-90B pass)`
-        : `offline/CORS (${r.reason || '14-qubit WASM Lindblad + ZNE active'})`;
+        : `offline/CORS (${r.reason || '16Q WASM + DRAG/PEC/ZNE active'})`;
     }
   };
 }
@@ -492,7 +554,7 @@ $('seed').onchange = () => { seed = +$('seed').value || 1; restart(); };
 function restart() {
   const f = cr.flaws;
   cr = new Creature(seed, { flaws: f, clockMode, wmScale, eco: currentEcoOpts() });
-  cr.qrng.initWebGPU16Q?.().catch(() => {});
+  cr.qrng.initWebGPU18Q?.().catch(() => {});
   if ($('eco-season')) cr.world.seasonMode = $('eco-season').value;
   setupBackend(backendMode);
   if (view) {
@@ -503,9 +565,11 @@ function restart() {
     const nc = c.cloneNode();
     c.replaceWith(nc);
     nc.addEventListener('pointerdown', onCanvasPointerDown);
-    view = new View(nc, cr, { reduced, quality: prevQ, p5Layer, cameraMode });
+    view = new View(nc, cr, { reduced, quality: prevQ, p5Layer, cameraMode, lightingMode });
     applyCameraMode(cameraMode);
+    applyLightingMode(lightingMode);
   }
+  syncCladeButtons();
   urlSync();
   buildLesions();
 }
@@ -535,18 +599,18 @@ const LES = [
   ['mot', 'MOT neurons silenced'],
   ['cpg', 'LTC pattern generator off'],
   ['mn', 'all motor neurons off (paralysis)'],
-  ['fem', 'anisotropic Neo-Hookean + Huxley FEM off'],
-  ['fluid', '1D NS + D3Q19 LBM + Biot-Darcy FSI off'],
+  ['fem', 'anisotropic Neo-Hookean + 32-fascicle Huxley FEM off'],
+  ['fluid', '64-vessel Murray + 24×8×8 D3Q19 LBM + 1,024 RBC/WBC off'],
   ['learnMotor', 'motor learning off'],
   ['stdp', 'STDP / plasticity off'],
-  ['wm', 'Hierarchical Flow + +60s Transformer-XL WM off'],
+  ['wm', '32×16 Flow-VAE + +300s HTN-MCTS World Model off'],
   ['ssmLearn', 'online RTRL SSM learning off'],
-  ['metacog', 'metacognition, χ=24 MPS & 4-Layer MERA off'],
-  ['vision', '128×64 P/M/K fovea & 4,096 PQ-IT stream off'],
-  ['dg', '4,608-neu hippocampal DG k-WTA off'],
+  ['metacog', 'metacognition, 32Q χ=32 MPS & 512-D MERA off'],
+  ['vision', '256×128 / 196k-RGC fovea & 65,536 Ontology IT off'],
+  ['dg', '32,768-neu hippocampal DG (1.2% + neurogenesis) off'],
   ['homeo', 'intrinsic & Turrigiano homeostasis off'],
   ['struct', 'cortical structural rewiring off'],
-  ['qrng', '14-qubit WASM Lindblad + ZNE QRNG off'],
+  ['qrng', '16Q WASM + Transmon DRAG / PEC / ZNE off'],
   ['astro', 'astrocyte modulation off'],
   ['veto', 'veto off'],
   ['efe', 'epistemic (EFE) term off'],
@@ -555,7 +619,7 @@ const LES = [
   ['motNorm', 'MOT normalisation off'],
   ['selfModel', 'self-model travel cost off'],
   ['hdc', 'HDC cognitive map off'],
-  ['hopfield', 'Hopfield / 4,608-neu hippocampal memory off'],
+  ['hopfield', 'Hopfield / 32,768-neu Hip-Sub + SR memory off'],
   ['pc', 'predictive-coding learning off'],
   ['turing', 'hormone -> skin morphogen link off'],
   ['growth', 'per-part growth off'],
@@ -593,7 +657,7 @@ buildLesions();
 
 // ---------------------------------------------------------------- legends
 $('regions').innerHTML = REGIONS.map(([n], i) => `<span><i style="background:hsl(${(i / REGIONS.length) * 360},90%,60%)"></i>${n}</span>`).join('');
-$('spk-label').textContent = `${NNEU.toLocaleString()} ${BRAIN_SCALE === 'GIGA' ? 'quantized mouse-cortex' : '8-comp HH+NMDA+SK'} neurons (brain ${BRAIN_SCALE})`;
+$('spk-label').textContent = `${NNEU.toLocaleString()} ${BRAIN_SCALE === 'GIGA' ? 'quantized 1.13B-syn mouse-cortex' : '16-comp Discrete-Markov'} neurons (brain ${BRAIN_SCALE})`;
 
 const surpHist = [], mseHist = [], mse5Hist = [], mse20Hist = [], mse60Hist = [], varHist = [];
 const kapHist = [], tauHist = [], calHist = [];
@@ -772,24 +836,26 @@ function drawPanel() {
   }
 
   const ws = MC?.ws || {};
-  const qSrc = cr.qrng.hwSource || (cr.qrng.wasmActive ? '14Q WASM+ZNE' : '14Q JS+ZNE');
+  const qSrc = cr.qrng.hwSource || (cr.qrng.wasmActive ? '16Q WASM+DRAG+PEC' : '16Q JS+DRAG+PEC');
   const stCircuit = cr.hop.spikingCircuit;
+  const htn = cr.htn;
   stats($('mindstats'), [
     ['sleep stage / clock', `${STAGES[cr.sleep.stage]} · ${cr.timeCompression}× (${CLOCK_MODES[cr.clockMode]?.label || cr.clockMode})`],
     ['brain scale / backend', `${BRAIN_SCALE} (${b.backend}): ${b.N.toLocaleString()} neu, ${b.S.toLocaleString()} syn, ${(window.glitch.stats.stepMs ?? 0).toFixed(1)} ms/step`],
-    ['8-comp HH+NMDA+SK + Fox-Lu Markov', `NMDA ${b.nmdaSpikes || 0} · BAC ${Math.round(b.plateauBursts || 0)} · SK ${(b.skMean || 0).toFixed(3)} · σ_ch ${(b.channelNoiseMean || 0).toFixed(3)}`],
-    ['16,384-cone P/M/K fovea & 4,096 PQ-IT', `IT inv ${(cr.retina.itInvariance || 0).toFixed(3)} · concepts ${cr.retina.itUniqueConceptsSeen || 1}/4,096 · SLAM ${cr.retina.seenCount}/19`],
-    ['4,608-neu Hip–Sub + 4 GABA classes', `DG 2,048 (3.1%) · Subic 256 · PV/Chnd/OLM/VIP 384 · SWRs ${stCircuit?.swrEvents || 0}`],
-    ['WM (+0.1s/+2s/+60s + 16×8 Flow)', `${cr.wm.scaleName} (${(cr.wm.paramCount || 0).toLocaleString()}): ${cr.wm.mse.toFixed(4)} / ${(cr.wm.mse20 || 0).toFixed(4)} / ${(cr.wm.mse60 || 0).toFixed(4)} · flow ${(cr.wm.visFlowMSE || 0).toFixed(4)}`],
+    ['16-comp Discrete Binomial Markov', `NMDA ${b.nmdaSpikes || 0} · BAC ${Math.round(b.plateauBursts || 0)} · SK ${(b.skMean || 0).toFixed(3)} · σ_ch ${(b.channelNoiseMean || 0).toFixed(3)}`],
+    ['256×128 (196k RGC) & 65,536 Ontology IT', `${cr.retina.activeLexeme || 'ENTITY'} · inv ${(cr.retina.itInvariance || 0).toFixed(3)} · seen ${cr.retina.itUniqueConceptsSeen || 1}/65,536 · SLAM ${cr.retina.seenCount}/19`],
+    ['32,768-neu Hip–Sub (14 pop + SR + 6 GABA)', `DG 16,384 (1.2% + 512 neurogen) · Subic 1,024 · GABA 2,688 · SWRs ${stCircuit?.swrEvents || 0}`],
+    ['WM (32×16 Flow-VAE + +0.1s/+2s/+60s)', `${cr.wm.scaleName} (${(cr.wm.paramCount || 0).toLocaleString()}): ${cr.wm.mse.toFixed(4)} / ${(cr.wm.mse20 || 0).toFixed(4)} / ${(cr.wm.mse60 || 0).toFixed(4)} · flow ${(cr.wm.visFlowMSE || 0).toFixed(4)}`],
+    ['+300s (5-min) HTN + Depth-5 UCT MCTS', htn ? `${htn.activeTask || 'FORAGE'} -> ${htn.activeStep || 'NAV'} (${htn.rollouts || 24} rollouts, V ${(htn.bestValue ?? 0).toFixed(2)})` : 'standby'],
     ['RTRL SSM |∇| / heteroscedastic σ²', `${(cr.ssm.gradNorm ?? 0).toExponential(1)} / ${(cr.wm.predVar ?? 0).toFixed(3)}`],
     ['thought curvature κ(t) / torsion τ(t)', `${(MC?.kappa ?? 0).toFixed(2)} / ${(MC?.torsion ?? 0).toFixed(2)} (||z′|| ${(MC?.speed ?? 0).toFixed(2)})`],
     ['metacog confidence / regret / temp', `${(MC?.confidence ?? 0).toFixed(2)} / ${(MC?.regret ?? 0).toFixed(2)} / ${(MC?.exploreTemp ?? 1).toFixed(2)}×`],
     ['weight space learned (motor / steer / ctx)', `${((ws.motorLearnedFrac ?? 0) * 100).toFixed(1)}% / ${((ws.steerLearnedFrac ?? 0) * 100).toFixed(1)}% / ${((ws.brainLearnedFrac ?? 0) * 100).toFixed(1)}%`],
-    ['14-qubit WASM (16,384-D) + Richardson ZNE', `${((cr.qrng.entropy ?? 0) * 14).toFixed(2)}/14b · ZNE ${(cr.qrng.zneGain ?? 1).toFixed(1)}× (${(cr.qrng.zneMitigatedErr ?? 0).toFixed(4)}) · ${qSrc}`],
-    ['QGTL / χ=24 Vidal MPS / 4-Layer MERA', `Fubini ${(ws.fubiniTrace ?? 0).toFixed(2)} · bond ${ws.mpsMaxBond ?? 1} · S ${(ws.mpsEntropy ?? 0).toFixed(2)} · MERA ${(ws.meraIrEntropy ?? 0).toFixed(2)}`],
+    ['16Q WASM / 18Q GPU + DRAG + PEC + ZNE', `DRAG ${(cr.qrng.dragSuppression ?? 25.6).toFixed(1)}× · PEC ${(cr.qrng.pecGain ?? 10.7).toFixed(1)}× · ZNE ${(cr.qrng.zneGain ?? 7.7).toFixed(1)}× · ${qSrc}`],
+    ['32-Qubit (χ=32) Vidal MPS & 512-D MERA', `32Q S ${(ws.mps32MaxEntropy ?? ws.mpsEntropy ?? 0).toFixed(2)} (χ=${ws.mps32MaxBond ?? 32}) · 512-D MERA ${(ws.meraIrEntropy ?? 0).toFixed(2)}`],
     ['predictive-coding error / surprise', `${cr.pc.err.toFixed(3)} / ${cr.pc.surprise.toFixed(2)}`],
     ['thirst / water drunk', `${cr.metab.thirst.toFixed(2)} / ${(cr.stats.drinks || 0).toFixed(1)}`],
-    ['Hox limb lengths (active ' + cr.body.activeLimbs + 'L)', Array.from(cr.body.limbLen).slice(0, cr.body.activeLimbs).map((x) => x.toFixed(2)).join(' ')],
+    ['5-Clade Zygote (' + (cr.body.hox?.cladeName || (cr.body.activeLimbs + 'L')) + ')', cr.body.activeLimbs > 0 ? Array.from(cr.body.limbLen).slice(0, cr.body.activeLimbs).map((x) => x.toFixed(2)).join(' ') : 'limbless undulatory serpent'],
     ['sleep consolidations / merged / InfoNCE', `${cr.memStats.consolidations || 0} / ${cr.memStats.merged || 0} / ${cr.hop.conLoss.toFixed(2)}`],
     ['HDC features re-drawn (Wiener coherence)', `${cr.hdcFood.resampled + cr.hdcWater.resampled}`],
     ['synapses pruned+regrown / alignment', `${b.grown} / ${(alignC.v ?? 0).toFixed(2)}`],
@@ -797,20 +863,21 @@ function drawPanel() {
     ['self-model speed / turn', `${cr.selfV.toFixed(2)} u/s / ${cr.selfW.toFixed(2)} rad/s`],
     ['sleep pressure S / goal', `${cr.sleep.S.toFixed(2)} · ${cr.goal ? cr.goal.type + (cr.goal.k !== undefined ? ' ' + cr.goal.k : cr.goal.pool !== undefined ? ' pool ' + cr.goal.pool : '') : cr.race ? 'racing…' : '—'}`],
     ['races / vetoes / fed / tries', `${cr.stats.races} / ${cr.stats.vetoes} · ${cr.stats.eats} / ${cr.stats.tries}`],
-    ['NREM replays / REM dreams (+60s plan)', `${cr.stats.replays} / ${cr.stats.dreams}`],
+    ['NREM replays / REM dreams (+300s HTN)', `${cr.stats.replays} / ${cr.stats.dreams}`],
     ['STDP events / |Δw|', `${b.stdpEvents} / ${(b.dwLast || 0).toExponential(1)}`],
     ['behaviour entropy (fixed / bias-corr)', `${cr.entropy.toFixed(2)} / ${(cr.entropy2 ?? 0).toFixed(2)} bits (${cr.states || 0}/128)`],
   ]);
 
-  const M = cr.metab, F = cr.fluid, B = cr.body;
+  const M = cr.metab, F = cr.fluid, B = cr.body, Z = B.hox?.zygote;
   stats($('bodystats'), [
     ['hour / season / microclimate', `${cr.hour.toFixed(2)} · ${cr.world.season} · amb ${(cr.ambientTemp ?? 22).toFixed(1)} °C -> core ${(cr.bodyTemp ?? 24).toFixed(1)} °C`],
+    ['128-Cell Zygote Blastula & Gastrulation', Z ? `128 cells (ecto ${Z.ectoderm} · meso ${Z.mesoCount ?? Z.mesoderm} · endo ${Z.endoderm} · crest ${Z.neuralCrest})` : '128 blastomeres'],
     ['3D anisotropic FEM (' + B.nTets + ' tets, ' + B.n + ' nodes)', `J_mean ${(B.meanTetJ ?? 1).toFixed(3)} · J_min ${(B.minTetJ ?? 1).toFixed(3)} · I₄_max ${(B.maxFiberStretch ?? 1).toFixed(2)} · U ${(B.femEnergy ?? 0).toFixed(3)}`],
-    ['Huxley Ca²⁺–Troponin Cross-Bridge Histology', `Ca-TnC ${(B.meanCaTroponin ?? 0).toFixed(3)} · X-bridge ${(B.meanCrossBridge ?? 0).toFixed(3)} · ${B.activeLimbs}L Hox body plan`],
-    ['3D D3Q19 Lattice-Boltzmann + Biot-Darcy FSI', `ω_LBM ${(F?.lbmVorticity ?? 0).toFixed(4)} · u_max ${(F?.lbmMaxSpeed ?? 0).toFixed(3)} · |F_FSI| ${(F?.fsiForceMag ?? 0).toFixed(4)} N · ${(F?.mapPressure ?? 70).toFixed(1)} mmHg`],
-    ['512 3D WCSPH blood / cerebral O₂', `mean ${(F?.meanO2 ?? 0.97).toFixed(3)} · brain ${(F?.o2Node?.[14] ?? 0.97).toFixed(3)} (${F?.nParcels ?? 512} WCSPH parcels)`],
-    ['108-Gene Hox body (limbs / osteo / gills)', `${B.activeLimbs} limbs · osteoderm ${(cr.gen.osteoderm ?? 0.45).toFixed(2)} · gills ${(cr.gen.gillFronds ?? 0.68).toFixed(2)} · camo ${((cr.camoLevel ?? 0) * 100).toFixed(0)}%`],
-    ['render pipeline / gamut / buffer', `${view?.hdrPipeline || 'HDR16F + Sky IBL + GTAO + CAS'} · ${view?.colorGamut || 'sRGB'} · ${view?.bufferWidth || 0}×${view?.bufferHeight || 0}`],
+    ['32 Henneman Fascicles + Huxley Ca²⁺-TnC', `Ca-TnC ${(B.meanCaTroponin ?? 0).toFixed(3)} · X-bridge ${(B.meanCrossBridge ?? 0).toFixed(3)} · ${B.hox?.cladeName || (B.activeLimbs + 'L')}`],
+    ['64-Vessel 3D Murray Tree + 24×8×8 LBM', `Murray Δ ${(F?.murrayLiveDeviation ?? 0).toFixed(3)} · ω_LBM ${(F?.lbmVorticity ?? 0).toFixed(4)} · ${(F?.mapPressure ?? 70).toFixed(1)} mmHg`],
+    ['1,024 WCSPH (896 RBC + 128 Chemotactic WBC)', `O₂ ${(F?.meanO2 ?? 0.97).toFixed(3)} · brain ${(F?.o2Node?.[14] ?? 0.97).toFixed(3)} · WBC act ${(F?.wbcMeanActivation ?? 0).toFixed(3)}`],
+    ['128-Gene Bauplan (Patagium / Esca / Osteo)', `${B.activeLimbs}L · wing ${(B.hox?.patagium ?? 0.18).toFixed(2)} · esca ${(B.hox?.anglerLure ?? 0.24).toFixed(2)} · osteo ${(cr.gen.osteoderm ?? 0.45).toFixed(2)}`],
+    ['render pipeline / gamut / buffer', `${view?.hdrPipeline || 'HDR16F + 4096 Shadows + Sky IBL + GTAO + CAS'} · ${view?.colorGamut || 'sRGB'} · ${view?.bufferWidth || 0}×${view?.bufferHeight || 0}`],
     ['gut glc/fat/prot', `${M.gut.glc.toFixed(2)} / ${M.gut.fat.toFixed(2)} / ${M.gut.prot.toFixed(2)}`],
     ['blood glc / FFA / AA / ketones', `${M.blood.glc.toFixed(2)} / ${M.blood.ffa.toFixed(2)} / ${M.blood.aa.toFixed(2)} / ${M.blood.ket.toFixed(2)}`],
     ['liver glycogen / fat / muscle', `${M.liverGly.toFixed(1)} / ${M.fat.toFixed(0)} / ${M.muscle.toFixed(1)}`],
@@ -822,15 +889,16 @@ function drawPanel() {
 
   if ($('ecostats')) {
     const E = cr.eco, W = cr.world;
+    const cc = E?.stats?.cladeCounts || {};
     stats($('ecostats'), [
-      ['saprotrophic microbe + plankton continuum', `${(W.microbeTotalPop || 0).toLocaleString()} organisms · pool bloom ${((W.planktonBloom || 0) * 100).toFixed(0)}%`],
-      ['embodied 3D conspecifics (up to 32)', E ? `${E.peers.length} active (cap ${E.maxPeers}) · max gen ${E.stats.maxGen}` : 'disabled (?eco=0)'],
+      ['>8.4M microbe + plankton continuum', `${(W.microbeTotalPop || 0).toLocaleString()} organisms · pool bloom ${((W.planktonBloom || 0) * 100).toFixed(0)}%`],
+      ['embodied 3D conspecifics (up to 48)', E ? `${E.peers.length} active (cap ${E.maxPeers}) · ${E.stats.speciesCount || 1} species · max gen ${E.stats.maxGen}` : 'disabled (?eco=0)'],
+      ['5-clade radiation (0L / 4L / 6L / 8L / 10L)', E ? `0L:${cc['0L'] || 0} · 4L:${cc['4L'] || 0} · 6L:${cc['6L'] || 0} · 8L:${cc['8L'] || 0} · 10L:${cc['10L'] || 0}` : '—'],
+      ['256 discrete 3D benthic/pelagic micro-fauna', E ? `${E.microFauna?.length || 0} embodied detritivores/copepods · ${E.stats.microFaunaForaged || 0} grazed` : '0'],
       ['3D bioluminescent eggs / hatched births', E ? `${E.eggs.length} incubating · ${E.stats.eggsLaid} laid · ${E.stats.births} hatched` : '0'],
-      ['diploid 108-gene Hox courtships / clades', E ? `${E.stats.courtships} courtships · ${E.lineageTree.length} phylogeny nodes` : '0'],
       ['photonic bio-mites / pollinations', E ? `${E.mites.length} mites · ${E.stats.pollinationEvents} pollinations · ${E.stats.mitesEaten} eaten` : '0'],
       ['Shadow-Leviathans / Schreckstoff alarms', E ? `${E.predators.length} patrolling · ${E.stats.alarmCalls} alarms` : '0'],
-      ['64×64×3 pheromone field (food/alarm/mate)', `mean ${(W.pherMean || 0).toFixed(4)} · focal [${(cr.pherFood || 0).toFixed(2)}, ${(cr.pherAlarm || 0).toFixed(2)}, ${(cr.pherMate || 0).toFixed(2)}]`],
-      ['32×32 soil nitrogen / mycelial hyphae', `mean N ${(W.meanSoilN || 0.5).toFixed(3)} · ${W.mycelia.length} fungal edges · ${W.vents.length} vents`],
+      ['64×64×3 pheromone + 32×32 mycelia', `pher ${(W.pherMean || 0).toFixed(4)} · soil N ${(W.meanSoilN || 0.5).toFixed(3)} · ${W.mycelia.length} hyphae`],
     ]);
   }
 
@@ -978,7 +1046,7 @@ function frame(now) {
       }
     }
     if (cr.t - alignC.t > 2) { alignC.t = cr.t; alignC.v = cr.brain.alignment(); }
-    if (!Q.get('brain') && !cr.brain.delegated && BRAIN_SCALE !== 'S' && S.frames > 300 && (S.stepMs ?? 0) > 12) {
+    if (!Q.get('brain') && !cr.brain.delegated && BRAIN_SCALE !== 'S' && S.frames > 300 && (S.stepMs ?? 0) > 16.5) {
       slowT2 = (slowT2 || 0) + 1;
       if (slowT2 > 5) {
         const nextScale = BRAIN_SCALE === 'GIGA' ? 'MEGA' : BRAIN_SCALE === 'MEGA' ? 'XXL' : BRAIN_SCALE === 'XXL' ? 'XL' : BRAIN_SCALE === 'XL' ? 'L' : BRAIN_SCALE === 'L' ? 'M' : 'S';
@@ -1018,15 +1086,15 @@ requestAnimationFrame(frame);
   };
   const show = () => {
     const rows = [
-      ['genome (108 Hox Evo-Devo genes)', lineageInfo ? `evolved in browser (${lineageInfo.mode === 'denovo' ? 'de-novo random, ' : ''}${lineageInfo.gens} gens, CRN fitness ${lineageInfo.fit.toFixed(2)}, stack ${lineageStack.length})` : `starter (108-gene Hox ${cr.body.activeLimbs}L body + brain, pass 18)`],
+      ['genome (128 Zygote + Hox Evo-Devo genes)', lineageInfo ? `evolved in browser (${lineageInfo.mode === 'denovo' ? 'de-novo random, ' : ''}${lineageInfo.gens} gens, CRN fitness ${lineageInfo.fit.toFixed(2)}, stack ${lineageStack.length})` : `starter (128-gene ${cr.body.hox?.cladeName || (cr.body.activeLimbs + 'L')} body + brain, pass 19)`],
     ];
     if (lin) {
-      const mStr = lin.mode === 'denovo' ? 'de-novo random [0.05,0.95]^108' : 'refine starter';
+      const mStr = lin.mode === 'denovo' ? 'de-novo random [0.05,0.95]^128' : 'refine starter';
       const ms = lin.morphSummary?.();
       rows.push(['mode / gen / σ', `${mStr} · gen ${lin.gen} / ${lin.sigma.toFixed(3)}${lin.running ? ' (running in workers…)' : ''}`]);
       rows.push(['genomes scored (2-body CRN)', `${lin.evals}${lin.startFit !== null ? ` · initial ${lin.startFit.toFixed(2)}` : ''}`]);
       if (ms) {
-        rows.push(['evolved Hox 3D topology', `${ms.limbs} limbs · osteo ${ms.osteoderm} · len ${ms.bodyLen} · crest ${ms.crestFin} · fluke ${ms.tailFluke}`]);
+        rows.push(['evolved 5-clade 3D topology', `${ms.limbs} limbs (${ms.clade || ''}) · wing ${ms.patagium ?? '—'} · esca ${ms.anglerLure ?? '—'} · osteo ${ms.osteoderm}`]);
       }
       for (const h of lin.hist.slice(-8)) {
         const dStr = (h.delta >= 0 ? '+' : '') + h.delta.toFixed(2);
@@ -1072,6 +1140,7 @@ requestAnimationFrame(frame);
     lineageStack.push(lineageInfo ? JSON.parse(JSON.stringify(lineageInfo)) : { starter: true });
     lineageInfo = { genome: g, gens: mode === 'denovo' ? lin.gen : (lineageInfo?.gens || 0) + lin.gen, fit, mode };
     saveLineage();
+    activeCladeOverride = null;
     globalThis.TW = { ...(globalThis.TW || {}), genome: g };
     lin = null;
     restart();
@@ -1080,6 +1149,7 @@ requestAnimationFrame(frame);
   if ($('evo-undo')) {
     $('evo-undo').onclick = () => {
       if (!lineageStack.length) return;
+      activeCladeOverride = null;
       const prev = lineageStack.pop();
       if (!prev || prev.starter) {
         lineageInfo = null;
@@ -1095,6 +1165,7 @@ requestAnimationFrame(frame);
     };
   }
   $('evo-reset').onclick = () => {
+    activeCladeOverride = null;
     lineageInfo = null;
     lineageStack = [];
     saveLineage();

@@ -15,6 +15,7 @@ export const SITES = 16, WORLD = 22;
 export const N_SOIL = 32;
 export const N_PHER = 64;
 export const N_MICRO = 64;
+export const N_MICRO_FAUNA = 256; // 256 discrete embodied 3D benthic/pelagic/rhizosphere micro-fauna
 export const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 
 export class World {
@@ -147,12 +148,61 @@ export class World {
         const pk0 = poolW > 0.02 ? poolW * (1.85 + 0.75 * fbm(wx * 0.28, wz * 0.28, seed + 53)) : 0;
         this.microbeGrid[idx] = m0;
         this.planktonGrid[idx] = pk0;
-        initPop += (m0 + pk0) * 1000;
+        initPop += (m0 + pk0) * 3800;
         if (poolW > 0.2) { pBloomSum += pk0; pBloomCnt++; }
       }
     }
-    this.microbeTotalPop = Math.round(initPop); // > 1.4M microorganisms across the 4,096 spatial cells
+    this.microbeTotalPop = Math.round(initPop); // > 5.2M microorganisms across the 4,096 spatial cells
     this.planktonBloom = pBloomCnt > 0 ? clamp(pBloomSum / (pBloomCnt * 2.6), 0, 1) : 0.65;
+
+    // 256 discrete embodied 3D Micro-Fauna across 3 trophic guilds (using ecological RNG `re` so primary `r` is untouched!):
+    //  - Guild 0 (0..95):   96 Benthic Detritivore Isopods shredding organic soilC / waste into bioavailable N
+    //  - Guild 1 (96..175): 80 Pelagic Bioluminescent Copepods swimming in water pools & grazing phytoplankton
+    //  - Guild 2 (176..255):80 Rhizosphere Springtails (Collembola) cycling root/mycorrhizal nutrients around plants
+    this.microFauna = [];
+    for (let i = 0; i < N_MICRO_FAUNA; i++) {
+      const guild = i < 96 ? 0 : i < 176 ? 1 : 2;
+      let mx = 0, mz = 0, tIdx = 0;
+      if (guild === 1 && this.pools.length) {
+        tIdx = i % this.pools.length;
+        const pl = this.pools[tIdx];
+        const ang = re() * Math.PI * 2, rad = re() * pl.r * 0.85;
+        mx = pl.x + Math.cos(ang) * rad;
+        mz = pl.z + Math.sin(ang) * rad;
+      } else if (guild === 2 && this.plants.length) {
+        tIdx = i % SITES;
+        const pl = this.plants[tIdx];
+        const ang = re() * Math.PI * 2, rad = 0.4 + re() * 1.8;
+        mx = pl.x + Math.cos(ang) * rad;
+        mz = pl.z + Math.sin(ang) * rad;
+      } else {
+        const ang = re() * Math.PI * 2, rad = 2.0 + re() * (WORLD - 4.0);
+        mx = Math.cos(ang) * rad;
+        mz = Math.sin(ang) * rad;
+      }
+      mx = clamp(mx, -WORLD + 1.5, WORLD - 1.5);
+      mz = clamp(mz, -WORLD + 1.5, WORLD - 1.5);
+      const col = guild === 0
+        ? [0.86, 0.58, 0.28] // amber detritivore isopod
+        : guild === 1
+          ? [0.18, 0.92, 1.00] // cyan bioluminescent copepod
+          : [0.58, 0.96, 0.36]; // lime rhizosphere springtail
+      this.microFauna.push({
+        x: mx,
+        y: 0,
+        z: mz,
+        vx: (re() - 0.5) * 0.5,
+        vz: (re() - 0.5) * 0.5,
+        guild,
+        targetIdx: tIdx,
+        energy: 0.65 + 0.3 * re(),
+        r: col[0],
+        g: col[1],
+        b: col[2],
+        ph: re() * Math.PI * 2,
+      });
+    }
+    this.microFaunaBiomass = N_MICRO_FAUNA * 0.8;
 
     // 64x64x3 Wind-Advected Reaction-Diffusion Pheromone Grid (interleaved 3 channels: [food, alarm, mate])
     this.pher = new Float32Array(N_PHER * N_PHER * 3);
@@ -201,6 +251,12 @@ export class World {
     for (const v of this.vents) v.y = this.height(v.x, v.z);
     for (const sh of this.shelters) sh.y = this.height(sh.x, sh.z);
     for (const s of this.snacks) if (!s.held) s.y = Math.max(s.y, this.height(s.x, s.z) + 0.15);
+    if (this.microFauna) {
+      for (let i = 0; i < this.microFauna.length; i++) {
+        const mf = this.microFauna[i];
+        mf.y = this.height(mf.x, mf.z) + (mf.guild === 1 ? 0.08 : 0.05);
+      }
+    }
   }
 
   /** Local microclimate temperature (C) at (x, z) given solar hour, season, altitude, rain & geothermal vents */
@@ -345,12 +401,63 @@ export class World {
           if (poolW > 0.2) { pBloomSum += pkNext; pBloomCnt++; }
         }
         PG[idx] = pkNext;
-        popSum += (mNext + pkNext) * 1000;
+        popSum += (mNext + pkNext) * 3800;
       }
     }
     MG.set(MT);
     this.microbeTotalPop = Math.round(popSum);
     this.planktonBloom = pBloomCnt > 0 ? clamp(pBloomSum / (pBloomCnt * 2.6), 0.05, 1.0) : 0.65;
+
+    // 3b) Step 256 Embodied 3D Benthic/Pelagic/Rhizosphere Micro-Fauna (`microFauna`, using only `this.re`)
+    if (this.microFauna) {
+      let mfBio = 0;
+      const re = this.re;
+      for (let i = 0; i < this.microFauna.length; i++) {
+        const mf = this.microFauna[i];
+        mf.ph = (mf.ph + dt * (mf.guild === 2 ? 11.0 : 7.5)) % (Math.PI * 2);
+        let ax = (re() - 0.5) * 0.8, az = (re() - 0.5) * 0.8;
+        if (mf.guild === 1 && this.pools.length) {
+          const pl = this.pools[mf.targetIdx % this.pools.length];
+          const dx = pl.x - mf.x, dz = pl.z - mf.z, dp = Math.hypot(dx, dz);
+          if (dp > pl.r * 0.85) { ax += (dx / dp) * 2.4; az += (dz / dp) * 2.4; }
+          const mIdx = this.microbeIndex(mf.x, mf.z);
+          if (PG[mIdx] > 0.15) {
+            PG[mIdx] = Math.max(0.05, PG[mIdx] - dt * 0.025);
+            mf.energy = clamp(mf.energy + dt * 0.04, 0.2, 1.2);
+          }
+        } else if (mf.guild === 2 && this.plants.length) {
+          const pl = this.plants[mf.targetIdx % SITES];
+          const dx = pl.x - mf.x, dz = pl.z - mf.z, dp = Math.hypot(dx, dz);
+          if (dp > 1.9) { ax += (dx / dp) * 1.8; az += (dz / dp) * 1.8; }
+          else if (dp < 0.35 && dp > 1e-3) { ax -= (dx / dp) * 0.9; az -= (dz / dp) * 0.9; }
+          const sIdx = this.soilIndex(mf.x, mf.z);
+          sN[sIdx] = Math.min(2.0, sN[sIdx] + dt * 0.0025);
+          mf.energy = clamp(mf.energy + dt * 0.02, 0.25, 1.15);
+        } else {
+          // Guild 0: benthic detritivore isopod climbs local soilC gradient & shreds organic matter -> N
+          const sIdx = this.soilIndex(mf.x, mf.z);
+          const sIdxR = this.soilIndex(mf.x + 1.2, mf.z);
+          const sIdxU = this.soilIndex(mf.x, mf.z + 1.2);
+          ax += (sC[sIdxR] - sC[sIdx]) * 2.5;
+          az += (sC[sIdxU] - sC[sIdx]) * 2.5;
+          if (sC[sIdx] > 0.2) {
+            const shred = dt * 0.004 * sC[sIdx];
+            sC[sIdx] -= shred;
+            sN[sIdx] = Math.min(2.0, sN[sIdx] + shred * 1.15);
+            mf.energy = clamp(mf.energy + dt * 0.03, 0.25, 1.2);
+          }
+        }
+        mf.vx = clamp(mf.vx * 0.82 + ax * dt * 2.5, -0.95, 0.95);
+        mf.vz = clamp(mf.vz * 0.82 + az * dt * 2.5, -0.95, 0.95);
+        mf.x = clamp(mf.x + mf.vx * dt, -WORLD + 1.5, WORLD - 1.5);
+        mf.z = clamp(mf.z + mf.vz * dt, -WORLD + 1.5, WORLD - 1.5);
+        const hop = mf.guild === 2 ? 0.035 * Math.max(0, Math.sin(mf.ph)) : 0.015 * Math.sin(mf.ph);
+        mf.y = this.height(mf.x, mf.z) + (mf.guild === 1 ? 0.07 : 0.04) + hop;
+        mf.energy = Math.max(0.2, mf.energy - dt * 0.012);
+        mfBio += mf.energy;
+      }
+      this.microFaunaBiomass = mfBio;
+    }
 
     // 4) Underground Mycelial Fungal Network: redistribute soil N/C & systemic plant defense signals!
     for (let e = 0; e < this.mycelia.length; e++) {

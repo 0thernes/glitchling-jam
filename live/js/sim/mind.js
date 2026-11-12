@@ -1,14 +1,17 @@
-// Learning machinery beside the spiking substrate (upgraded in pass 18):
+// Learning & Symbolic-Neural Planning machinery beside the spiking substrate (upgraded in pass 19):
 //  - SelectiveSSM: 32-mode complex diagonal state-space model (S4D/Mamba selectivity) with exact online mode-wise RTRL
 //    eligibility traces for input matrix B, selective step-size gate Wd, gate bias bd, and modal frequencies omega.
 //  - WorldModel: Causal Multi-Head RoPE Self-Attention + RMSNorm + SwiGLU + RTRL-SSM Multimodal Transformer-XL +
-//    Conditional Rectified Flow-Matching Generative Video Head + 4-Timescale Hierarchical Planner (+0.1s / +0.5s / +2.0s / +60.0s),
-//    ingesting BOTH 72-D neural-SSM state AND 384-D (16x8x3) raw foveal RGB visual pixels across 5 scales (?wm=std|large|xl|ultra|titan):
-//      * 'std'   (L=2, d=64,  H=4, ffn=128, T=12 ->    ~195k params, real-time default)
-//      * 'large' (L=3, d=128, H=4, ffn=256, T=12 ->    ~715k params)
-//      * 'xl'    (L=4, d=168, H=6, ffn=320, T=16 ->  ~1.36M params)
-//      * 'ultra' (L=6, d=240, H=8, ffn=480, T=16 ->  ~2.95M params)
-//      * 'titan' (L=8, d=320, H=8, ffn=960, T=32 -> ~11.12M params, 11-million-parameter causal multimodal Transformer-XL!)
+//    2-Stage Spatial-Pyramid Patch-VAE (1,536 -> 96 -> 32 -> 96 -> 1,536) + 4-Step Conditional Rectified Flow-Matching Video Head +
+//    Multi-Timescale Hierarchical Rollout (+0.1s / +0.5s / +2.0s / +60.0s), ingesting BOTH 72-D neural-SSM state AND
+//    1,536-D (32x16x3) foveal RGB visual patches across 6 scales (?wm=std|large|xl|ultra|titan|omega):
+//      * 'std'   (L=2,  d=64,  H=4, ffn=128,  T=12 ->    ~680k params, real-time default)
+//      * 'large' (L=3,  d=128, H=4, ffn=256,  T=12 ->   ~1.48M params)
+//      * 'xl'    (L=4,  d=168, H=6, ffn=320,  T=16 ->   ~2.32M params)
+//      * 'ultra' (L=6,  d=240, H=8, ffn=480,  T=16 ->   ~4.19M params)
+//      * 'titan' (L=8,  d=320, H=8, ffn=960,  T=32 ->  ~12.79M params)
+//      * 'omega' (L=10, d=448, H=8, ffn=1344, T=32 ->  ~28.69M params, 28.7-million-parameter causal multimodal Transformer-XL!)
+//  - HTNPlanner: 5-Minute (+300.0 s) Neuro-Symbolic Hierarchical Task Network (HTN) + 24-Rollout Depth-5 UCT Monte-Carlo Tree Search.
 //  - Sleep: two-process (adenosine S + circadian C) flip-flop and ultradian N1/N2/N3/REM stage cycle.
 //  - PredictiveCoding: two-level Rao & Ballard / Whittington & Bogacz hierarchical inference & Hebbian error learning.
 import { mulberry, gauss, softplus, clamp } from './util.js';
@@ -19,23 +22,25 @@ const dsilu = (x) => {
   return s * (1 + x * (1 - s));
 };
 
-export const N_VIS_PATCH = 384; // 16x8x3 high-acuity raw foveal RGB pixel patch from 128x64 binocular retinas
+export const N_VIS_PATCH = 1536;// 32x16x3 high-acuity raw foveal RGB pixel patch from dual 256x128 binocular retinas
 export const N_MACRO = 8;       // 8-D 1-minute (+60.0 s) hierarchical macro-state observables
-export const D_FLOW = 24;       // 24-D latent space for 4-step Conditional Rectified Flow-Matching generative video head
-export const H_FLOW = 48;       // Velocity-field MLP hidden dimension
+export const D_VAE = 96;        // Stage-1 Spatial-Pyramid Patch-VAE nonlinear hidden dimension (1,536 <-> 96 <-> 32)
+export const D_FLOW = 32;       // 32-D Stage-2 latent space for 4-step Conditional Rectified Flow-Matching video synthesis
+export const H_FLOW = 64;       // Velocity-field MLP hidden dimension
 
 export const WM_SCALES = {
-  std:   { L: 2, d: 64,  H: 4, ffn: 128, T: 12, d5: 64  },
-  large: { L: 3, d: 128, H: 4, ffn: 256, T: 12, d5: 96  },
-  xl:    { L: 4, d: 168, H: 6, ffn: 320, T: 16, d5: 112 },
-  ultra: { L: 6, d: 240, H: 8, ffn: 480, T: 16, d5: 144 },
-  titan: { L: 8, d: 320, H: 8, ffn: 960, T: 32, d5: 192 },
+  std:   { L: 2,  d: 64,  H: 4, ffn: 128,  T: 12, d5: 64  },
+  large: { L: 3,  d: 128, H: 4, ffn: 256,  T: 12, d5: 96  },
+  xl:    { L: 4,  d: 168, H: 6, ffn: 320,  T: 16, d5: 112 },
+  ultra: { L: 6,  d: 240, H: 8, ffn: 480,  T: 16, d5: 144 },
+  titan: { L: 8,  d: 320, H: 8, ffn: 960,  T: 32, d5: 192 },
+  omega: { L: 10, d: 448, H: 8, ffn: 1344, T: 32, d5: 256 },
 };
 
 function resolveWMScale(scaleArg) {
   if (typeof scaleArg === 'string' && WM_SCALES[scaleArg]) return scaleArg;
   if (typeof scaleArg === 'number') {
-    return scaleArg >= 300 ? 'titan' : scaleArg >= 220 ? 'ultra' : scaleArg >= 160 ? 'xl' : scaleArg >= 96 ? 'large' : 'std';
+    return scaleArg >= 400 ? 'omega' : scaleArg >= 300 ? 'titan' : scaleArg >= 220 ? 'ultra' : scaleArg >= 160 ? 'xl' : scaleArg >= 96 ? 'large' : 'std';
   }
   const g =
     globalThis.WM_SCALE ||
@@ -359,17 +364,25 @@ export class WorldModel {
     this.Wskip60z = allocF32(N_MACRO * nZ, 0);
     this.Wskip60a = allocF32(N_MACRO * nAct, 0);
 
-    // Online 4-Step Conditional Rectified Flow-Matching Generative Video Head (dz/ds = v_theta(z_s, s, h_t) over 16x8x3 RGB)
+    // Online 2-Stage Spatial-Pyramid Patch-VAE (1,536 -> 96 -> 32 -> 96 -> 1,536) + 4-Step Conditional Rectified Flow-Matching Video Head
+    this.dVae = D_VAE;
     this.dFlow = D_FLOW;
     this.hFlow = H_FLOW;
-    this.WflowEnc = allocF32(D_FLOW * nVis, 0.35 / Math.sqrt(nVis));
+    this.WvaeEnc1 = allocF32(D_VAE * nVis, 0.35 / Math.sqrt(nVis));
+    this.bvaeEnc1 = allocF32(D_VAE, 0);
+    this.WvaeEnc2 = allocF32(D_FLOW * D_VAE, 0.45 / Math.sqrt(D_VAE));
     this.WflowZ = allocF32(H_FLOW * D_FLOW, 0.55 / Math.sqrt(D_FLOW));
     this.WflowH = allocF32(H_FLOW * d, 0.45 / Math.sqrt(d));
     this.WflowT = allocF32(H_FLOW * 4, 0.30);
     this.bflowH = allocF32(H_FLOW, 0);
     this.WflowVel = allocF32(D_FLOW * H_FLOW, 0.14 / Math.sqrt(H_FLOW));
     this.bflowVel = allocF32(D_FLOW, 0);
-    this.WflowOut = allocF32(nVis * D_FLOW, 0.12 / Math.sqrt(D_FLOW));
+    this.WvaeDec1 = allocF32(D_VAE * D_FLOW, 0.35 / Math.sqrt(D_FLOW));
+    this.bvaeDec1 = allocF32(D_VAE, 0);
+    this.WvaeDec2 = allocF32(nVis * D_VAE, 0.12 / Math.sqrt(D_VAE));
+    this.WflowSkip = allocF32(nVis * D_FLOW, 0.08 / Math.sqrt(D_FLOW)); // multiscale residual pyramid skip
+    this.WflowEnc = this.WvaeEnc1; // backward-compatible inspector alias
+    this.WflowOut = this.WvaeDec2;
 
     // Heteroscedastic uncertainty head
     this.Wvar = allocF32(d, 0.05);
@@ -438,13 +451,19 @@ export class WorldModel {
     this.u60Buf = new Float32Array(d5);
     this.act60Buf = new Float32Array(d5);
 
-    // Conditional Rectified Flow-Matching scratch buffers
+    // 2-Stage Spatial-Pyramid Patch-VAE + Conditional Rectified Flow-Matching scratch buffers
     this.visFlowPred = new Float32Array(nVis);
+    this.vaeEncPre = new Float32Array(D_VAE);
+    this.vaeEncAct = new Float32Array(D_VAE);
+    this.vaeDecPre = new Float32Array(D_VAE);
+    this.vaeDecAct = new Float32Array(D_VAE);
+    this.dVaeMid = new Float32Array(D_VAE);
     this.flowZ0 = new Float32Array(D_FLOW);
     this.flowZ1 = new Float32Array(D_FLOW);
     this.flowZs = new Float32Array(D_FLOW);
     this.flowPre = new Float32Array(H_FLOW);
     this.flowAct = new Float32Array(H_FLOW);
+    this.flowDAct = new Float32Array(H_FLOW);
     this.flowVel = new Float32Array(D_FLOW);
 
     // Forward/backward scratch buffers
@@ -1067,9 +1086,9 @@ export class WorldModel {
     return outVel;
   }
 
-  /** Integrate 4-step Conditional Rectified Flow ODE dz/ds = v_theta(z_s, s, h_t) -> synthesize 16x8x3 future foveal RGB frame */
+  /** Integrate 4-step Conditional Rectified Flow ODE + 2-Stage Spatial-Pyramid Patch-VAE Decoder -> synthesize 32x16x3 future RGB frame */
   predictVisFlow(visPrev, hCtx, outVis = null, steps = 4) {
-    const { nVis, WflowOut, flowZs, flowVel } = this;
+    const { nVis, WvaeDec1, bvaeDec1, WvaeDec2, WflowSkip, vaeDecPre, vaeDecAct, flowZs, flowVel } = this;
     flowZs.fill(0);
     const dtFlow = 1 / Math.max(1, steps);
     for (let st = 0; st < steps; st++) {
@@ -1077,30 +1096,50 @@ export class WorldModel {
       this._flowVelocity(flowZs, s, hCtx, flowVel);
       for (let m = 0; m < D_FLOW; m++) flowZs[m] += dtFlow * flowVel[m];
     }
+    for (let k = 0; k < D_VAE; k++) {
+      let s = bvaeDec1[k];
+      const off = k * D_FLOW;
+      for (let m = 0; m < D_FLOW; m++) s += WvaeDec1[off + m] * flowZs[m];
+      vaeDecPre[k] = s;
+      vaeDecAct[k] = silu(s);
+    }
     const dst = outVis || this.visFlowPred;
     for (let v = 0; v < nVis; v++) {
       let sv = visPrev ? visPrev[v] : 0.25;
-      const oD = v * D_FLOW;
-      for (let m = 0; m < D_FLOW; m++) sv += WflowOut[oD + m] * flowZs[m];
+      const oV = v * D_VAE, oS = v * D_FLOW;
+      for (let k = 0; k < D_VAE; k++) sv += WvaeDec2[oV + k] * vaeDecAct[k];
+      for (let m = 0; m < D_FLOW; m++) sv += WflowSkip[oS + m] * flowZs[m];
       dst[v] = clamp(sv, 0, 1);
     }
     return dst;
   }
 
-  /** Online Conditional Rectified Flow-Matching velocity training + 4-step ODE visual frame synthesis */
+  /** Online 2-Stage Spatial-Pyramid Patch-VAE + Conditional Rectified Flow-Matching velocity training on 32x16x3 RGB frames */
   _learnVisFlow(visPrev, visCur, hCtx, lr) {
     const {
-      nVis, dModel: d, WflowEnc, WflowZ, WflowH, WflowT, bflowH, WflowVel, bflowVel, WflowOut,
-      flowZ0, flowZ1, flowZs, flowPre, flowAct, flowVel, visFlowPred,
+      nVis, dModel: d,
+      WvaeEnc1, bvaeEnc1, WvaeEnc2, WvaeDec1, bvaeDec1, WvaeDec2, WflowSkip,
+      WflowZ, WflowH, WflowT, bflowH, WflowVel, bflowVel,
+      vaeEncPre, vaeEncAct, vaeDecPre, vaeDecAct, dVaeMid,
+      flowZ0, flowZ1, flowZs, flowPre, flowAct, flowDAct, flowVel, visFlowPred,
     } = this;
-    // 1) Encode residual RGB innovation dVis = visCur - visPrev into target latent z1
+
+    // 1) 2-Stage Spatial-Pyramid Patch-VAE Encoder: dVis (1,536-D) -> vaeEncAct (96-D SiLU) -> target latent flowZ1 (32-D)
+    for (let k = 0; k < D_VAE; k++) {
+      let s = bvaeEnc1[k];
+      const o1 = k * nVis;
+      for (let v = 0; v < nVis; v++) s += WvaeEnc1[o1 + v] * (visCur[v] - visPrev[v]);
+      vaeEncPre[k] = s;
+      vaeEncAct[k] = silu(s);
+    }
     for (let m = 0; m < D_FLOW; m++) {
       let s = 0;
-      const oE = m * nVis;
-      for (let v = 0; v < nVis; v++) s += WflowEnc[oE + v] * (visCur[v] - visPrev[v]);
+      const o2 = m * D_VAE;
+      for (let k = 0; k < D_VAE; k++) s += WvaeEnc2[o2 + k] * vaeEncAct[k];
       flowZ1[m] = clamp(s, -3, 3);
       flowZ0[m] = 0.08 * gauss(this._flowRng);
     }
+
     // 2) Stratified flow time s in (0.08, 0.92) along straight-line path z_s = (1 - s)*z0 + s*z1
     const s = 0.08 + 0.84 * (((this.n * 0.61803398875) % 1 + 1) % 1);
     for (let m = 0; m < D_FLOW; m++) flowZs[m] = (1 - s) * flowZ0[m] + s * flowZ1[m];
@@ -1111,8 +1150,7 @@ export class WorldModel {
     const etaV = (0.35 * lr) / (H_FLOW + 4);
     const etaH = (0.45 * lr) / (hh + D_FLOW + 4);
 
-    const dAct = this.dUpBuf; // length ffn >= 128 >= H_FLOW (48)
-    for (let k = 0; k < H_FLOW; k++) dAct[k] = 0;
+    flowDAct.fill(0);
     let velSE = 0;
     for (let m = 0; m < D_FLOW; m++) {
       const targetV = flowZ1[m] - flowZ0[m];
@@ -1120,7 +1158,7 @@ export class WorldModel {
       velSE += errV * errV;
       const oV = m * H_FLOW;
       for (let k = 0; k < H_FLOW; k++) {
-        dAct[k] += WflowVel[oV + k] * errV;
+        flowDAct[k] += WflowVel[oV + k] * errV;
         WflowVel[oV + k] = clamp(WflowVel[oV + k] - etaV * errV * flowAct[k], -2.5, 2.5);
       }
       bflowVel[m] = clamp(bflowVel[m] - 0.25 * etaV * errV, -2.0, 2.0);
@@ -1129,7 +1167,7 @@ export class WorldModel {
 
     const t0 = s, t1 = 1 - s, t2 = Math.sin(Math.PI * s), t3 = Math.cos(Math.PI * s);
     for (let k = 0; k < H_FLOW; k++) {
-      const dg = clamp(dAct[k] * dsilu(flowPre[k]), -3, 3);
+      const dg = clamp(flowDAct[k] * dsilu(flowPre[k]), -3, 3);
       const oZ = k * D_FLOW, oH = k * d, oT = k * 4;
       for (let m = 0; m < D_FLOW; m++) WflowZ[oZ + m] = clamp(WflowZ[oZ + m] - etaH * dg * flowZs[m], -2.5, 2.5);
       for (let j = 0; j < d; j++) WflowH[oH + j] = clamp(WflowH[oH + j] - etaH * dg * hCtx[j], -2.5, 2.5);
@@ -1140,27 +1178,56 @@ export class WorldModel {
       bflowH[k] = clamp(bflowH[k] - 0.25 * etaH * dg, -2.0, 2.0);
     }
 
-    // 3) Integrate 4-step rectified flow ODE from z0=0 and train decoder WflowOut + coupled encoder WflowEnc
+    // 3) Integrate 4-step rectified flow ODE and backprop through 2-Stage Patch-VAE Decoder & Encoder
     this.predictVisFlow(visPrev, hCtx, visFlowPred, 4);
     let fse = 0;
-    const etaDec = (0.38 * lr) / (D_FLOW + 2);
+    const etaDec2 = (0.32 * lr) / (D_VAE + D_FLOW + 2);
+    const etaDec1 = (0.28 * lr) / (D_FLOW + 4);
     const dLat = flowZ0;
     dLat.fill(0);
+    dVaeMid.fill(0);
     for (let v = 0; v < nVis; v++) {
       const gv = visFlowPred[v] - visCur[v];
       fse += gv * gv;
-      const oD = v * D_FLOW;
+      const oV = v * D_VAE, oS = v * D_FLOW;
+      for (let k = 0; k < D_VAE; k++) {
+        dVaeMid[k] += WvaeDec2[oV + k] * gv;
+        WvaeDec2[oV + k] = clamp(WvaeDec2[oV + k] - etaDec2 * gv * vaeDecAct[k], -2.0, 2.0);
+      }
       for (let m = 0; m < D_FLOW; m++) {
-        dLat[m] += WflowOut[oD + m] * gv;
-        WflowOut[oD + m] = clamp(WflowOut[oD + m] - etaDec * gv * flowZs[m], -2.0, 2.0);
+        dLat[m] += WflowSkip[oS + m] * gv;
+        WflowSkip[oS + m] = clamp(WflowSkip[oS + m] - etaDec2 * gv * flowZs[m], -2.0, 2.0);
       }
     }
-    const etaEnc = (0.12 * lr) / (nVis * 0.1 + 4);
+    for (let k = 0; k < D_VAE; k++) {
+      const dk = clamp(dVaeMid[k] * dsilu(vaeDecPre[k]), -2.5, 2.5);
+      const off = k * D_FLOW;
+      for (let m = 0; m < D_FLOW; m++) {
+        dLat[m] += WvaeDec1[off + m] * dk;
+        WvaeDec1[off + m] = clamp(WvaeDec1[off + m] - etaDec1 * dk * flowZs[m], -2.0, 2.0);
+      }
+      bvaeDec1[k] = clamp(bvaeDec1[k] - 0.2 * etaDec1 * dk, -1.5, 1.5);
+    }
+    // Coupled Patch-VAE encoder alignment (2nd stage every step; 1st 1536-D stage amortized every 2nd step for minimal CPU cost)
+    const etaEnc2 = (0.14 * lr) / (D_VAE + 4);
+    dVaeMid.fill(0);
     for (let m = 0; m < D_FLOW; m++) {
       const dm = clamp(dLat[m], -2, 2);
-      const oE = m * nVis;
-      for (let v = 0; v < nVis; v++) {
-        WflowEnc[oE + v] = clamp(WflowEnc[oE + v] - etaEnc * dm * (visCur[v] - visPrev[v]), -2.0, 2.0);
+      const o2 = m * D_VAE;
+      for (let k = 0; k < D_VAE; k++) {
+        dVaeMid[k] += WvaeEnc2[o2 + k] * dm;
+        WvaeEnc2[o2 + k] = clamp(WvaeEnc2[o2 + k] - etaEnc2 * dm * vaeEncAct[k], -2.0, 2.0);
+      }
+    }
+    if ((this.n & 1) === 0) {
+      const etaEnc1 = (0.10 * lr) / (nVis * 0.05 + 4);
+      for (let k = 0; k < D_VAE; k++) {
+        const dk = clamp(dVaeMid[k] * dsilu(vaeEncPre[k]), -2, 2);
+        const o1 = k * nVis;
+        for (let v = 0; v < nVis; v++) {
+          WvaeEnc1[o1 + v] = clamp(WvaeEnc1[o1 + v] - etaEnc1 * dk * (visCur[v] - visPrev[v]), -2.0, 2.0);
+        }
+        bvaeEnc1[k] = clamp(bvaeEnc1[k] - 0.2 * etaEnc1 * dk, -1.5, 1.5);
       }
     }
     fse /= nVis;
@@ -1568,5 +1635,316 @@ export class PredictiveCoding {
     this.err = se; this.errSlow += 0.01 * (se - this.errSlow);
     this.surprise = clamp(se / (this.errSlow + 1e-6) / 3); this.n++;
     return se;
+  }
+}
+
+/**
+ * 5-Minute (+300.0 s = 3,000 steps @ 10 Hz) Neuro-Symbolic Hierarchical Task Network (HTN)
+ * + 24-Rollout Depth-5 UCT Monte-Carlo Tree Search (MCTS) Strategic Life Planner.
+ *
+ * Decomposes root compound task `Flourish5Min(+300s)` through symbolic Methods (with explicit Preconditions)
+ * into sub-networks of Compound Tasks (`EmergencyHomeostasis`, `MetabolicExpedition`, `EpistemicFrontierSurvey`,
+ * `AssortativeKinship`) and 8 grounded Primitive Operators (`OP_FORAGE_YIELD`, `OP_FORAGE_NOVEL`, `OP_HYDRATE_POOL`,
+ * `OP_HARVEST_MORSEL`, `OP_THERMOREGULATE_VENT`, `OP_EVADE_PREDATOR`, `OP_SURVEY_FRONTIER`, `OP_ENGAGE_KIN`),
+ * then searches 5 x 60.0-s = +300.0-s multi-step symbolic-neural rollouts via UCT MCTS coupled to `WorldModel` macro dynamics.
+ */
+export const HTN_PRIMITIVES = [
+  'OP_FORAGE_YIELD',
+  'OP_FORAGE_NOVEL',
+  'OP_HYDRATE_POOL',
+  'OP_HARVEST_MORSEL',
+  'OP_THERMOREGULATE_VENT',
+  'OP_EVADE_PREDATOR',
+  'OP_SURVEY_FRONTIER',
+  'OP_ENGAGE_KIN',
+];
+
+export class HTNPlanner {
+  constructor(seed = 1, nPolicies = 21) {
+    this.r = mulberry(seed * 4219 + 97);
+    this.nPolicies = nPolicies;
+    this.horizonSec = 300.0; // 5 full minutes (5 x 60.0-s macro epochs = 3,000 10-Hz steps)
+    this.depthMax = 5;
+    this.nRollouts = 24;
+    this.cUct = 1.18;
+    this.policyPrior = new Float64Array(nPolicies);
+    this.htnOpPriors = new Float64Array(HTN_PRIMITIVES.length);
+    this.activeMethod = 'M2_MetabolicExpedition';
+    this.activeCompoundTasks = ['Flourish5Min(+300s)', 'MetabolicExpedition', 'HarvestAndHydrate'];
+    this.bestPlanOps = ['OP_FORAGE_YIELD', 'OP_HYDRATE_POOL', 'OP_SURVEY_FRONTIER', 'OP_FORAGE_YIELD', 'OP_ENGAGE_KIN'];
+    this.planSummary = 'Flourish5Min -> MetabolicExpedition -> [OP_FORAGE_YIELD -> OP_HYDRATE_POOL -> OP_SURVEY_FRONTIER] (+300s)';
+    this.treeNodes = 1;
+    this.bestValue = 0;
+    this.plansComputed = 0;
+  }
+
+  /** Symbolic HTN method selection & precondition-gated operator prior decomposition */
+  _decomposeHTN(st) {
+    const p = this.htnOpPriors;
+    p.fill(0.04);
+    if (st.hazard > 0.22) {
+      this.activeMethod = 'M0_EvadeApexThreat';
+      this.activeCompoundTasks = ['Flourish5Min(+300s)', 'EmergencyHomeostasis', 'EvadeAndShelter'];
+      p[5] = 0.52; p[6] = 0.16; p[2] = 0.10; p[0] = 0.10;
+    } else if (st.tempErr > 0.34) {
+      this.activeMethod = 'M1_ThermalEquilibrium';
+      this.activeCompoundTasks = ['Flourish5Min(+300s)', 'EmergencyHomeostasis', 'ThermoregulateVentOrPool'];
+      p[4] = 0.48; p[2] = 0.22; p[0] = 0.14; p[6] = 0.08;
+    } else if (st.thirst > 0.32 && st.thirst >= st.hunger * 0.9) {
+      this.activeMethod = 'M2_HydrationExpedition';
+      this.activeCompoundTasks = ['Flourish5Min(+300s)', 'MetabolicExpedition', 'LocatePotablePool->Forage'];
+      p[2] = 0.50; p[0] = 0.20; p[6] = 0.12; p[3] = st.hasSnack ? 0.12 : 0.02;
+    } else if (st.hunger > 0.26 || st.energy < 0.72) {
+      this.activeMethod = 'M3_ForageCircuit';
+      this.activeCompoundTasks = ['Flourish5Min(+300s)', 'MetabolicExpedition', 'HarvestFlora->Hydrate->Survey'];
+      p[0] = 0.44; p[3] = st.hasSnack ? 0.24 : 0.03; p[1] = 0.16; p[2] = 0.12; p[6] = 0.08;
+    } else if (st.socialDrive > 0.28 && st.peerNear > 0 && st.energy > 0.68) {
+      this.activeMethod = 'M4_AssortativeKinship';
+      this.activeCompoundTasks = ['Flourish5Min(+300s)', 'SocialSpeciation', 'EngageCladeMate->Forage'];
+      p[7] = 0.42; p[0] = 0.22; p[6] = 0.18; p[1] = 0.10;
+    } else {
+      this.activeMethod = 'M5_EpistemicFrontier';
+      this.activeCompoundTasks = ['Flourish5Min(+300s)', 'EpistemicFrontierSurvey', 'TriangulateLandmarks->Harvest'];
+      p[6] = 0.38; p[1] = 0.26; p[0] = 0.18; p[7] = st.peerNear > 0 ? 0.10 : 0.04;
+    }
+    let s = 0;
+    for (let i = 0; i < p.length; i++) s += p[i];
+    for (let i = 0; i < p.length; i++) p[i] /= s || 1;
+  }
+
+  /** Advance 1-minute (+60.0 s) symbolic-neural abstract state under primitive operator `op` + WorldModel locomotor mobility */
+  _stepMinuteModel(s, op, mobilityGain) {
+    let { energy, hydration, tempErr, uncert, kinFit, hazard, hasSnack } = s;
+    // Basal 60-second metabolic & evaporative drain
+    energy = clamp(energy - 0.085, 0, 1);
+    hydration = clamp(hydration - 0.075, 0, 1);
+    tempErr = clamp(tempErr * 0.92 + 0.03, 0, 1);
+    hazard = clamp(hazard * 0.80, 0, 1);
+    uncert = clamp(uncert + 0.025, 0, 1);
+    let r = 0;
+
+    // Precondition check & expected +60s grounded effect
+    switch (op) {
+      case 0: // OP_FORAGE_YIELD
+        energy = clamp(energy + 0.28 * mobilityGain, 0, 1);
+        uncert = clamp(uncert - 0.05, 0, 1);
+        r += 0.36 * (1.15 - s.energy) * mobilityGain;
+        break;
+      case 1: // OP_FORAGE_NOVEL
+        energy = clamp(energy + 0.20 * mobilityGain, 0, 1);
+        uncert = clamp(uncert - 0.16 * mobilityGain, 0, 1);
+        r += (0.22 * (1.05 - s.energy) + 0.24 * s.uncert) * mobilityGain;
+        break;
+      case 2: // OP_HYDRATE_POOL
+        if (s.hydration < 0.92) {
+          hydration = clamp(hydration + 0.38 * mobilityGain, 0, 1);
+          tempErr = clamp(tempErr - 0.10, 0, 1);
+          r += 0.46 * (1.10 - s.hydration) * mobilityGain;
+        } else r -= 0.08;
+        break;
+      case 3: // OP_HARVEST_MORSEL
+        if (hasSnack) {
+          energy = clamp(energy + 0.32, 0, 1);
+          hasSnack = false;
+          r += 0.42 * (1.10 - s.energy);
+        } else r -= 0.18;
+        break;
+      case 4: // OP_THERMOREGULATE_VENT
+        if (s.tempErr > 0.12) {
+          tempErr = clamp(tempErr - 0.32 * mobilityGain, 0, 1);
+          r += 0.44 * s.tempErr;
+        } else r -= 0.10;
+        break;
+      case 5: // OP_EVADE_PREDATOR
+        if (s.hazard > 0.08) {
+          hazard = clamp(hazard - 0.45 * mobilityGain, 0, 1);
+          energy = clamp(energy - 0.03, 0, 1);
+          r += 0.58 * s.hazard;
+        } else r -= 0.12;
+        break;
+      case 6: // OP_SURVEY_FRONTIER
+        uncert = clamp(uncert - 0.24 * mobilityGain, 0, 1);
+        r += 0.28 * s.uncert * clamp(s.energy, 0.2, 1.0);
+        break;
+      case 7: // OP_ENGAGE_KIN
+        if (s.energy > 0.55 && s.hydration > 0.50) {
+          kinFit = clamp(kinFit + 0.25, 0, 1);
+          r += 0.26 * (1 - s.kinFit);
+        } else r -= 0.10;
+        break;
+    }
+    // Homeostatic viability survival reward at end of minute
+    const surv = Math.min(energy, hydration) - 0.45 * hazard - 0.30 * tempErr - 0.12 * uncert + 0.12 * kinFit;
+    return {
+      next: { energy, hydration, tempErr, uncert, kinFit, hazard, hasSnack },
+      reward: r + 0.35 * surv,
+    };
+  }
+
+  /** Run 24-rollout depth-5 (+300.0 s = 5-Minute) UCT MCTS over HTN-decomposed primitive operators */
+  plan(ctx, wm = null) {
+    const nOps = HTN_PRIMITIVES.length;
+    const hunger = clamp(ctx.hunger ?? 0.3, 0, 1);
+    const thirst = clamp(ctx.thirst ?? 0.2, 0, 1);
+    const rootState = {
+      energy: clamp(1 - hunger, 0.05, 1),
+      hydration: clamp(1 - thirst, 0.05, 1),
+      tempErr: clamp(ctx.tempErr ?? 0.05, 0, 1),
+      uncert: clamp(ctx.uncert ?? 0.45, 0, 1),
+      kinFit: clamp(ctx.kinFit ?? 0.2, 0, 1),
+      hazard: clamp(ctx.predatorLoom ?? 0, 0, 1),
+      hasSnack: !!ctx.hasSnack,
+      hunger,
+      thirst,
+      socialDrive: clamp(ctx.socialDrive ?? 0.2, 0, 1),
+      peerNear: ctx.peerNear ?? 0,
+    };
+
+    this._decomposeHTN(rootState);
+
+    // Couple rollout mobility to WorldModel +60s macro-horizon uprightness & speed prediction!
+    let mobilityGain = 0.92;
+    if (wm && wm.n60 > 0) {
+      const predSpeed = clamp(wm.macroHorizonEMA[0], 0, 2.5);
+      const predUp = clamp(wm.macroHorizonEMA[3], 0.2, 1.0);
+      mobilityGain = clamp(0.68 + 0.28 * predUp + 0.12 * predSpeed, 0.55, 1.25);
+    }
+
+    const mkNode = (state, depth, parent, opFromParent) => ({
+      state,
+      depth,
+      parent,
+      op: opFromParent,
+      visits: 0,
+      valueSum: 0,
+      children: null,
+    });
+    const nodes = [mkNode(rootState, 0, -1, -1)];
+
+    for (let ro = 0; ro < this.nRollouts; ro++) {
+      let curIdx = 0;
+      // 1) Selection + Expansion via PUCT / UCT guided by symbolic HTN method priors
+      while (nodes[curIdx].depth < this.depthMax) {
+        const nd = nodes[curIdx];
+        if (!nd.children) {
+          nd.children = new Int32Array(nOps).fill(-1);
+        }
+        // Pick first unvisited high-prior op or UCT-maximizing child
+        let bestOp = 0, bestScore = -1e9;
+        const logP = Math.log(nd.visits + 1.5);
+        for (let op = 0; op < nOps; op++) {
+          const cid = nd.children[op];
+          const htnP = this.htnOpPriors[op];
+          if (cid < 0) {
+            const initScore = 0.65 * htnP + 0.08 * this.r();
+            if (initScore + 10.0 > bestScore) {
+              bestScore = initScore + 10.0;
+              bestOp = op;
+            }
+          } else {
+            const ch = nodes[cid];
+            const qMean = ch.valueSum / Math.max(1, ch.visits);
+            const uct = qMean + this.cUct * Math.sqrt(logP / (1 + ch.visits)) + 0.28 * htnP;
+            if (uct > bestScore) {
+              bestScore = uct;
+              bestOp = op;
+            }
+          }
+        }
+        if (nd.children[bestOp] < 0) {
+          const tr = this._stepMinuteModel(nd.state, bestOp, mobilityGain);
+          const childIdx = nodes.length;
+          const childNode = mkNode(tr.next, nd.depth + 1, curIdx, bestOp);
+          childNode.stepReward = tr.reward;
+          nodes.push(childNode);
+          nd.children[bestOp] = childIdx;
+          curIdx = childIdx;
+          break;
+        }
+        curIdx = nd.children[bestOp];
+      }
+
+      // 2) Rollout remaining minutes out to +300.0 s (depth 5)
+      let simState = nodes[curIdx].state;
+      let d = nodes[curIdx].depth;
+      let rolloutRet = 0;
+      let disc = 1.0;
+      while (d < this.depthMax) {
+        // Sample HTN-biased rollout operator
+        const u = this.r();
+        let acc = 0, pick = 0;
+        for (let op = 0; op < nOps; op++) {
+          acc += this.htnOpPriors[op];
+          if (u <= acc) { pick = op; break; }
+        }
+        const tr = this._stepMinuteModel(simState, pick, mobilityGain);
+        rolloutRet += disc * tr.reward;
+        disc *= 0.90;
+        simState = tr.next;
+        d++;
+      }
+
+      // 3) Backpropagate cumulative 5-minute return up the tree
+      let ret = rolloutRet;
+      let bIdx = curIdx;
+      while (bIdx >= 0) {
+        const bNode = nodes[bIdx];
+        bNode.visits++;
+        ret = (bNode.stepReward || 0) + 0.90 * ret;
+        bNode.valueSum += ret;
+        bIdx = bNode.parent;
+      }
+    }
+
+    // Extract winning 5-step (+300.0 s) symbolic plan spine & map root Q-values onto the 21 striatal policies
+    this.treeNodes = nodes.length;
+    const planOps = [];
+    let walk = 0;
+    let firstOp = 0;
+    for (let step = 0; step < this.depthMax; step++) {
+      const nd = nodes[walk];
+      if (!nd.children) break;
+      let bestC = -1, bestV = -1, bestOp = 0;
+      for (let op = 0; op < nOps; op++) {
+        const cid = nd.children[op];
+        if (cid >= 0 && nodes[cid].visits > bestV) {
+          bestV = nodes[cid].visits;
+          bestC = cid;
+          bestOp = op;
+        }
+      }
+      if (bestC < 0) break;
+      if (step === 0) {
+        firstOp = bestOp;
+        this.bestValue = nodes[bestC].valueSum / Math.max(1, nodes[bestC].visits);
+      }
+      planOps.push(HTN_PRIMITIVES[bestOp]);
+      walk = bestC;
+    }
+    while (planOps.length < this.depthMax) planOps.push(HTN_PRIMITIVES[firstOp]);
+    this.bestPlanOps = planOps;
+    this.planSummary = `${this.activeCompoundTasks[1]} -> [${planOps.slice(0, 3).join(' -> ')}] (+300s)`;
+
+    // Map MCTS root action values onto 21 concrete policies (0..15 sites, 16..18 pools, 19 snack, 20 explore/vent)
+    this.policyPrior.fill(0);
+    const root = nodes[0];
+    const opWeight = new Float64Array(nOps);
+    if (root.children) {
+      for (let op = 0; op < nOps; op++) {
+        const cid = root.children[op];
+        opWeight[op] = cid >= 0 ? nodes[cid].visits / Math.max(1, this.nRollouts) : 0;
+      }
+    }
+    const bestSite = clamp(ctx.bestYieldSite ?? 0, 0, 15);
+    const novelSite = clamp(ctx.mostUncertSite ?? ((bestSite + 7) & 15), 0, 15);
+    const bestPool = 16 + clamp(ctx.bestPool ?? 0, 0, 2);
+
+    this.policyPrior[bestSite] += 0.85 * opWeight[0];
+    this.policyPrior[novelSite] += 0.80 * opWeight[1];
+    this.policyPrior[bestPool] += 0.90 * opWeight[2];
+    if (this.nPolicies > 19) this.policyPrior[19] += 0.85 * opWeight[3];
+    if (this.nPolicies > 20) this.policyPrior[20] += 0.85 * (opWeight[4] + opWeight[5] + opWeight[6] + 0.6 * opWeight[7]);
+    this.plansComputed++;
+    return this.policyPrior;
   }
 }

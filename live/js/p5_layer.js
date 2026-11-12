@@ -9,11 +9,11 @@ import { clamp } from './sim/util.js';
 import { WORLD } from './sim/world.js';
 
 export const P5_VIEWS = [
-  { id: 0, short: '8cHH+Hip', title: '8-Comp HH+NMDA+SK Arbour & 4,608-Neu Hippocampus–Subiculum' },
-  { id: 1, short: 'Biosphere', title: '1.4M+ Microbe Continuum, 32-Peer Clades & 64×64×3 Plumes' },
-  { id: 2, short: '108G Hox', title: '108-Gene Hox 4/6/8-Limb Morphospace & Live Cladogram' },
-  { id: 3, short: 'Fovea+Flow', title: '128×64 P/M/K Fovea, 16×8 Flow WM & 4,096 PQ-IT Concepts' },
-  { id: 4, short: '14Q+ZNE', title: '14-Qubit WASM (16,384-D), Richardson ZNE & 4-Layer χ=24 MERA' },
+  { id: 0, short: '16cMkv+Hip', title: '16-Comp Discrete Markov Cable & 32,768-Neu Hippocampus + SR' },
+  { id: 1, short: 'Biosphere', title: '5.2M+ Microbes, 256 Micro-Fauna, 48-Peer 5-Clade Speciation' },
+  { id: 2, short: '128G Zygote', title: '128-Cell Zygote Blastula, 128-Gene 5-Clade Morphospace & Tree' },
+  { id: 3, short: '256Fov+Ont', title: '256×128 (196k RGC) Fovea, 32×16 Flow-VAE & 65k Ontology IT' },
+  { id: 4, short: '16Q+DRAG', title: '16Q WASM (65k-D), Qutrit DRAG+PEC+ZNE, 32Q χ=32 MPS & 512-D MERA' },
 ];
 
 export class P5Layer {
@@ -336,15 +336,15 @@ export class P5Layer {
     const br = cr.brain;
     p.noStroke();
     p.fill(150, 220, 255);
-    p.textSize(9.2);
-    p.text(`8-Comp Arbour · NMDA ${br.nmdaSpikes || 0} · BAC ${Math.round(br.plateauBursts || 0)} · SK ${(br.skMean || 0).toFixed(2)}`, pad, 13);
+    p.textSize(9.0);
+    p.text(`16-Comp Markov · Na_O ${(br.markovOpenNaMean || 0).toFixed(1)} · NMDA ${Math.round(br.nmdaSpikes || 0)} · BAC ${Math.round(br.plateauBursts || 0)}`, pad, 13);
 
     const traces = [
-      { arr: this.hhHist.ais, col: [255, 105, 130], lbl: 'AIS' },
+      { arr: this.hhHist.ais, col: [255, 105, 130], lbl: 'AIS Mkv' },
       { arr: this.hhHist.soma, col: [95, 225, 255], lbl: 'Soma' },
-      { arr: this.hhHist.basalNMDA, col: [95, 245, 165], lbl: 'Basal NMDA' },
-      { arr: this.hhHist.trunkHCN, col: [195, 150, 255], lbl: 'Trunk Ih' },
-      { arr: this.hhHist.tuftCaSK, col: [255, 195, 85], lbl: 'Tuft Ca/SK' },
+      { arr: this.hhHist.basalNMDA, col: [95, 245, 165], lbl: 'Basal4' },
+      { arr: this.hhHist.trunkHCN, col: [195, 150, 255], lbl: 'Trk2 Ih' },
+      { arr: this.hhHist.tuftCaSK, col: [255, 195, 85], lbl: 'Tuft4 Ca' },
     ];
     const n = this.hhHist.ais.length, ptr = this.hhHist.ptr;
     p.noFill();
@@ -362,22 +362,22 @@ export class P5Layer {
       p.endShape();
       p.noStroke();
       p.fill(tr.col[0], tr.col[1], tr.col[2]);
-      p.textSize(8.2);
+      p.textSize(8.0);
       p.text(tr.lbl, pad + t * ((w - 16) / 5), midY - 2);
     }
 
-    // Bottom: 4,608-Neuron Histological Hippocampal–Subicular Re-Entrant Loop + 4 Interneuron Classes
+    // Bottom: 32,768-Neuron Histological Hippocampal–Subicular Loop + Adult Neurogenesis + 6 GABA Classes + SR
     const cir = cr.hop?.spikingCircuit;
     p.fill(190, 180, 255);
-    p.textSize(9.0);
-    p.text(`4,608-Neu Hip–Sub (DG 2,048 + PV/Chnd/OLM/VIP) · SWRs ${cir?.swrEvents ?? 0}`, pad, midY + 13);
+    p.textSize(8.8);
+    p.text(`32,768-Neu Hip–Sub (DG 16,384 + 512 Neurogen + 6 GABA + SR) · SWRs ${cir?.swrEvents ?? 0}`, pad, midY + 13);
     const pops = [
-      { name: 'EC II/III', val: cir ? clamp((cir.meanEC || 0.25) * 1.4, 0.08, 1) : 0.32, col: [95, 205, 255] },
-      { name: 'DG 2k', val: clamp((cr.hop?.dgSparsity ?? 0.031) * 14, 0.08, 1), col: [85, 245, 175] },
-      { name: 'CA3', val: clamp(1 - (cr.hop?.ca1Novelty ?? 0.3), 0.12, 1), col: [255, 195, 90] },
-      { name: 'CA1', val: clamp(cr.hop?.ca1Novelty ?? 0.28, 0.1, 1), col: [255, 115, 175] },
+      { name: 'EC Grid', val: cir ? clamp((cir.meanEC || 0.25) * 1.4, 0.08, 1) : 0.32, col: [95, 205, 255] },
+      { name: 'DG 16k', val: clamp((cr.hop?.dgSparsity ?? 0.012) * 32, 0.08, 1), col: [85, 245, 175] },
+      { name: 'CA3+SR', val: clamp(1 - (cr.hop?.ca1Novelty ?? 0.3), 0.12, 1), col: [255, 195, 90] },
+      { name: 'CA1/2', val: clamp(cr.hop?.ca1Novelty ?? 0.28, 0.1, 1), col: [255, 115, 175] },
       { name: 'Subic', val: cir ? clamp((cir.meanSub || 0.28) * 1.5, 0.1, 1) : 0.36, col: [185, 135, 255] },
-      { name: 'GABA4', val: cir ? clamp((cir.meanInh || 0.30) * 1.4, 0.1, 1) : 0.38, col: [80, 245, 235] },
+      { name: 'GABA6', val: cir ? clamp((cir.meanInh || 0.30) * 1.4, 0.1, 1) : 0.38, col: [80, 245, 235] },
     ];
     const bw = (w - 2 * pad - 25) / 6;
     for (let i = 0; i < 6; i++) {
@@ -388,14 +388,14 @@ export class P5Layer {
       p.fill(pops[i].col[0], pops[i].col[1], pops[i].col[2], 215);
       p.rect(bx, by + bh - fh, bw, fh, 3);
       p.fill(210, 224, 242);
-      p.textSize(7.8);
+      p.textSize(7.6);
       p.text(pops[i].name, bx + 1, h - 4);
     }
   }
 
   _drawBiosphereMap(p, cr, w, h) {
     const W = cr.world, eco = cr.eco;
-    const sz = Math.min(w - 102, h - 16);
+    const sz = Math.min(w - 106, h - 16);
     const ox = 8, oy = 8;
     const mapX = (x) => ox + ((x / (2 * WORLD)) + 0.5) * sz;
     const mapZ = (z) => oy + ((z / (2 * WORLD)) + 0.5) * sz;
@@ -415,6 +415,13 @@ export class P5Layer {
       p.fill(255, 115, 45, 220);
       p.circle(mapX(v.x), mapZ(v.z), 6.5 + 2 * Math.sin(cr.t * 4));
     }
+    if (W.microFauna) {
+      for (let i = 0; i < W.microFauna.length; i += 2) {
+        const mf = W.microFauna[i];
+        p.fill(mf.kind === 0 ? 255 : 70, mf.kind === 1 ? 235 : 210, mf.kind === 2 ? 120 : 255, 160);
+        p.circle(mapX(mf.x), mapZ(mf.z), 1.9);
+      }
+    }
     for (const q of W.plants) {
       p.fill(85, 240, 135, 95 + 150 * q.fruit);
       p.circle(mapX(q.x), mapZ(q.z), 3.4 + 2.8 * q.fruit);
@@ -427,7 +434,7 @@ export class P5Layer {
       }
       for (const pr of eco.peers) {
         p.fill(180 + 70 * Math.cos(pr.gen.pigmentHue * 6.28), 150 + 80 * Math.sin(pr.gen.pigmentHue * 6.28), 245);
-        p.circle(mapX(pr.x), mapZ(pr.z), 4.2 + 2.2 * pr.scale);
+        p.circle(mapX(pr.x), mapZ(pr.z), 4.0 + 2.0 * pr.scale);
       }
       for (const lv of eco.predators) {
         p.stroke(255, 55, 85);
@@ -444,19 +451,19 @@ export class P5Layer {
     p.circle(mapX(c[0]), mapZ(c[2]), 7.4);
     p.noStroke();
 
-    const lx = ox + sz + 8;
+    const lx = ox + sz + 7;
     p.fill(210, 226, 245);
-    p.textSize(8.8);
-    const micM = ((W.microbeTotalPop || 1450000) / 1e6).toFixed(2);
+    p.textSize(8.5);
+    const micM = ((W.microbeTotalPop || 5200000) / 1e6).toFixed(2);
     const lines = [
       `Microbes: ${micM}M`,
-      `Plankton: ${((W.planktonBloom || 0.65) * 100).toFixed(0)}%`,
-      `Peers: ${eco ? eco.peers.length : 0}/${eco ? eco.maxPeers : 32}`,
-      `Focal: ${cr.body.activeLimbs}L Hox`,
+      `MicroFauna: ${W.microFauna ? W.microFauna.length : 256}`,
+      `Peers: ${eco ? eco.peers.length : 0}/${eco ? eco.maxPeers : 48}`,
+      `Species: ${eco?.stats?.speciesCount || 1} clades`,
+      `Focal: ${cr.body.activeLimbs}L (${cr.body.n}n)`,
       `Eggs: ${eco ? eco.eggs.length : 0} (B:${eco ? eco.stats.births : 0})`,
-      `Mites: ${eco ? eco.mites.length : 0}`,
-      `Soil N: ${(W.meanSoilN || 0.48).toFixed(2)}`,
-      `Pher: ${(W.pherMean || 0).toFixed(3)}`,
+      `Vessels: ${cr.fluid?.nE || 64} Murray`,
+      `Blood: 896R+128W`,
       `Season: ${W.season}`,
       `Temp: ${cr.bodyTemp.toFixed(1)}°C`,
     ];
@@ -467,48 +474,64 @@ export class P5Layer {
     const midX = w * 0.52;
     p.noStroke();
     p.fill(155, 225, 255);
-    p.textSize(9.2);
-    p.text(`108-Gene Hox (${cr.body.activeLimbs}L) Morphospace`, 8, 14);
-    p.text(`Cladogram (${cr.eco?.lineageTree?.length ?? 1} nodes)`, midX + 4, 14);
+    p.textSize(8.8);
+    const emb = cr.body.hox?.zygote || cr.body.hox?.embryo;
+    p.text(`128-Cell Blastula & 128G (${cr.body.activeLimbs}L)`, 8, 13);
+    p.text(`5-Clade Tree (${cr.eco?.lineageTree?.length ?? 1}n)`, midX + 4, 13);
 
+    // Upper-left: 128-Blastomere 3D Gastrula Cross-Section (Ectoderm / Mesoderm / Endoderm / Neural Crest)
+    const bx = midX * 0.48, by = h * 0.36, bRad = Math.min(bx - 16, h * 0.20);
+    p.stroke(42, 66, 96);
+    p.noFill();
+    p.circle(bx, by, bRad * 2.1);
+    if (emb?.cells) {
+      p.noStroke();
+      const germCols = [[85, 205, 255], [255, 110, 140], [255, 215, 95], [190, 125, 255]];
+      for (let i = 0; i < emb.cells.length; i++) {
+        const cl = emb.cells[i];
+        const col = germCols[cl.germ || 0] || germCols[0];
+        p.fill(col[0], col[1], col[2], 210);
+        p.circle(bx + cl.x * bRad * 0.85, by - cl.y * bRad * 0.85, 3.6);
+      }
+    }
+
+    // Lower-left: 128-gene 5-Clade Morphospace Radar
     const keys = [
-      ['bodyLen', 0.78, 1.28], ['bodyGirth', 0.78, 1.28], ['crestFin', 0, 1], ['tailFluke', 0, 1],
-      ['foreLimb', 0.78, 1.32], ['hindLimb', 0.78, 1.32], ['osteoderm', 0.05, 1.25], ['gillFronds', 0.15, 1.45],
-      ['limbTopo', 0, 1], ['sarcomereVmax', 0.65, 1.45], ['neuroHipAlloc', 0.75, 1.35], ['fiberStiff', 0.7, 1.35],
+      ['bodyLen', 0.78, 1.28], ['bodyGirth', 0.78, 1.28], ['crestFin', 0, 1.5], ['patagiumSpan', 0, 1.35],
+      ['anglerLure', 0, 1.4], ['osteoderm', 0.05, 1.25], ['gillFronds', 0.15, 1.45], ['limbTopo', 0, 1],
+      ['decapodBud', 0, 1], ['sarcomereVmax', 0.65, 1.45], ['myelinCond', 0.65, 1.45], ['speciationIso', 0, 1],
     ];
-    const cx = midX * 0.48, cy = h * 0.56, rad = Math.min(cx - 16, h * 0.37);
+    const cx = midX * 0.48, cy = h * 0.76, rad = Math.min(cx - 16, h * 0.19);
     p.stroke(42, 66, 96);
     p.noFill();
     p.circle(cx, cy, rad * 2);
-    p.circle(cx, cy, rad);
-
     p.fill(56, 232, 255, 72);
     p.stroke(56, 232, 255, 235);
-    p.strokeWeight(1.5);
+    p.strokeWeight(1.4);
     p.beginShape();
     for (let i = 0; i < keys.length; i++) {
       const [k, lo, hi] = keys[i];
-      const u = clamp(((cr.gen[k] ?? (lo + hi) * 0.5) - lo) / (hi - lo), 0.08, 1);
+      const u = clamp(((cr.gen[k] ?? (lo + hi) * 0.5) - lo) / (hi - lo), 0.1, 1);
       const a = (i / keys.length) * Math.PI * 2 - Math.PI / 2;
       p.vertex(cx + Math.cos(a) * rad * u, cy + Math.sin(a) * rad * u);
     }
     p.endShape(p.CLOSE);
 
-    const tree = cr.eco?.lineageTree || [{ id: 0, gen: 0, hue: cr.gen.pigmentHue ?? 0.72, limbPairs: 3 }];
+    const tree = cr.eco?.lineageTree || [{ id: 0, gen: 0, hue: cr.gen.pigmentHue ?? 0.72, limbPairs: cr.body.limbPairs }];
     const recent = tree.slice(-14);
     const tx0 = midX + 10, tw = w - tx0 - 12;
     p.strokeWeight(1.1);
     recent.forEach((nd, idx) => {
-      const x = tx0 + Math.min(1, (nd.gen || 0) / 5) * (tw - 30);
-      const y = 27 + (idx / Math.max(1, recent.length - 1)) * (h - 40);
+      const x = tx0 + Math.min(1, (nd.gen || 0) / 5) * (tw - 34);
+      const y = 26 + (idx / Math.max(1, recent.length - 1)) * (h - 38);
       p.stroke(100, 165, 220, 135);
       p.line(tx0, y, x, y);
       p.noStroke();
       p.fill(150 + 95 * Math.cos((nd.hue || 0.7) * 6.28), 190, 248);
-      p.circle(x, y, 5.8);
+      p.circle(x, y, 5.6);
       p.fill(205, 220, 240);
-      p.textSize(8.0);
-      p.text(`G${nd.gen || 0}#${nd.id}(${(nd.limbPairs || 3) * 2}L)`, x + 5, y + 3);
+      p.textSize(7.8);
+      p.text(`G${nd.gen || 0}#${nd.id}(${(nd.limbPairs ?? 3) * 2}L)`, x + 5, y + 3);
     });
   }
 
@@ -516,32 +539,34 @@ export class P5Layer {
     const rt = cr.retina, wm = cr.wm;
     p.noStroke();
     p.fill(155, 225, 255);
-    p.textSize(9.0);
-    p.text(`128×64 P/M/K Fovea (${rt.nReceptors.toLocaleString()} cones) · PQ-IT ${rt.itUniqueConceptsSeen || 1}/${rt.itConceptCapacity || 4096}`, 8, 13);
+    p.textSize(8.6);
+    p.text(`256×128 Fovea (${rt.nReceptors.toLocaleString()} rec / 196k RGC) · ${rt.activeLexeme || 'SCANNING'}`, 8, 13);
 
-    // Downsampled 32x16 preview of 128x64 left retinal sheet
+    // Downsampled 32x16 preview of 256x128 left retinal sheet
     const cellW = Math.max(2, Math.floor((w * 0.50) / 32));
     const cellH = Math.max(2, Math.floor((h * 0.44) / 16));
-    const strideX = Math.max(1, Math.floor(128 / 32));
-    const strideY = Math.max(1, Math.floor(64 / 16));
+    const strideX = Math.max(1, Math.floor(256 / 32));
+    const strideY = Math.max(1, Math.floor(128 / 16));
     for (let vy = 0; vy < 16; vy++) {
       for (let vx = 0; vx < 32; vx++) {
-        const idx = ((vy * strideY) * 128 + (vx * strideX)) * 3;
+        const idx = ((vy * strideY) * 256 + (vx * strideX)) * 3;
         p.fill((rt.retL[idx] || 0) * 255, (rt.retL[idx + 1] || 0) * 255, (rt.retL[idx + 2] || 0) * 255);
         p.rect(8 + vx * cellW, 20 + vy * cellH, cellW, cellH);
       }
     }
 
-    // Right: 16x8 Rectified Flow-Matching Generated RGB Patch + +2.0s Rollout Patch!
+    // Right: 32x16 Patch-VAE + 4-Step Rectified Flow-Matching RGB Patch (downsampled 2x to 16x8 for crisp side-by-side)
     const px0 = 14 + 32 * cellW;
     p.fill(210, 226, 245);
-    p.textSize(8.0);
-    p.text('16×8 Flow-Match / +2s', px0, 26);
+    p.textSize(7.8);
+    p.text('32×16 Flow-VAE / +2s', px0, 26);
     const pw = Math.max(2, Math.floor((w - px0 - 10) / 16));
     const flowBuf = wm.visFlowPred || wm.visPred;
+    const isHiRes = flowBuf && flowBuf.length >= 1536;
+    const wStride = isHiRes ? 2 : 1, wRow = isHiRes ? 32 : 16;
     for (let py = 0; py < 8; py++) {
       for (let px = 0; px < 16; px++) {
-        const o = (py * 16 + px) * 3;
+        const o = ((py * wStride) * wRow + (px * wStride)) * 3;
         p.fill((flowBuf[o] || 0) * 255, (flowBuf[o + 1] || 0) * 255, (flowBuf[o + 2] || 0) * 255);
         p.rect(px0 + px * pw, 31 + py * pw, pw, pw);
         p.fill((wm.vis20Buf[o] || 0) * 255, (wm.vis20Buf[o + 1] || 0) * 255, (wm.vis20Buf[o + 2] || 0) * 255);
@@ -549,17 +574,17 @@ export class P5Layer {
       }
     }
 
-    // Bottom: 64 Shape + 64 Attr = 4,096 Compositional PQ-IT + +60s WM readout
+    // Bottom: 256x256 = 65,536 Ontology-Grounded IT + +300s HTN-MCTS Planner
     const by0 = h * 0.64, bh = h - by0 - 13;
     p.fill(185, 205, 255);
-    p.textSize(8.4);
-    p.text(`PQ-IT (64×64=4,096) #${rt.itActiveConcept || 0} · Flow ${wm.visFlowMSE?.toFixed(4) ?? '0.00'} · +60s ${(wm.mse60 ?? 0).toFixed(4)}`, 8, by0 - 3);
+    p.textSize(8.2);
+    p.text(`Ontology IT (${rt.itUniqueConceptsSeen || 1}/65,536) · HTN +300s: ${cr.htn?.lastTopGoal || 'FORAGE'}`, 8, by0 - 3);
     const shapeAct = rt.itShapeAct || rt.itAct;
     const nBars = Math.min(32, shapeAct.length);
     const bw = (w - 18) / nBars;
     for (let i = 0; i < nBars; i++) {
       const a = clamp(shapeAct[i] || 0, 0, 1);
-      p.fill(i === (rt.itTopShape ?? rt.itTopCat) ? 255 : 70, i === (rt.itTopShape ?? rt.itTopCat) ? 195 : 220, 255, 220);
+      p.fill(i === ((rt.itTopShape ?? rt.itTopCat) % nBars) ? 255 : 70, 210, 255, 220);
       p.rect(9 + i * bw, by0 + bh * (1 - a), Math.max(1.8, bw - 1.2), bh * a);
     }
   }
@@ -568,11 +593,11 @@ export class P5Layer {
     const q = cr.qrng, mc = cr.metacog;
     p.noStroke();
     p.fill(170, 228, 255);
-    p.textSize(8.8);
-    const sVn = ((q.entropy ?? 0) * 14).toFixed(2);
-    p.text(`14Q WASM (16,384-D) · S_vN ${sVn}/14b · ZNE ${(q.zneGain || 1).toFixed(1)}× bias cut`, 8, 13);
+    p.textSize(8.4);
+    const sVn = ((q.entropy ?? 0) * 16).toFixed(2);
+    p.text(`16Q WASM (65,536-D) · S_vN ${sVn}/16b · DRAG ${(q.dragSuppression || 25.6).toFixed(1)}× · PEC ${(q.pecGain || 10.7).toFixed(1)}×`, 8, 13);
 
-    // Left: 64-petal Hilbert amplitude/phase rose over 16,384-state register
+    // Left: 64-petal Hilbert amplitude/phase rose over 65,536-state register
     const cx = w * 0.25, cy = h * 0.56, rad = Math.min(cx - 12, h * 0.35);
     p.stroke(42, 66, 98);
     p.noFill();
@@ -582,7 +607,7 @@ export class P5Layer {
       const stride = Math.max(1, Math.floor(re.length / 64));
       for (let k = 0; k < 64; k++) {
         const idx = k * stride;
-        const mag = clamp(Math.hypot(re[idx], im[idx]) * 96, 0.08, 1.0);
+        const mag = clamp(Math.hypot(re[idx], im[idx]) * 192, 0.08, 1.0);
         const ph = Math.atan2(im[idx], re[idx]);
         const ang = (k / 64) * Math.PI * 2;
         p.stroke(110 + 135 * Math.cos(ph), 165 + 80 * Math.sin(ph), 255, 215);
@@ -590,35 +615,35 @@ export class P5Layer {
       }
     }
 
-    // Right: Richardson ZNE Error Mitigation + 4-Layer (8->4->2->1) χ=24 Binary MERA Tree
+    // Right: Qutrit DRAG + PEC + ZNE + 32-Qubit (χ=32) MPS & 9-Scale (512-D) Binary MERA Tree
     const mx = w * 0.50, mw = w - mx - 10;
     const ms = mc?.ws?.meraScales || [];
     p.noStroke();
     p.fill(205, 195, 255);
-    p.textSize(8.2);
-    p.text(`ZNE |err|: raw ${(q.zneRawErr || 0).toFixed(4)} → mit ${(q.zneMitigatedErr || 0).toFixed(4)}`, mx, 27);
-    p.text(`χ=24 MPS S ${(mc?.ws?.mpsEntropy ?? 0).toFixed(2)}b · 4-Layer MERA (256-D)`, mx, 39);
+    p.textSize(8.0);
+    p.text(`DRAG F_gate ${(q.dragGateFidelity || 0.970).toFixed(3)} · ZNE ${(q.zneGain || 5.1).toFixed(1)}×`, mx, 27);
+    p.text(`32Q MPS χ=${mc?.ws?.mps32MaxBond ?? 16}/32 · 512-D MERA (L=9)`, mx, 39);
 
-    const levels = [8, 4, 2, 1];
+    const levels = [16, 8, 4, 2, 1];
     for (let lv = 0; lv < levels.length; lv++) {
       const cnt = levels[lv];
-      const y = h - 16 - lv * ((h - 66) / 3);
+      const y = h - 14 - lv * ((h - 64) / 4);
       for (let i = 0; i < cnt; i++) {
         const x = mx + ((i + 0.5) / cnt) * mw;
         if (lv < levels.length - 1) {
           const px = mx + ((Math.floor(i / 2) + 0.5) / levels[lv + 1]) * mw;
-          const py = h - 16 - (lv + 1) * ((h - 66) / 3);
-          p.stroke(110, 205, 255, 155);
+          const py = h - 14 - (lv + 1) * ((h - 64) / 4);
+          p.stroke(110, 205, 255, 145);
           p.line(x, y, px, py);
         }
         p.noStroke();
-        p.fill(lv === 3 ? 255 : 75, 225, 255);
-        p.circle(x, y, 5.8);
+        p.fill(lv === 4 ? 255 : 75, 225, 255);
+        p.circle(x, y, lv === 0 ? 3.8 : 5.2);
       }
       if (ms[lv]) {
         p.fill(150, 190, 225);
-        p.textSize(7.2);
-        p.text(ms[lv].entropy.toFixed(1), mx - 16, y + 3);
+        p.textSize(7.0);
+        p.text(ms[lv].entropy.toFixed(1), mx - 15, y + 3);
       }
     }
   }
