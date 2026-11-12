@@ -551,6 +551,33 @@ $('follow').onclick = () => { if (!view) return; view.follow = !view.follow; $('
 $('reset').onclick = () => { seed = Math.floor(Math.random() * 99999) + 1; $('seed').value = seed; restart(); };
 $('seed').onchange = () => { seed = +$('seed').value || 1; restart(); };
 
+if ($('dome-storm')) {
+  $('dome-storm').onclick = () => {
+    if (cr.world.dome) {
+      cr.world.dome.auroraStorm = 0.92;
+      cr.world.dome.auroraPhase = Math.PI * 0.45;
+      cr.ev('dome', 'geomagnetic aurora storm surged across Geodesic Biodome');
+    }
+  };
+}
+if ($('dome-refuge')) {
+  $('dome-refuge').onclick = () => {
+    if (cr.eco) {
+      cr.eco.refugeImmunityEnabled = !cr.eco.refugeImmunityEnabled;
+      $('dome-refuge').textContent = `🛡 Refuge: ${cr.eco.refugeImmunityEnabled ? 'ON' : 'OFF'}`;
+      cr.ev('dome', `GATE-DOME-REFUGE Big-Tree sanctuary ward ${cr.eco.refugeImmunityEnabled ? 'ENABLED' : 'DISABLED'}`);
+    }
+  };
+}
+if ($('dome-trauma')) {
+  $('dome-trauma').onclick = () => {
+    if (cr.heptarch) {
+      cr.heptarch.inflictLimbTrauma(0, 0.48);
+      cr.ev('bioelec', 'limb 0 traumatized (V_mem depolarized) -> Levin blastema regrowth engaged');
+    }
+  };
+}
+
 function restart() {
   const f = cr.flaws;
   cr = new Creature(seed, { flaws: f, clockMode, wmScale, eco: currentEcoOpts() });
@@ -630,6 +657,9 @@ const LES = [
   ['nav', 'head-direction / path integration off (unseen goals have no direction)'],
   ['babble', 'neonatal motor babbling off (needs reset)'],
   ['course', 'course-over-ground drift term off'],
+  ['heptarch', 'HEPTARCH 7-seat council & Raider ColdStrike off'],
+  ['magneto', 'Cryptochrome-4 radical-pair nocturnal compass off'],
+  ['bioelec', 'Levin gap-junction V_mem limb regeneration off'],
 ];
 
 function buildLesions() {
@@ -852,7 +882,9 @@ function drawPanel() {
     ['metacog confidence / regret / temp', `${(MC?.confidence ?? 0).toFixed(2)} / ${(MC?.regret ?? 0).toFixed(2)} / ${(MC?.exploreTemp ?? 1).toFixed(2)}×`],
     ['weight space learned (motor / steer / ctx)', `${((ws.motorLearnedFrac ?? 0) * 100).toFixed(1)}% / ${((ws.steerLearnedFrac ?? 0) * 100).toFixed(1)}% / ${((ws.brainLearnedFrac ?? 0) * 100).toFixed(1)}%`],
     ['16Q WASM / 18Q GPU + DRAG + PEC + ZNE', `DRAG ${(cr.qrng.dragSuppression ?? 25.6).toFixed(1)}× · PEC ${(cr.qrng.pecGain ?? 10.7).toFixed(1)}× · ZNE ${(cr.qrng.zneGain ?? 7.7).toFixed(1)}× · ${qSrc}`],
-    ['32-Qubit (χ=32) Vidal MPS & 512-D MERA', `32Q S ${(ws.mps32MaxEntropy ?? ws.mpsEntropy ?? 0).toFixed(2)} (χ=${ws.mps32MaxBond ?? 32}) · 512-D MERA ${(ws.meraIrEntropy ?? 0).toFixed(2)}`],
+    ['32-Qubit (χ=32) Vidal MPS & 512-D MERA', `32Q S ${(ws.mps32MaxEntropy ?? ws.mpsEntropy ?? 0).toFixed(2)} (χ=${ws.mps32MaxBond ?? 32}) · VC≤${(ws.vcTruncBound ?? 0).toExponential(1)} · M2 ${(ws.stabilizerMagicM2 ?? 0).toFixed(2)}`],
+    ['KS Contextuality (KCBS / CEGA-18 / Hoggar)', `KCBS ${(ws.kcbsValue ?? 2.236).toFixed(3)} · CEGA ${(ws.cegaValue ?? 9.0).toFixed(1)} · Hog ${(ws.hoggarFloor ?? 0.333).toFixed(3)} · C3 Δ${(ws.c3CospectralGap ?? 0.025).toFixed(3)}`],
+    ['HEPTARCH 7-Seat Council & ColdStrike', cr.heptarch ? `${cr.heptarch.mode} · ${cr.heptarch.dominantSeat} · CS#${cr.heptarch.csPhase} · Cap ${(cr.heptarch.capacitor ?? 0).toFixed(2)} · ToM k=${cr.heptarch.tomLevel}` : '—'],
     ['predictive-coding error / surprise', `${cr.pc.err.toFixed(3)} / ${cr.pc.surprise.toFixed(2)}`],
     ['thirst / water drunk', `${cr.metab.thirst.toFixed(2)} / ${(cr.stats.drinks || 0).toFixed(1)}`],
     ['5-Clade Zygote (' + (cr.body.hox?.cladeName || (cr.body.activeLimbs + 'L')) + ')', cr.body.activeLimbs > 0 ? Array.from(cr.body.limbLen).slice(0, cr.body.activeLimbs).map((x) => x.toFixed(2)).join(' ') : 'limbless undulatory serpent'],
@@ -885,7 +917,37 @@ function drawPanel() {
     ['ATP / heart rate (baroreflex)', `${M.atp.toFixed(2)} · ${M.hr.toFixed(0)} bpm`],
     ['water gut / blood · bladder / colon', `${M.gut.water.toFixed(2)}/${M.blood.water.toFixed(2)} · ${M.bladder.toFixed(2)}/${M.colon.toFixed(2)}`],
     ['hunger / thirst / distance', `${M.hunger().toFixed(2)} / ${M.thirst.toFixed(2)} · ${cr.stats.dist.toFixed(1)} u`],
+    ['Cryptochrome-4 compass / Levin V_mem', cr.heptarch ? `coh ${(cr.heptarch.spinCoherence ?? 0).toFixed(2)} · limb0 ${((cr.heptarch.limbIntegrity[0] ?? 1) * 100).toFixed(0)}% (${(cr.heptarch.vMem[0] ?? -50.5).toFixed(1)} mV)` : '—'],
   ]);
+
+  if ($('heptarch-bars') && cr.heptarch) {
+    const H = cr.heptarch;
+    const seatNames = ['Surge', 'Chrono', 'Keel', 'Capacitor', 'Wildcard', 'LongGame', 'Jester'];
+    const csNames = ['Idle', 'Recon', 'Feign', 'Compile', 'Clamp', 'Commit', 'Zenkai'];
+    if ($('heptarch-mode')) {
+      $('heptarch-mode').textContent = `${H.mode} · ${H.dominantSeat} · CS:${csNames[H.csPhase] || 'Idle'}`;
+    }
+    bars($('heptarch-bars'), seatNames.map((nm, i) => [`${nm} ${((H.seats[i] || 0) * 100).toFixed(0)}%`, (H.seats[i] || 0) / 0.46]));
+  }
+
+  if ($('domestats')) {
+    const W = cr.world, D = W.dome || {}, L = W.ledger || {}, H = cr.heptarch, E = cr.eco;
+    const r = H?.rungs || {};
+    const castes = E?.casteCounts || {};
+    let maxSeat = 0;
+    if (H?.seats) for (let i = 0; i < 7; i++) if (H.seats[i] > maxSeat) maxSeat = H.seats[i];
+    stats($('domestats'), [
+      ['First-Law 11-pool FP64 Kahan closure', `err ${(L.closureErr ?? 0).toExponential(2)} (< 1e-12) · rad ${(D.stefanBoltzmannKW ?? 0).toFixed(2)} kW`],
+      ['Dome atmosphere & Daisyworld albedo', `O₂ ${(D.o2 ?? 20.95).toFixed(2)}% · CO₂ ${Math.round(D.co2 ?? 412)} ppm · alb ${(D.albedo ?? 0.42).toFixed(3)} · ΔT ${(D.greenhouseDeltaC >= 0 ? '+' : '') + (D.greenhouseDeltaC ?? 0).toFixed(2)}°C`],
+      ['Geomagnetic field & FMO vibronic-ENAQT', `${(D.fieldUT ?? 48.5).toFixed(1)} μT · storm ${(D.auroraStorm ?? 0).toFixed(2)} · ENAQT ${((D.meanEnaqt ?? 0.72) * 100).toFixed(1)}% vs Förster ${((W.plants?.[0]?.forsterEff ?? 0.56) * 100).toFixed(1)}%`],
+      ['NESTOR 23-rung precision & BSS motifs', `spindle R${r.spindleReflex ?? 5} · CfC R${r.gangliaCfC ?? 8} · CTX R${r.cortexCSR ?? 10} · VAE R${r.foveaFlowVAE ?? 15} · N=${(H?.activeMotifs ?? 24).toFixed(1)} (Exuvia ${H?.exuviaCount ?? 0})`],
+      ['HEPTARCH anti-monarchy & ColdStrike', `max π ${(maxSeat).toFixed(3)} ≤ 0.46 · Cap ${(H?.capacitor ?? 0).toFixed(2)} · TTC ${(H?.ttc ?? 60).toFixed(0)}s · strikes ${H?.coldStrikesCompleted ?? 0}`],
+      ['5-Caste Colony + RS[15,11] acoustic ECC', E ? `α:${castes['Sovereign α'] || 0} β:${castes['Harvester β'] || 0} γ:${castes['Sentinel γ'] || 0} δ:${castes['Weaver δ'] || 0} ε:${castes['Disruptor ε'] || 0} · R=${(E.colonyOrderR ?? 0).toFixed(2)} · RS repaired ${E.stats.rsSymbolsRepaired ?? 0}` : '—'],
+      ['Xenomimics (Bell twins) & Xylos (2-GW)', E ? `CHSH S=${(E.xenomimics?.[0]?.chshS ?? 2.65).toFixed(2)} (bias ${(E.xenomimics?.[0]?.marginalBias ?? 0).toFixed(2)}) · Xylos ${E.xylos?.length || 0} · slime ${W.slimeTrails?.length || 0}` : '—'],
+      ['Titans (IPD treaties) & Shoggoths (meek)', E ? `alliances ${E.stats.titanAlliances ?? 0} · wars ${E.stats.titanWars ?? 0} · bargains ${E.stats.shoggothBargains ?? 0} · meek ${(E.shoggoths?.[0]?.meek ?? 0.8).toFixed(2)}` : '—'],
+      ['Sanctuaries, Monoliths & Lithic Tools', `refuge saves ${E?.stats?.sanctuarySaves ?? 0} · nectar ${cr.stats.sanctuaryFeeds || 0} · monoliths ${cr.stats.monolithResonances || 0} · caches ${cr.stats.cachesOpened || 0} · stones ${cr.stats.stonesMoved || 0}`],
+    ]);
+  }
 
   if ($('ecostats')) {
     const E = cr.eco, W = cr.world;
@@ -898,7 +960,8 @@ function drawPanel() {
       ['3D bioluminescent eggs / hatched births', E ? `${E.eggs.length} incubating · ${E.stats.eggsLaid} laid · ${E.stats.births} hatched` : '0'],
       ['photonic bio-mites / pollinations', E ? `${E.mites.length} mites · ${E.stats.pollinationEvents} pollinations · ${E.stats.mitesEaten} eaten` : '0'],
       ['Shadow-Leviathans / Schreckstoff alarms', E ? `${E.predators.length} patrolling · ${E.stats.alarmCalls} alarms` : '0'],
-      ['64×64×3 pheromone + 32×32 mycelia', `pher ${(W.pherMean || 0).toFixed(4)} · soil N ${(W.meanSoilN || 0.5).toFixed(3)} · ${W.mycelia.length} hyphae`],
+      ['64×64×3 pheromone + 32×32 mycelia', `pher ${(W.pherMean || 0).toFixed(4)} · soil N ${(W.meanSoilN || 0.5).toFixed(3)} · ${W.mycelia.length} hyphae (Ising ${(W.dome?.isingOrder ?? 0).toFixed(2)})`],
+      ['Multi-Kingdom Dome Bestiary', E ? `Xenomimics ${E.xenomimics?.length || 0} · Xylos ${E.xylos?.length || 0} · Titans ${E.titans?.length || 0} · Shoggoths ${E.shoggoths?.length || 0}` : '—'],
     ]);
   }
 

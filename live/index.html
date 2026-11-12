@@ -33,7 +33,7 @@
 </nav>
 <aside id="panel" class="panel" hidden>
   <div class="tabs" role="tablist">
-    <button role="tab" data-tab="brain" aria-selected="true">Brain</button><button role="tab" data-tab="body">Body</button><button role="tab" data-tab="eco">Ecology</button><button role="tab" data-tab="flaws">Flaws</button><button role="tab" data-tab="world">World</button><button role="tab" data-tab="lab">Lesions</button><button role="tab" data-tab="about">Real?</button>
+    <button role="tab" data-tab="brain" aria-selected="true">Brain</button><button role="tab" data-tab="dome">Dome</button><button role="tab" data-tab="body">Body</button><button role="tab" data-tab="eco">Ecology</button><button role="tab" data-tab="flaws">Flaws</button><button role="tab" data-tab="world">World</button><button role="tab" data-tab="lab">Lesions</button><button role="tab" data-tab="about">Real?</button>
   </div>
   <section data-pane="brain">
     <div class="row"><b>Spikes</b> <small id="spk-label">3,268 16-comp Discrete-Markov neurons, rows by region</small></div>
@@ -47,6 +47,17 @@
     <div class="row"><b>32×16 Flow-VAE + +300s HTN WM</b> <small>+0.1s / +2s BPTT / +60s / +300s HTN-MCTS + 32×16 Flow</small></div><canvas id="wm" width="360" height="50"></canvas>
     <div class="row"><b>Thought curvature, 32Q MPS &amp; MERA</b> <small>Eshkol κ(t), τ(t), 32Q χ=32 MPS &amp; 512-D MERA</small></div><canvas id="metacog" width="360" height="44"></canvas>
     <div id="mindstats" class="stats"></div>
+  </section>
+  <section data-pane="dome" hidden>
+    <p class="small"><b>Layer-1 Geodesic Biodome &amp; HEPTARCH v0.2 Council:</b> 7-seat anti-monarchy arbitration (<code>max π_m ≤ 0.46</code>), Raider 6-phase <code>ColdStrike</code>, NESTOR 23-rung precision governor + <code>DSD/RSR</code> + <code>Exuvia</code> escape, <code>RS[15,11]</code> bio-acoustic ECC, <code>Cryptochrome-4</code> compass, <code>Levin V_mem</code> limb regeneration, 11-pool <code>FP64</code> Kahan First-Law ledger, 4 Quantum Monoliths + <code>C3</code> twins, and 4 Multi-Kingdom Dome species.</p>
+    <div class="row"><b>HEPTARCH 7-Seat Council</b> <small id="heptarch-mode">Stillwater · Keel</small></div>
+    <div id="heptarch-bars"></div>
+    <div class="btns">
+      <button id="dome-storm" title="Pulse a geomagnetic aurora storm across the Geodesic Biodome">⚡ Aurora Storm</button>
+      <button id="dome-refuge" title="Toggle GATE-DOME-REFUGE Big-Tree Sanctuary predation ward for causal V4 audit">🛡 Refuge: ON</button>
+      <button id="dome-trauma" title="Inflict reversible trauma on limb 0 to watch Levin V_mem gap-junction blastema regrowth">🦿 Limb Trauma</button>
+    </div>
+    <div id="domestats" class="stats"></div>
   </section>
   <section data-pane="body" hidden><div id="bodystats" class="stats"></div><canvas id="meta" width="360" height="90"></canvas></section>
   <section data-pane="eco" hidden>

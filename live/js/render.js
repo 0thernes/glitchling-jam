@@ -14,6 +14,7 @@ import { NS, CH } from './sim/body.js';
 import { REGIONS, R0, NNEU } from './sim/brain.js';
 import { SW, SH } from './sim/skin.js';
 import { WORLD } from './sim/world.js';
+import { clamp } from './sim/util.js';
 
 const HUES = [0x34f5a6, 0xff44d8, 0x38e8ff, 0xffb838];
 const RING_M = 48, RING_S = 96;
@@ -395,6 +396,7 @@ export class View {
     this.buildTerrain();
     this.buildGrass();
     this.buildProps();
+    this.buildDome();
     this.buildEcosystem();
     this.buildCreature();
     this.buildWeather();
@@ -1288,6 +1290,355 @@ export class View {
     }
   }
 
+  // ------------------------------------------------------------------ Layer-1 Geodesic Biodome, Anomaly Tori, Big-Tree Sanctuaries, Crystal Monoliths + C3 Twins & Lithic Tools
+  buildDome() {
+    const W = this.cr.world;
+    this.domeGroup = new THREE.Group();
+    this.scene.add(this.domeGroup);
+
+    const rDome = W.dome?.radius || 21.6;
+
+    // 1) Translucent Geodesic Biodome Canopy Shell + Strut Lattice + Grounded Horizon Containment Ring
+    const shellGeo = new THREE.SphereGeometry(rDome, 36, 20, 0, Math.PI * 2, 0, Math.PI * 0.52);
+    this.domeShellMat = new THREE.MeshPhysicalMaterial({
+      color: 0x3ad8ff,
+      emissive: 0x0b4c6e,
+      emissiveIntensity: 0.35,
+      roughness: 0.12,
+      metalness: 0.08,
+      transparent: true,
+      opacity: 0.055,
+      side: THREE.BackSide,
+      depthWrite: false,
+    });
+    this.domeShellMesh = new THREE.Mesh(shellGeo, this.domeShellMat);
+    this.domeShellMesh.position.y = -0.35;
+    this.domeGroup.add(this.domeShellMesh);
+
+    const icoGeo = new THREE.IcosahedronGeometry(rDome - 0.04, 3);
+    const icoPos = icoGeo.attributes.position;
+    for (let i = 0; i < icoPos.count; i++) {
+      const y = icoPos.getY(i);
+      if (y < -0.6) icoPos.setY(i, -0.6);
+    }
+    const wireGeo = new THREE.WireframeGeometry(icoGeo);
+    this.domeWireMat = new THREE.LineBasicMaterial({
+      color: 0x5ce8ff,
+      transparent: true,
+      opacity: 0.14,
+      depthWrite: false,
+    });
+    this.domeWire = new THREE.LineSegments(wireGeo, this.domeWireMat);
+    this.domeGroup.add(this.domeWire);
+
+    const baseRingGeo = new THREE.TorusGeometry(rDome, 0.14, 12, 96);
+    baseRingGeo.rotateX(Math.PI / 2);
+    this.domeRingMat = new THREE.MeshStandardMaterial({
+      color: 0x264860,
+      emissive: 0x22b8e0,
+      emissiveIntensity: 0.75,
+      roughness: 0.28,
+      metalness: 0.65,
+    });
+    this.domeBaseRing = new THREE.Mesh(baseRingGeo, this.domeRingMat);
+    this.domeBaseRing.position.y = 0.05;
+    this.domeGroup.add(this.domeBaseRing);
+
+    // 2) 3 Reality-Glitch Physics Anomaly Tori (low-g cyan, chrono-visc violet, sensory-crack amber)
+    this.anomalyMeshes = [];
+    for (const az of (W.anomalyZones || [])) {
+      const grp = new THREE.Group();
+      const col = new THREE.Color().setHSL(az.hue ?? 0.53, 0.92, 0.58);
+      const rMat = new THREE.MeshStandardMaterial({
+        color: col,
+        emissive: col,
+        emissiveIntensity: 1.15,
+        roughness: 0.2,
+        transparent: true,
+        opacity: 0.68,
+      });
+      const outer = new THREE.Mesh(new THREE.TorusGeometry(az.r, 0.045, 10, 48), rMat);
+      outer.rotation.x = Math.PI / 2;
+      const inner = new THREE.Mesh(new THREE.TorusGeometry(az.r * 0.62, 0.032, 8, 36), rMat);
+      inner.rotation.x = Math.PI * 0.36;
+      const floorDisc = new THREE.Mesh(
+        new THREE.CircleGeometry(az.r * 0.96, 36),
+        new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.09, side: THREE.DoubleSide, depthWrite: false })
+      );
+      floorDisc.rotation.x = -Math.PI / 2;
+      floorDisc.position.y = -0.26;
+      grp.add(outer, inner, floorDisc);
+      grp.position.set(az.x, az.y, az.z);
+      this.domeGroup.add(grp);
+      this.anomalyMeshes.push({ grp, outer, inner, rMat });
+    }
+
+    // 3) 2 Giant Bioluminescent Big-Tree Sanctuaries (`GATE-DOME-REFUGE` canopy + buttress roots + golden nectar orbs)
+    this.sanctuaryMeshes = [];
+    for (const sc of (W.sanctuaries || [])) {
+      const grp = new THREE.Group();
+      const trunkMat = new THREE.MeshStandardMaterial({
+        color: 0x3b2d26,
+        emissive: new THREE.Color().setHSL(sc.hue, 0.75, 0.12),
+        roughness: 0.78,
+      });
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.78, sc.h, 12), trunkMat);
+      trunk.position.y = sc.h * 0.48;
+      trunk.castShadow = true;
+      grp.add(trunk);
+
+      for (let b = 0; b < 5; b++) {
+        const ang = (b * Math.PI * 2) / 5;
+        const root = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.35, 6), trunkMat);
+        root.position.set(Math.cos(ang) * 0.62, 0.48, Math.sin(ang) * 0.62);
+        root.rotation.z = -Math.cos(ang) * 0.42;
+        root.rotation.x = Math.sin(ang) * 0.42;
+        grp.add(root);
+      }
+
+      const canCol = new THREE.Color().setHSL(sc.hue, 0.88, 0.52);
+      const canopyMat = new THREE.MeshPhysicalMaterial({
+        color: canCol,
+        emissive: canCol,
+        emissiveIntensity: 0.72,
+        roughness: 0.25,
+        transmission: 0.35,
+        transparent: true,
+        opacity: 0.84,
+        side: THREE.DoubleSide,
+      });
+      const canopy = new THREE.Mesh(new THREE.SphereGeometry(sc.r * 0.76, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.56), canopyMat);
+      canopy.position.y = sc.h * 0.86;
+      canopy.scale.set(1, 0.62, 1);
+      grp.add(canopy);
+
+      const orbs = [];
+      const orbGeo = new THREE.SphereGeometry(0.14, 12, 10);
+      const orbMat = new THREE.MeshStandardMaterial({
+        color: 0xffe27a,
+        emissive: 0xffb830,
+        emissiveIntensity: 1.45,
+        roughness: 0.18,
+      });
+      for (let k = 0; k < 6; k++) {
+        const oa = (k * Math.PI) / 3 + 0.25;
+        const om = new THREE.Mesh(orbGeo, orbMat);
+        om.position.set(Math.cos(oa) * sc.r * 0.52, sc.h * 0.74, Math.sin(oa) * sc.r * 0.52);
+        grp.add(om);
+        orbs.push(om);
+      }
+
+      const wardRing = new THREE.Mesh(
+        new THREE.RingGeometry(sc.r - 0.12, sc.r, 48),
+        new THREE.MeshBasicMaterial({ color: canCol, transparent: true, opacity: 0.36, side: THREE.DoubleSide, depthWrite: false })
+      );
+      wardRing.rotation.x = -Math.PI / 2;
+      wardRing.position.y = 0.06;
+      grp.add(wardRing);
+
+      grp.position.set(sc.x, sc.y, sc.z);
+      this.domeGroup.add(grp);
+      this.sanctuaryMeshes.push({ grp, canopyMat, orbMat, orbs, wardRing });
+    }
+
+    // 4) 4 Quantum-Geometric Crystal Monoliths + C3 Cospectral Twin Obelisks (sigma_0 / sigma_1)
+    this.monolithMeshes = [];
+    for (const mn of (W.monoliths || [])) {
+      const grp = new THREE.Group();
+      const col = new THREE.Color().setHSL(mn.hue ?? 0.52, 0.9, 0.58);
+      const cMat = new THREE.MeshPhysicalMaterial({
+        color: col,
+        emissive: col,
+        emissiveIntensity: 0.95,
+        roughness: 0.08,
+        metalness: 0.22,
+        transmission: 0.45,
+        iridescence: 0.85,
+        transparent: true,
+        opacity: 0.9,
+      });
+      let spireGeo;
+      if (mn.kind === 'ck31') spireGeo = new THREE.OctahedronGeometry(0.78, 1);
+      else if (mn.kind === 'cabello33') spireGeo = new THREE.CylinderGeometry(0.38, 0.62, mn.h, 6);
+      else if (mn.kind === 'cega18') spireGeo = new THREE.OctahedronGeometry(0.82, 0);
+      else spireGeo = new THREE.ConeGeometry(0.58, mn.h, 8);
+
+      const spire = new THREE.Mesh(spireGeo, cMat);
+      spire.position.y = mn.kind === 'cabello33' || mn.kind === 'hoggar64' ? mn.h * 0.5 : 1.45;
+      if (mn.kind === 'ck31' || mn.kind === 'cega18') spire.scale.set(1, 1.75, 1);
+      spire.castShadow = true;
+      grp.add(spire);
+
+      const ped = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.82, 1.05, 0.34, 8),
+        new THREE.MeshStandardMaterial({ color: 0x1d2736, roughness: 0.55, metalness: 0.5 })
+      );
+      ped.position.y = 0.17;
+      grp.add(ped);
+
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.035, 8, 36), cMat);
+      halo.position.y = 1.65;
+      halo.rotation.x = Math.PI * 0.42;
+      grp.add(halo);
+
+      // Flanking C3 Cospectral Twin Obelisks on Hoggar-64 monolith: sigma_0 (contextual trap) vs sigma_1 (Jordan-safe)
+      if (mn.twins) {
+        for (const tw of mn.twins) {
+          const twCol = tw.safe ? new THREE.Color(0x42f5a7) : new THREE.Color(0xff5277);
+          const twMat = new THREE.MeshPhysicalMaterial({
+            color: twCol,
+            emissive: twCol,
+            emissiveIntensity: 0.85,
+            roughness: 0.14,
+            metalness: 0.25,
+            transparent: true,
+            opacity: 0.88,
+          });
+          const ob = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.28, 1.55, 6), twMat);
+          ob.position.set(tw.dx, 0.78, tw.dz);
+          grp.add(ob);
+        }
+      }
+
+      grp.position.set(mn.x, mn.y, mn.z);
+      this.domeGroup.add(grp);
+      this.monolithMeshes.push({ grp, spire, halo, cMat });
+    }
+
+    // 5) 6 Movable Lithic DomeStones, 4 Spoiling DomeCaches & up to 16 Shed Exuvia Chitin Shells
+    this.stoneMeshes = [];
+    const stoneGeo = new THREE.DodecahedronGeometry(1, 1);
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x8b95a6, roughness: 0.68, metalness: 0.22 });
+    for (const st of (W.domeStones || [])) {
+      const m = new THREE.Mesh(stoneGeo, stoneMat);
+      m.scale.set(st.r * 1.15, st.r * 0.82, st.r * 1.05);
+      m.castShadow = true;
+      m.position.set(st.x, st.y, st.z);
+      this.domeGroup.add(m);
+      this.stoneMeshes.push(m);
+    }
+
+    this.cacheMeshes = [];
+    const cacheGeo = new THREE.IcosahedronGeometry(0.24, 1);
+    for (const dc of (W.domeCaches || [])) {
+      const cMat = new THREE.MeshStandardMaterial({
+        color: dc.hardShell ? 0xd9a441 : 0x72e896,
+        emissive: dc.hardShell ? 0x6e4810 : 0x1e6b38,
+        emissiveIntensity: 0.65,
+        roughness: 0.32,
+      });
+      const m = new THREE.Mesh(cacheGeo, cMat);
+      m.position.set(dc.x, dc.y, dc.z);
+      this.domeGroup.add(m);
+      this.cacheMeshes.push({ mesh: m, mat: cMat });
+    }
+
+    this.exuviaMeshes = [];
+    const exGeo = new THREE.SphereGeometry(0.22, 12, 8);
+    exGeo.scale(1.45, 0.55, 0.85);
+    for (let i = 0; i < 16; i++) {
+      const exMat = new THREE.MeshPhysicalMaterial({
+        color: 0xc8eef8,
+        emissive: 0x24586e,
+        emissiveIntensity: 0.35,
+        roughness: 0.25,
+        transmission: 0.55,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const m = new THREE.Mesh(exGeo, exMat);
+      m.visible = false;
+      this.domeGroup.add(m);
+      this.exuviaMeshes.push({ mesh: m, mat: exMat });
+    }
+  }
+
+  syncDome(t, day) {
+    const W = this.cr.world;
+    if (!this.domeGroup || !W.dome) return;
+    const D = W.dome;
+    // Clamp all Dome & Sanctuary visual pulses strictly <= 3 Hz (here 0.25..0.65 Hz)!
+    const slowPulse = 0.5 + 0.5 * Math.sin(t * 2.1); // 0.33 Hz
+    const storm = D.auroraStorm || 0;
+    this.domeShellMat.opacity = 0.045 + 0.075 * storm * slowPulse + 0.02 * (1 - day);
+    this.domeShellMat.emissive.setHSL((0.52 + 0.16 * storm) % 1, 0.85, 0.18 + 0.22 * storm);
+    this.domeWireMat.opacity = 0.11 + 0.14 * storm * slowPulse;
+    this.domeRingMat.emissiveIntensity = 0.55 + 0.65 * slowPulse + 0.8 * storm;
+
+    if (W.anomalyZones) {
+      for (let i = 0; i < this.anomalyMeshes.length; i++) {
+        const az = W.anomalyZones[i], am = this.anomalyMeshes[i];
+        if (!az || !am) continue;
+        am.grp.position.set(az.x, az.y, az.z);
+        am.outer.rotation.z = t * 0.65 * (i % 2 === 0 ? 1 : -1);
+        am.inner.rotation.y = t * 0.95;
+        am.rMat.emissiveIntensity = 0.85 + 0.45 * Math.sin(t * 2.6 + i);
+      }
+    }
+
+    if (W.sanctuaries) {
+      for (let i = 0; i < this.sanctuaryMeshes.length; i++) {
+        const sc = W.sanctuaries[i], sm = this.sanctuaryMeshes[i];
+        if (!sc || !sm) continue;
+        sm.grp.position.set(sc.x, W.height(sc.x, sc.z), sc.z);
+        const nec = clamp(sc.nectar ?? 0.8, 0, 1);
+        sm.canopyMat.emissiveIntensity = 0.55 + 0.45 * nec + 0.22 * (1 - day);
+        sm.orbMat.emissiveIntensity = 0.45 + 1.45 * nec * (0.8 + 0.2 * Math.sin(t * 2.8 + i));
+        for (let k = 0; k < sm.orbs.length; k++) {
+          sm.orbs[k].visible = nec > 0.08;
+          sm.orbs[k].scale.setScalar(0.45 + 0.65 * nec);
+        }
+      }
+    }
+
+    if (W.monoliths) {
+      for (let i = 0; i < this.monolithMeshes.length; i++) {
+        const mn = W.monoliths[i], mm = this.monolithMeshes[i];
+        if (!mn || !mm) continue;
+        mm.grp.position.set(mn.x, W.height(mn.x, mn.z), mn.z);
+        mm.spire.rotation.y = t * 0.45 + mn.phase;
+        mm.halo.rotation.z = -t * 0.75;
+        mm.cMat.emissiveIntensity = 0.45 + 1.05 * (mn.charge ?? 0.8) * (0.85 + 0.15 * Math.sin(t * 2.4 + i));
+      }
+    }
+
+    if (W.domeStones) {
+      for (let i = 0; i < this.stoneMeshes.length; i++) {
+        const st = W.domeStones[i], m = this.stoneMeshes[i];
+        if (!st || !m) continue;
+        m.position.set(st.x, st.heldBy ? st.y : W.height(st.x, st.z) + st.r * 0.72, st.z);
+      }
+    }
+
+    if (W.domeCaches) {
+      for (let i = 0; i < this.cacheMeshes.length; i++) {
+        const dc = W.domeCaches[i], cm = this.cacheMeshes[i];
+        if (!dc || !cm) continue;
+        cm.mesh.visible = dc.energy > 0.06;
+        if (!cm.mesh.visible) continue;
+        cm.mesh.position.set(dc.x, W.height(dc.x, dc.z) + 0.16, dc.z);
+        cm.mesh.scale.setScalar(0.65 + 0.45 * dc.energy);
+        const fresh = clamp(dc.freshness ?? 1, 0, 1);
+        cm.mat.color.setHSL(dc.hardShell ? 0.11 * fresh + 0.06 : 0.34 * fresh + 0.08, 0.45 + 0.45 * fresh, 0.32 + 0.26 * fresh);
+      }
+    }
+
+    const exArr = W.exuvia || [];
+    for (let i = 0; i < this.exuviaMeshes.length; i++) {
+      const em = this.exuviaMeshes[i];
+      if (i >= exArr.length) {
+        em.mesh.visible = false;
+        continue;
+      }
+      const ex = exArr[i];
+      em.mesh.visible = true;
+      em.mesh.position.set(ex.x, W.height(ex.x, ex.z) + 0.09, ex.z);
+      em.mesh.scale.setScalar(0.55 + 0.55 * (ex.mineral ?? 0.8));
+      em.mat.color.setHSL(ex.hue ?? 0.72, 0.45, 0.68);
+      em.mat.opacity = 0.25 + 0.48 * (ex.mineral ?? 0.8);
+    }
+  }
+
   // ------------------------------------------------------------------ 32-Peer Skinned Biosphere, Translucent Eggs, Bio-Mites & Shadow-Leviathans
   buildEcosystem() {
     const S = this.scene;
@@ -1568,6 +1919,171 @@ export class View {
     this.mushroomStems.instanceMatrix.needsUpdate = true;
     if (this.mushroomCaps.instanceColor) this.mushroomCaps.instanceColor.needsUpdate = true;
     this.scene.add(this.mushroomCaps, this.mushroomStems);
+
+    // 7) Multi-Kingdom Dome Species: Xenomimic Bell Twins, Xylos Poincare Gliders, Geopolitical Titans & Amorphous Shoggoths
+    this.xenomimicPool = [];
+    const xmBodyGeo = new THREE.ConeGeometry(0.18, 0.72, 8);
+    xmBodyGeo.rotateX(Math.PI / 2);
+    const xmWingGeo = new THREE.BoxGeometry(0.88, 0.03, 0.34);
+    for (let i = 0; i < 4; i++) {
+      const grp = new THREE.Group();
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: 0x42e8ff,
+        emissive: 0x1685d8,
+        emissiveIntensity: 0.9,
+        roughness: 0.14,
+        metalness: 0.25,
+        iridescence: 0.95,
+      });
+      const body = new THREE.Mesh(xmBodyGeo, mat);
+      const wing = new THREE.Mesh(xmWingGeo, mat);
+      const core = new THREE.Mesh(
+        new THREE.SphereGeometry(0.11, 12, 10),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x7af5ff, emissiveIntensity: 1.6 })
+      );
+      core.position.y = 0.08;
+      grp.add(body, wing, core);
+      grp.visible = false;
+      this.ecoGroup.add(grp);
+      this.xenomimicPool.push({ grp, wing, mat, core });
+    }
+    // 2 Entanglement Bell Ribbons linking twin pairs (0<->1, 2<->3)
+    this.bellRibbons = [];
+    for (let p = 0; p < 2; p++) {
+      const rGeo = new THREE.BufferGeometry();
+      rGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12 * 3), 3));
+      const rMat = new THREE.LineBasicMaterial({ color: 0x70f8ff, transparent: true, opacity: 0.55 });
+      const ln = new THREE.Line(rGeo, rMat);
+      ln.frustumCulled = false;
+      ln.visible = false;
+      this.ecoGroup.add(ln);
+      this.bellRibbons.push({ line: ln, geo: rGeo, mat: rMat });
+    }
+
+    // Xylos (4 radial 6-lobe Poincare-disk gliders with 2-slot Global Workspace highlight)
+    this.xylosPool = [];
+    const xyDomeGeo = new THREE.SphereGeometry(0.32, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.6);
+    const xyLobeGeo = new THREE.SphereGeometry(0.11, 10, 8);
+    xyLobeGeo.scale(1.6, 0.55, 0.85);
+    for (let i = 0; i < 4; i++) {
+      const grp = new THREE.Group();
+      const bellMat = new THREE.MeshPhysicalMaterial({
+        color: 0x62ffd2,
+        emissive: 0x168a72,
+        emissiveIntensity: 0.65,
+        roughness: 0.16,
+        transmission: 0.52,
+        transparent: true,
+        opacity: 0.84,
+        side: THREE.DoubleSide,
+      });
+      const bell = new THREE.Mesh(xyDomeGeo, bellMat);
+      grp.add(bell);
+      const lobes = [];
+      for (let l = 0; l < 6; l++) {
+        const lMat = new THREE.MeshStandardMaterial({
+          color: 0x48e8c8,
+          emissive: 0x157868,
+          emissiveIntensity: 0.5,
+          roughness: 0.25,
+        });
+        const lm = new THREE.Mesh(xyLobeGeo, lMat);
+        const la = (l * Math.PI) / 3;
+        lm.position.set(Math.cos(la) * 0.36, -0.02, Math.sin(la) * 0.36);
+        lm.rotation.y = -la;
+        grp.add(lm);
+        lobes.push({ mesh: lm, mat: lMat });
+      }
+      grp.visible = false;
+      this.ecoGroup.add(grp);
+      this.xylosPool.push({ grp, bell, bellMat, lobes });
+    }
+
+    // Titans (3 towering 1.4u geopolitical litho-colossi with emerald/cyan/crimson IPD treaty cores)
+    this.titanPool = [];
+    const tiTorsoGeo = new THREE.DodecahedronGeometry(0.62, 0);
+    const tiPlateGeo = new THREE.OctahedronGeometry(0.24, 0);
+    for (let i = 0; i < 3; i++) {
+      const grp = new THREE.Group();
+      const armorMat = new THREE.MeshStandardMaterial({
+        color: 0x2d3545,
+        emissive: 0x101826,
+        roughness: 0.42,
+        metalness: 0.68,
+      });
+      const torso = new THREE.Mesh(tiTorsoGeo, armorMat);
+      torso.scale.set(0.95, 1.45, 0.95);
+      torso.position.y = 0.95;
+      torso.castShadow = true;
+      grp.add(torso);
+
+      const coreMat = new THREE.MeshStandardMaterial({
+        color: 0x3cf5a8,
+        emissive: 0x22e890,
+        emissiveIntensity: 1.5,
+        roughness: 0.15,
+      });
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), coreMat);
+      core.position.y = 1.65;
+      grp.add(core);
+
+      const plates = [];
+      for (let k = 0; k < 3; k++) {
+        const pm = new THREE.Mesh(tiPlateGeo, armorMat);
+        grp.add(pm);
+        plates.push(pm);
+      }
+
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x3cf5a8, transparent: true, opacity: 0.38, side: THREE.DoubleSide, depthWrite: false });
+      const ring = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.28, 36), ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.05;
+      grp.add(ring);
+
+      grp.visible = false;
+      this.ecoGroup.add(grp);
+      this.titanPool.push({ grp, torso, core, coreMat, plates, ringMat });
+    }
+
+    // Shoggoths (2 amorphous opalescent ambushers whose tendrils & glow clamp by meek = 1 - 0.6 * deceive)
+    this.shoggothPool = [];
+    const shCoreGeo = new THREE.IcosahedronGeometry(0.44, 2);
+    const shTentGeo = new THREE.ConeGeometry(0.085, 0.68, 7);
+    shTentGeo.rotateX(Math.PI / 2);
+    for (let i = 0; i < 2; i++) {
+      const grp = new THREE.Group();
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: 0x2b193d,
+        emissive: 0x6a1eb8,
+        emissiveIntensity: 0.85,
+        roughness: 0.12,
+        clearcoat: 1.0,
+        iridescence: 0.9,
+      });
+      const core = new THREE.Mesh(shCoreGeo, mat);
+      core.scale.set(1.15, 0.72, 1.15);
+      core.position.y = 0.28;
+      grp.add(core);
+
+      const tendrils = [];
+      for (let k = 0; k < 6; k++) {
+        const tm = new THREE.Mesh(shTentGeo, mat);
+        grp.add(tm);
+        tendrils.push(tm);
+      }
+      const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffd25a, emissive: 0xff5a2a, emissiveIntensity: 1.3 });
+      const eyes = [];
+      for (let e = 0; e < 4; e++) {
+        const em = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), eyeMat);
+        const ea = (e * Math.PI) / 2 + 0.4;
+        em.position.set(Math.cos(ea) * 0.28, 0.46, Math.sin(ea) * 0.28);
+        grp.add(em);
+        eyes.push(em);
+      }
+      grp.visible = false;
+      this.ecoGroup.add(grp);
+      this.shoggothPool.push({ grp, core, mat, tendrils, eyeMat });
+    }
   }
 
   syncEcosystem(t) {
@@ -1612,8 +2128,9 @@ export class View {
       const crestH = 0.15 * (p.gen.crestFin ?? 1.0) * p.scale;
       slot.bodyMat.color.setHSL(hue, 0.74 - 0.35 * p.camo, 0.42 + 0.10 * p.courtship);
       slot.bodyMat.emissive.setHSL((hue + 0.08) % 1, 0.88, 0.12 + 0.22 * p.courtship + 0.12 * p.vocalAmp);
-      slot.crestMat.color.setHSL((hue + 0.14) % 1, 0.92, 0.58);
-      slot.crestMat.emissive.setHSL((hue + 0.14) % 1, 0.95, 0.32 + 0.28 * p.courtship);
+      const casteHue = p.casteId === 0 ? 0.13 : p.casteId === 2 ? 0.56 : p.casteId === 3 ? 0.08 : p.casteId === 4 ? 0.86 : ((hue + 0.14) % 1);
+      slot.crestMat.color.setHSL(casteHue, 0.92, 0.58);
+      slot.crestMat.emissive.setHSL(casteHue, 0.95, 0.32 + 0.28 * p.courtship + (p.casteId === 0 ? 0.2 : 0));
 
       const cPos = slot.crestGeo.attributes.position.array;
       for (let s = 0; s < 7; s++) {
@@ -1761,6 +2278,117 @@ export class View {
       const snap = 0.25 + 0.45 * pr.swoop + 0.15 * Math.sin(t * 7.5 + pr.ph);
       slot.jaws[0].rotation.y = snap;
       slot.jaws[1].rotation.y = -snap;
+    }
+
+    // 5) Sync Multi-Kingdom Dome Species (Xenomimics + Bell Ribbons, Xylos, Titans, Shoggoths; pulses <= 3 Hz)
+    const xenos = eco.xenomimics || [];
+    for (let i = 0; i < 4; i++) {
+      const slot = this.xenomimicPool[i];
+      if (!slot) continue;
+      if (i >= xenos.length) { slot.grp.visible = false; continue; }
+      const xm = xenos[i];
+      slot.grp.visible = true;
+      const hover = 0.36 + 0.08 * Math.sin(t * 3.2 + xm.phase);
+      slot.grp.position.set(xm.x, this.cr.world.height(xm.x, xm.z) + hover, xm.z);
+      slot.grp.rotation.set(0, -xm.hdg + Math.PI * 0.5, 0.18 * Math.sin(t * 3.8 + i));
+      slot.wing.rotation.z = 0.16 * Math.sin(t * 4.5 + xm.phase);
+      const h = xm.chirality > 0 ? 0.53 : 0.79; // +kappa cyan vs -kappa violet Bell twin!
+      slot.mat.color.setHSL(h, 0.92, 0.56);
+      slot.mat.emissive.setHSL(h, 0.95, 0.25 + 0.35 * (xm.bellFidelity ?? 0.8));
+    }
+    for (let p = 0; p < 2; p++) {
+      const rb = this.bellRibbons[p];
+      const a = xenos[2 * p], b = xenos[2 * p + 1];
+      if (!rb || !a || !b || (a.bellFidelity ?? 0) < 0.52) {
+        if (rb) rb.line.visible = false;
+        continue;
+      }
+      rb.line.visible = true;
+      const arr = rb.geo.attributes.position.array;
+      const ay = this.cr.world.height(a.x, a.z) + 0.42;
+      const by = this.cr.world.height(b.x, b.z) + 0.42;
+      for (let k = 0; k < 12; k++) {
+        const u = k / 11;
+        arr[3 * k] = a.x + (b.x - a.x) * u;
+        arr[3 * k + 1] = ay + (by - ay) * u + Math.sin(u * Math.PI) * (0.65 + 0.15 * Math.sin(t * 2.8 + p));
+        arr[3 * k + 2] = a.z + (b.z - a.z) * u;
+      }
+      rb.geo.attributes.position.needsUpdate = true;
+      rb.mat.opacity = clamp(((a.chshS ?? 2.4) - 2.0) * 0.65, 0.12, 0.68);
+    }
+
+    const xylos = eco.xylos || [];
+    for (let i = 0; i < 4; i++) {
+      const slot = this.xylosPool[i];
+      if (!slot) continue;
+      if (i >= xylos.length) { slot.grp.visible = false; continue; }
+      const xy = xylos[i];
+      slot.grp.visible = true;
+      slot.grp.position.set(xy.x, this.cr.world.height(xy.x, xy.z) + 0.24 + 0.05 * Math.sin(t * 2.6 + i), xy.z);
+      slot.grp.rotation.y = t * 0.45 + i;
+      const slotLobeA = (xy.gwSlotA ?? 0) % 6;
+      const slotLobeB = (xy.gwSlotB ?? 1) % 6;
+      for (let l = 0; l < 6; l++) {
+        const isGW = l === slotLobeA || l === slotLobeB;
+        const lb = slot.lobes[l];
+        lb.mat.color.setHex(isGW ? 0xffe478 : 0x48e8c8);
+        lb.mat.emissive.setHex(isGW ? 0xffa828 : 0x157868);
+        lb.mat.emissiveIntensity = isGW ? 1.55 : 0.42;
+        lb.mesh.scale.setScalar(isGW ? 1.25 : 0.92);
+      }
+    }
+
+    const titans = eco.titans || [];
+    for (let i = 0; i < 3; i++) {
+      const slot = this.titanPool[i];
+      if (!slot) continue;
+      if (i >= titans.length) { slot.grp.visible = false; continue; }
+      const ti = titans[i];
+      slot.grp.visible = true;
+      slot.grp.position.set(ti.x, this.cr.world.height(ti.x, ti.z), ti.z);
+      slot.torso.rotation.y = -ti.hdg;
+      slot.core.rotation.y = t * 0.9 + i;
+      // Geopolitical Treaty Signal: Crimson = War, Emerald = Alliance, Cyan = Truce
+      let hasWar = false, hasAlly = false;
+      if (ti.treaty) {
+        for (let j = 0; j < ti.treaty.length; j++) {
+          if (j === i) continue;
+          if (ti.treaty[j] === 'war') hasWar = true;
+          else if (ti.treaty[j] === 'alliance') hasAlly = true;
+        }
+      }
+      const colHex = hasWar ? 0xff3b5c : hasAlly ? 0x38f59c : 0x45d8ff;
+      slot.coreMat.color.setHex(colHex);
+      slot.coreMat.emissive.setHex(colHex);
+      slot.ringMat.color.setHex(colHex);
+      for (let k = 0; k < 3; k++) {
+        const pa = t * 0.85 + (k * Math.PI * 2) / 3 + i;
+        slot.plates[k].position.set(Math.cos(pa) * 0.82, 1.05 + 0.12 * Math.sin(t * 2.2 + k), Math.sin(pa) * 0.82);
+        slot.plates[k].rotation.set(pa, pa * 0.5, 0);
+      }
+    }
+
+    const shoggoths = eco.shoggoths || [];
+    for (let i = 0; i < 2; i++) {
+      const slot = this.shoggothPool[i];
+      if (!slot) continue;
+      if (i >= shoggoths.length) { slot.grp.visible = false; continue; }
+      const sh = shoggoths[i];
+      slot.grp.visible = true;
+      slot.grp.position.set(sh.x, this.cr.world.height(sh.x, sh.z), sh.z);
+      const meek = clamp(sh.meek ?? (1 - 0.6 * (sh.deceive ?? 0)), 0.4, 1.0);
+      const lunge = sh.ambush ?? 0;
+      slot.core.scale.set(1.12 + 0.14 * Math.sin(t * 2.5 + i), 0.58 + 0.25 * meek + 0.3 * lunge, 1.12 + 0.14 * Math.cos(t * 2.5 + i));
+      slot.mat.emissive.setHSL(lunge > 0.2 ? 0.96 : 0.78, 0.88, (0.14 + 0.32 * lunge) * meek);
+      slot.eyeMat.emissiveIntensity = (0.55 + 1.45 * lunge) * meek;
+      for (let k = 0; k < 6; k++) {
+        const ka = (k * Math.PI) / 3 + 0.15 * Math.sin(t * 2.4 + k);
+        const reach = (0.36 + 0.32 * meek + 0.42 * lunge);
+        const tm = slot.tendrils[k];
+        tm.position.set(Math.cos(ka) * reach, 0.16, Math.sin(ka) * reach);
+        tm.rotation.y = -ka + Math.PI * 0.5;
+        tm.scale.set(meek, meek, 0.65 + 0.55 * meek + 0.5 * lunge);
+      }
     }
   }
 
@@ -2446,7 +3074,8 @@ export class View {
       this.ventPlumes.visible = false;
     }
 
-    // 3) Sync Multi-Agent Biosphere
+    // 3) Sync Layer-1 Geodesic Dome & Multi-Agent Biosphere
+    this.syncDome(t, day);
     this.syncEcosystem(t);
 
     // 4) Sync Focal Creature 96x48 Organic Dermal Tube + Crest + Fluke + Mandible + Curved Antennae + 4/6/8 Limbs + Wet Eyes
@@ -2661,7 +3290,8 @@ export class View {
 
       // Deep shoulder/hip girdle root inside trunk -> hip -> biceps/femur belly -> knee -> forearm/crus -> autopod
       const xb = B.crossBridge ? (B.crossBridge[k % B.crossBridge.length] ?? 0.25) : 0.25;
-      const girthM = (cr.gen.bodyGirth ?? 1.0) * (1.0 + 0.22 * xb);
+      const limbInt = cr.heptarch ? (cr.heptarch.limbIntegrity[k % 10] ?? 1.0) : 1.0;
+      const girthM = (cr.gen.bodyGirth ?? 1.0) * (1.0 + 0.22 * xb) * (0.52 + 0.48 * limbInt);
       lt.pts[0][0] = sc[0] * 0.42 + hx * 0.58;
       lt.pts[0][1] = sc[1] * 0.42 + hy * 0.58;
       lt.pts[0][2] = sc[2] * 0.42 + hz * 0.58;
@@ -2769,7 +3399,8 @@ export class View {
       }
       writeCatmullTube(this.anglerTube.geo, 10, 8, this.anglerTube.pts, this.anglerTube.radii, fh.u);
       const tip = this.anglerTube.pts[4];
-      const pulse = 0.78 + 0.32 * Math.sin(t * 5.2) + 0.45 * (cr.vocalAmp ?? 0);
+      const emitScale = cr.lesion?.heptarch ? 1.0 : (1.0 - 0.6 * (cr.heptarch?.deceive ?? 0));
+      const pulse = (0.78 + 0.32 * Math.sin(t * 5.2) + 0.45 * (cr.vocalAmp ?? 0)) * emitScale;
       this.anglerEsca.position.set(tip[0], tip[1], tip[2]);
       this.anglerEsca.scale.setScalar((0.72 + 0.48 * lureSpan) * (0.94 + 0.08 * Math.sin(t * 5.2)));
       this.escaMat.emissiveIntensity = (1.5 + 1.4 * (1 - day)) * pulse;

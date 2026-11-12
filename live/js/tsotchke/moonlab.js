@@ -122,7 +122,7 @@ export function vidalMPS(vec, L = Math.min(8, Math.max(2, Math.round(Math.log2(v
   const norm = Math.sqrt(n2);
   if (norm < 1e-15) {
     return {
-      L, norm: 0, meanS: 0, maxS: 0, keptFidelity: 1, maxBond: 1,
+      L, norm: 0, meanS: 0, maxS: 0, keptFidelity: 1, vcTruncBound: 0, maxBond: 1,
       gammas: Array.from({ length: L }, () => ({ data: new Float64Array(2), lDim: 1, rDim: 1 })),
       lambdas: Array.from({ length: L - 1 }, () => Float64Array.of(1)),
     };
@@ -133,7 +133,7 @@ export function vidalMPS(vec, L = Math.min(8, Math.max(2, Math.round(Math.log2(v
   const gammas = [];
   const lambdas = [];
   let prevLambda = Float64Array.of(1);
-  let leftBond = 1, rightDim = N, meanS = 0, maxS = 0, fid = 1, maxBond = 1;
+  let leftBond = 1, rightDim = N, meanS = 0, maxS = 0, fid = 1, vcBound = 0, maxBond = 1;
 
   for (let site = 0; site < L - 1; site++) {
     const rows = leftBond * 2, cols = rightDim >> 1;
@@ -152,6 +152,12 @@ export function vidalMPS(vec, L = Math.min(8, Math.max(2, Math.round(Math.log2(v
         k2 += S[k] * S[k];
         lam[k] = S[k];
       }
+    }
+    // Verstraete-Cirac (2006) certified global MPS truncation error bound:
+    // || |psi> - |psi_chi> ||_2 <= sum_k sqrt(2 * delta_k / (1 + sqrt(1 - delta_k))), delta_k = 1 - keptWeight_k
+    const deltaCut = Math.max(0, Math.min(1, 1 - k2 / (s2 + 1e-18)));
+    if (deltaCut > 0) {
+      vcBound += Math.sqrt((2 * deltaCut) / (1 + Math.sqrt(Math.max(0, 1 - deltaCut))));
     }
     // Re-normalise truncated Schmidt values to preserve state norm
     const keepNorm = Math.sqrt(k2) || 1;
@@ -195,7 +201,7 @@ export function vidalMPS(vec, L = Math.min(8, Math.max(2, Math.round(Math.log2(v
   }
   gammas.push({ data: lastGam, lDim: leftBond, rDim: 1 });
 
-  return { L, norm, meanS, maxS, keptFidelity: Math.min(1, fid), maxBond, gammas, lambdas };
+  return { L, norm, meanS, maxS, keptFidelity: Math.min(1, fid), vcTruncBound: vcBound, maxBond, gammas, lambdas };
 }
 
 /** Contract a Vidal Canonical MPS back into a full 2^L vector in R^{2^L} */
@@ -259,6 +265,7 @@ export class MPSQuantumSimulator32Q {
     this.lambdas = Array.from({ length: N - 1 }, () => Float64Array.of(1.0));
     this.bondEntropies = new Float64Array(N - 1);
     this.truncFidelity = 1.0;
+    this.vcTruncBound = 0.0;
     this.maxBond = 1;
   }
 
@@ -352,7 +359,12 @@ export class MPSQuantumSimulator32Q {
     const keepNorm = Math.sqrt(k2) || 1;
     for (let k = 0; k < chi; k++) newLam[k] /= keepNorm;
     this.bondEntropies[q] = H;
-    this.truncFidelity *= Math.min(1, k2 / (s2 + 1e-18));
+    const keptRatio = Math.min(1, k2 / (s2 + 1e-18));
+    this.truncFidelity *= keptRatio;
+    const deltaCut = Math.max(0, 1 - keptRatio);
+    if (deltaCut > 0) {
+      this.vcTruncBound += Math.sqrt((2 * deltaCut) / (1 + Math.sqrt(Math.max(0, 1 - deltaCut))));
+    }
 
     const nextG0 = new Float64Array(lDim * 2 * chi);
     for (let aL = 0; aL < lDim; aL++) {
@@ -403,6 +415,85 @@ export class MPSQuantumSimulator32Q {
     return (p0 - p1) / (p0 + p1 + 1e-18);
   }
 
+  /**
+   * Exact 2-Rényi Stabilizer Magic M_2 (Leone-Oliviero-Hamma 2022) on the canonical 2-qubit reduced density
+   * matrix rho_{q, q+1} extracted directly from Vidal canonical tensors (zero full-state expansion needed!).
+   * Returns 0.000 on pure/mixed Clifford stabilizer states and > 0 under non-Clifford Ry(theta) magic injection.
+   */
+  stabilizerMagic2Q(q = (this.nQubits >> 1) - 1) {
+    const G0 = this.gammas[q], G1 = this.gammas[q + 1];
+    const lDim = G0.lDim, mDim = G0.rDim, rDim = G1.rDim;
+    const lamL = q > 0 ? this.lambdas[q - 1] : Float64Array.of(1.0);
+    const lamM = this.lambdas[q];
+    const lamR = q + 1 < this.nQubits - 1 ? this.lambdas[q + 1] : Float64Array.of(1.0);
+
+    // Contract Theta_{(i,j), (aL, aR)} and form 4x4 real symmetric reduced density matrix rho = Theta * Theta^T
+    const envDim = lDim * rDim;
+    const Th = new Float64Array(4 * envDim);
+    for (let aL = 0; aL < lDim; aL++) {
+      const wL = lamL[aL];
+      for (let i = 0; i < 2; i++) {
+        const g0B = (aL * 2 + i) * mDim;
+        for (let m = 0; m < mDim; m++) {
+          const wLM = wL * G0.data[g0B + m] * lamM[m];
+          if (Math.abs(wLM) < 1e-18) continue;
+          for (let j = 0; j < 2; j++) {
+            const g1B = (m * 2 + j) * rDim;
+            const rowOff = (i * 2 + j) * envDim + aL * rDim;
+            for (let aR = 0; aR < rDim; aR++) {
+              Th[rowOff + aR] += wLM * G1.data[g1B + aR] * lamR[aR];
+            }
+          }
+        }
+      }
+    }
+    const rho = new Float64Array(16);
+    let tr = 0;
+    for (let a = 0; a < 4; a++) {
+      for (let b = a; b < 4; b++) {
+        let s = 0;
+        const oa = a * envDim, ob = b * envDim;
+        for (let e = 0; e < envDim; e++) s += Th[oa + e] * Th[ob + e];
+        rho[a * 4 + b] = rho[b * 4 + a] = s;
+        if (a === b) tr += s;
+      }
+    }
+    if (tr > 1e-15) {
+      const invTr = 1 / tr;
+      for (let k = 0; k < 16; k++) rho[k] *= invTr;
+    }
+
+    // Evaluate Tr(rho (P_a x P_b)) across all 16 two-qubit Pauli strings (on real symmetric rho, Y expects 0 unless YY!)
+    let sumP2 = 0, sumP4 = 0;
+    for (let pA = 0; pA < 4; pA++) {
+      for (let pB = 0; pB < 4; pB++) {
+        let ex = 0;
+        for (let r0 = 0; r0 < 2; r0++) {
+          for (let r1 = 0; r1 < 2; r1++) {
+            let c0 = r0, c1 = r1, sgn = 1;
+            let nY = 0;
+            if (pA === 1) c0 ^= 1;
+            else if (pA === 2) { c0 ^= 1; nY++; sgn *= (r0 === 0 ? -1 : 1); }
+            else if (pA === 3 && r0 === 1) sgn = -sgn;
+
+            if (pB === 1) c1 ^= 1;
+            else if (pB === 2) { c1 ^= 1; nY++; sgn *= (r1 === 0 ? -1 : 1); }
+            else if (pB === 3 && r1 === 1) sgn = -sgn;
+
+            if (nY === 1) continue; // single Y is purely imaginary antisymmetric -> trace against real symmetric rho is 0
+            if (nY === 2) sgn = -sgn; // (i)(-i) / (-i)(-i): Y x Y = [0,0,0,-1; 0,0,1,0; 0,1,0,0; -1,0,0,0]
+            ex += sgn * rho[(r0 * 2 + r1) * 4 + (c0 * 2 + c1)];
+          }
+        }
+        const e2 = ex * ex;
+        sumP2 += e2;
+        sumP4 += e2 * e2;
+      }
+    }
+    if (sumP2 <= 1e-15 || sumP4 <= 1e-15) return 0;
+    return Math.max(0, -Math.log2(Math.min(1, sumP4 / sumP2)));
+  }
+
   /** Execute a brickwork 32-qubit entangling circuit (Ry(theta_q) + brickwork CNOT + Ry mixing) up to bond chiMax = 32 */
   runEntanglingCircuit(thetas, depth = 3) {
     this.reset();
@@ -424,6 +515,7 @@ export class MPSQuantumSimulator32Q {
       sSum += s;
       if (s > sMax) sMax = s;
     }
+    const magicM2 = this.stabilizerMagic2Q((N >> 1) - 1);
     return {
       nQubits: N,
       hilbertDim: this.hilbertDim,
@@ -431,6 +523,8 @@ export class MPSQuantumSimulator32Q {
       meanEntropy: sSum / (N - 1),
       maxEntropy: sMax,
       fidelity: this.truncFidelity,
+      vcTruncBound: this.vcTruncBound,
+      stabilizerMagicM2: magicM2,
       z0: this.expectationZ(0),
       zMid: this.expectationZ(N >> 1),
     };

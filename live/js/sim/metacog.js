@@ -232,12 +232,18 @@ export class Metacognition {
     this.ws.mpsEntropy = mps.meanS;
     this.ws.mpsBond = mps.maxBond;
     this.ws.mpsFidelity = mps.keptFidelity;
+    this.ws.vcTruncBound = (mps.vcTruncBound || 0) + (mps32.vcTruncBound || 0);
     this.ws.mps32MaxBond = mps32.maxBond;
     this.ws.mps32Entropy = mps32.meanEntropy;
     this.ws.mps32Fidelity = mps32.fidelity;
+    this.ws.stabilizerMagicM2 = mps32.stabilizerMagicM2 || 0;
     this.ws.meraIrEntropy = mera.irEntropy;
     this.ws.meraScaleRatio = mera.scaleRatio;
     this.ws.meraScales = mera.scales;
+    this.ws.cegaValue = cr.heptarch?.ctxWitness?.cegaValue ?? 9.0;
+    this.ws.kcbsValue = cr.heptarch?.ctxWitness?.kcbsValue ?? Math.sqrt(5);
+    this.ws.hoggarFloor = cr.heptarch?.ctxWitness?.hoggarFloor ?? (1 / 3);
+    this.ws.c3CospectralGap = cr.heptarch?.ctxWitness?.c3CospectralGap ?? 0.025;
     this.ws.ewcPenalty = cr.ewcEnergy || 0;
   }
 

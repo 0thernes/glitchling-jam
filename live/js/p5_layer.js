@@ -10,10 +10,10 @@ import { WORLD } from './sim/world.js';
 
 export const P5_VIEWS = [
   { id: 0, short: '16cMkv+Hip', title: '16-Comp Discrete Markov Cable & 32,768-Neu Hippocampus + SR' },
-  { id: 1, short: 'Biosphere', title: '5.2M+ Microbes, 256 Micro-Fauna, 48-Peer 5-Clade Speciation' },
+  { id: 1, short: 'Dome+Multi', title: 'Geodesic Biodome, 5-Caste Colony, Titans, Xenomimics, Xylos & Shoggoths' },
   { id: 2, short: '128G Zygote', title: '128-Cell Zygote Blastula, 128-Gene 5-Clade Morphospace & Tree' },
   { id: 3, short: '256Fov+Ont', title: '256×128 (196k RGC) Fovea, 32×16 Flow-VAE & 65k Ontology IT' },
-  { id: 4, short: '16Q+DRAG', title: '16Q WASM (65k-D), Qutrit DRAG+PEC+ZNE, 32Q χ=32 MPS & 512-D MERA' },
+  { id: 4, short: '16Q+KS+MPS', title: '16Q WASM, KCBS/CEGA-18/Hoggar Contextuality, VC-MPS & Magic M2' },
 ];
 
 export class P5Layer {
@@ -270,6 +270,29 @@ export class P5Layer {
         ctx.stroke();
       }
     }
+
+    // 3) Physarum slime highways & Big-Tree Sanctuary bioluminescent ground wards
+    const toPx = (v) => ((v / (2 * WORLD)) + 0.5) * 256;
+    if (W.slimeTrails && W.slimeTrails.length > 0) {
+      for (let i = 0; i < W.slimeTrails.length; i++) {
+        const sl = W.slimeTrails[i];
+        const sx = toPx(sl.x), sy = toPx(sl.z);
+        ctx.fillStyle = `rgba(110, 255, 212, ${(0.24 * sl.strength).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 4.5 + 3.5 * sl.strength, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (W.sanctuaries) {
+      for (const sc of W.sanctuaries) {
+        const sx = toPx(sc.x), sy = toPx(sc.z), sr = (sc.r / (2 * WORLD)) * 256;
+        ctx.strokeStyle = 'rgba(95, 255, 196, 0.35)';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
     this.bioTex.needsUpdate = true;
   }
 
@@ -406,7 +429,29 @@ export class P5Layer {
 
     p.drawingContext.drawImage(this.bioCanvas, ox, oy, sz, sz);
 
+    // Geodesic Biodome containment ring (R_DOME = 21.6) + Sanctuaries + Crystal Monoliths
+    if (W.dome) {
+      p.noFill();
+      p.stroke(85, 225, 255, 130);
+      p.strokeWeight(1.2);
+      p.circle(mapX(0), mapZ(0), (W.dome.radius / WORLD) * sz);
+      p.strokeWeight(1.0);
+    }
+    if (W.sanctuaries) {
+      for (const sc of W.sanctuaries) {
+        p.stroke(90, 255, 185, 185);
+        p.fill(25, 95, 72, 75);
+        p.circle(mapX(sc.x), mapZ(sc.z), (sc.r / WORLD) * sz);
+      }
+    }
     p.noStroke();
+    if (W.monoliths) {
+      for (const mn of W.monoliths) {
+        p.fill(135, 235, 255, 225);
+        p.rect(mapX(mn.x) - 2.6, mapZ(mn.z) - 2.6, 5.2, 5.2, 1);
+      }
+    }
+
     for (const pl of W.pools) {
       p.fill(40, 195, 255, 155);
       p.circle(mapX(pl.x), mapZ(pl.z), (pl.r / WORLD) * sz);
@@ -441,6 +486,24 @@ export class P5Layer {
         p.fill(40, 10, 24, 235);
         p.circle(mapX(lv.x), mapZ(lv.z), 8.5);
         p.noStroke();
+      }
+      for (const xm of eco.xenomimics || []) {
+        p.fill(xm.chirality > 0 ? 75 : 205, 225, 255, 225);
+        p.circle(mapX(xm.x), mapZ(xm.z), 4.6);
+      }
+      for (const xy of eco.xylos || []) {
+        p.fill(255, 226, 115, 215);
+        p.circle(mapX(xy.x), mapZ(xy.z), 4.8);
+      }
+      for (const ti of eco.titans || []) {
+        p.stroke(65, 255, 175);
+        p.fill(35, 50, 68, 240);
+        p.circle(mapX(ti.x), mapZ(ti.z), 9.2);
+        p.noStroke();
+      }
+      for (const sh of eco.shoggoths || []) {
+        p.fill(185, 75, 245, Math.round(220 * (sh.meek ?? 0.7)));
+        p.circle(mapX(sh.x), mapZ(sh.z), 6.8);
       }
     }
 
@@ -621,8 +684,8 @@ export class P5Layer {
     p.noStroke();
     p.fill(205, 195, 255);
     p.textSize(8.0);
-    p.text(`DRAG F_gate ${(q.dragGateFidelity || 0.970).toFixed(3)} · ZNE ${(q.zneGain || 5.1).toFixed(1)}×`, mx, 27);
-    p.text(`32Q MPS χ=${mc?.ws?.mps32MaxBond ?? 16}/32 · 512-D MERA (L=9)`, mx, 39);
+    p.text(`DRAG F_gate ${(q.dragGateFidelity || 0.970).toFixed(3)} · VC≤${(mc?.ws?.vcTruncBound ?? 0).toExponential(1)} · M2 ${(mc?.ws?.stabilizerMagicM2 ?? 0).toFixed(2)}`, mx, 27);
+    p.text(`KCBS ${(mc?.ws?.kcbsValue ?? 2.24).toFixed(2)} · CEGA ${(mc?.ws?.cegaValue ?? 9.0).toFixed(1)} · Hog ${(mc?.ws?.hoggarFloor ?? 0.333).toFixed(3)}`, mx, 39);
 
     const levels = [16, 8, 4, 2, 1];
     for (let lv = 0; lv < levels.length; lv++) {

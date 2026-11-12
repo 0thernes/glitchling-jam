@@ -12,11 +12,16 @@
 import { fbm, mulberry, clamp } from './util.js';
 
 export const SITES = 16, WORLD = 22;
+export const R_DOME = 21.6;
 export const N_SOIL = 32;
 export const N_PHER = 64;
 export const N_MICRO = 64;
 export const N_MICRO_FAUNA = 256; // 256 discrete embodied 3D benthic/pelagic/rhizosphere micro-fauna
 export const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
+export const LEDGER_POOLS = [
+  'flora', 'gut', 'blood', 'stores', 'atp', 'tissue',
+  'kinetic', 'elastic', 'detritus', 'heatPhys', 'dissNum',
+];
 
 export class World {
   constructor(seed) {
@@ -223,6 +228,150 @@ export class World {
     this.wind = { x: 0, z: 0, tx: 0, tz: 0, rain: 0 };
     this.eco = null; // populated when Ecosystem multi-agent biosphere is active
     this.pherMean = 0;
+
+    // -------------------------------------------------------------------------
+    // Pass 20: Dedicated 3rd RNG stream `this.rd` so `this.r` and `this.re` stay
+    // 100% bit-identical for all existing navigation/foraging/ecosystem probes!
+    // -------------------------------------------------------------------------
+    const rd = (this.rd = mulberry(seed * 277 + 19));
+
+    // Attach FMO Vibronic-ENAQT quantum photosynthesis & Daisyworld albedo traits to the 16 plants
+    this.isingSpins = new Int8Array(SITES);
+    for (let k = 0; k < SITES; k++) {
+      const q = this.plants[k];
+      q.albedoTrait = (k & 1) ? (0.62 + 0.18 * rd()) : (0.16 + 0.18 * rd()); // pale reflective vs dark thermophilic
+      q.enaqtEff = 0.88;
+      q.forsterEff = 0.72; // classical Förster hopping surrogate for honest comparison
+      this.isingSpins[k] = rd() < 0.5 ? -1 : 1;
+    }
+
+    // Two-Layer Geodesic Biodome ("The Dome"): atmospheric gases, Daisyworld albedo, geomagnetic field & aurora storms
+    this.dome = {
+      radius: R_DOME,
+      o2: 20.95,           // % atmospheric O2
+      co2: 412.0,          // ppm atmospheric CO2
+      pressureKPa: 101.32, // kPa barometric pressure
+      humidity: 0.58,
+      albedo: 0.42,        // Watson-Lovelock Daisyworld biotic planetary/dome albedo
+      greenhouseDeltaC: 0.0,
+      stefanBoltzmannKW: 0.0,
+      fieldUT: 48.5,       // ~48.5 uT geomagnetic field intensity
+      inclination: 1.08,   // ~62 deg magnetic dip angle (rad) for Cryptochrome-4 inclination compass
+      declination: 0.0,
+      auroraStorm: 0.0,    // [0..1] cosmic-ray / RF magnetic storm intensity
+      auroraPhase: rd() * Math.PI * 2,
+      boundaryTouches: 0,
+      glitchDiscoveries: 0,
+      isingOrder: 0,
+    };
+
+    // 3 Drifting Reality-Glitch Anomaly Seams inside Layer-1 Dome (exploitable physics seams!)
+    const anomSpecs = [
+      { kind: 'low-g', gravityMul: 0.54, dragMul: 0.90, phaseNoise: 0.05, hue: 0.53 },
+      { kind: 'chrono-visc', gravityMul: 1.00, dragMul: 1.48, phaseNoise: 0.12, hue: 0.82 },
+      { kind: 'sensory-crack', gravityMul: 0.86, dragMul: 0.96, phaseNoise: 0.38, hue: 0.12 },
+    ];
+    this.anomalyZones = anomSpecs.map((sp, i) => {
+      const ang = i * ((Math.PI * 2) / 3) + 0.55 + (rd() - 0.5) * 0.35;
+      const dist = 10.5 + rd() * 5.5;
+      return {
+        ...sp,
+        id: i,
+        x: Math.cos(ang) * dist,
+        z: Math.sin(ang) * dist,
+        y: 0,
+        r: 2.35,
+        ang,
+        dist,
+        omega: (i % 2 === 0 ? 1 : -1) * (0.018 + 0.008 * rd()),
+        probed: 0,
+      };
+    });
+
+    // 4 Quantum-Geometric Crystal Resonance Monoliths + C3 Cospectral Twin Obelisks (sigma_0 / sigma_1)
+    const monoDefs = [
+      { kind: 'ck31', label: 'Conway-Kochen 31-Ray Cube', rays: 31, hue: 0.52 },
+      { kind: 'cabello33', label: 'Cabello 33-Ray Hex-Prism', rays: 33, hue: 0.34 },
+      { kind: 'cega18', label: 'CEGA 18-Ray Entanglement Forge', rays: 18, hue: 0.78 },
+      { kind: 'hoggar64', label: 'Hoggar 64-Line + C3 Twins (σ0/σ1)', rays: 64, hue: 0.11 },
+    ];
+    this.monoliths = monoDefs.map((md, i) => {
+      const ang = i * (Math.PI * 0.5) + 0.98;
+      const dist = 13.4 + (rd() - 0.5) * 1.8;
+      const mx = Math.cos(ang) * dist, mz = Math.sin(ang) * dist;
+      return {
+        ...md,
+        id: i,
+        x: mx,
+        z: mz,
+        y: 0,
+        r: 1.35,
+        h: 2.85 + 0.35 * i,
+        charge: 0.85,
+        phase: rd() * Math.PI * 2,
+        // Monolith 3 carries the C3 cospectral twin obelisk pair: sigma_1 (safe, frust=344) vs sigma_0 (contextual trap, frust=347)
+        twins: md.kind === 'hoggar64' ? [
+          { tag: 'sigma0', frust: 347, trace3: 14976, dx: -1.15, dz: 0.45, safe: false },
+          { tag: 'sigma1', frust: 344, trace3: 15360, dx: 1.15, dz: -0.45, safe: true },
+        ] : null,
+      };
+    });
+
+    // 2 Giant Bioluminescent Big-Tree Sanctuary Beings (`GATE-DOME-REFUGE` predation damping + thermal buffer + nectar fruit)
+    this.sanctuaries = [0, 1].map((i) => {
+      const ang = i * Math.PI + 0.32 + (rd() - 0.5) * 0.25;
+      const dist = 8.8 + rd() * 2.4;
+      return {
+        id: i,
+        x: Math.cos(ang) * dist,
+        z: Math.sin(ang) * dist,
+        y: 0,
+        r: 3.35,       // canopy refuge radius
+        h: 3.9 + 0.4 * rd(),
+        nectar: 1.0,
+        hue: i === 0 ? 0.46 : 0.62,
+        visitors: 0,
+      };
+    });
+
+    // 6 Movable Lithic DomeStones (pushable/carryable tools, cairn windbreaks & cache nutcrackers)
+    this.domeStones = Array.from({ length: 6 }, (_, i) => {
+      const ang = (i * Math.PI) / 3 + 0.2 + (rd() - 0.5) * 0.3;
+      const dist = 4.8 + rd() * 8.5;
+      return {
+        id: i,
+        x: Math.cos(ang) * dist,
+        z: Math.sin(ang) * dist,
+        y: 0,
+        vx: 0,
+        vz: 0,
+        r: 0.24 + 0.05 * rd(),
+        mass: 1.8,
+        heldBy: null,
+        cairnNeighbors: 0,
+      };
+    });
+
+    // Spoiling Nutrient Caches, Physarum Low-Drag Slime Trails & Shed Exuvia Chitin Shells
+    this.domeCaches = Array.from({ length: 4 }, (_, i) => {
+      const ang = i * (Math.PI * 0.5) + 0.72;
+      const dist = 6.5 + rd() * 6.5;
+      return {
+        id: i,
+        x: Math.cos(ang) * dist,
+        z: Math.sin(ang) * dist,
+        y: 0,
+        energy: 0.85,
+        freshness: 1.0, // spoils slowly over time towardritus!
+        hardShell: i % 2 === 0, // hard-shelled caches open faster with a nearby DomeStone!
+      };
+    });
+    this.slimeTrails = []; // { x, z, strength } -> up to 48 nodes giving -20% locomotion drag
+    this.exuvia = [];      // { x, y, z, mineral, hue, age } -> shed chitin shells recycled by detritivores
+
+    // 11-Pool FP64 Kahan-Compensated First-Law Dome Energy Ledger (`GATE-03`: normalized closure error < 1e-12)
+    this.initEnergyLedger();
+
     this.fixY();
   }
 
@@ -257,9 +406,229 @@ export class World {
         mf.y = this.height(mf.x, mf.z) + (mf.guild === 1 ? 0.08 : 0.05);
       }
     }
+    if (this.monoliths) {
+      for (const m of this.monoliths) m.y = this.height(m.x, m.z);
+    }
+    if (this.sanctuaries) {
+      for (const sc of this.sanctuaries) sc.y = this.height(sc.x, sc.z);
+    }
+    if (this.anomalyZones) {
+      for (const az of this.anomalyZones) az.y = this.height(az.x, az.z) + 0.35;
+    }
+    if (this.domeStones) {
+      for (const st of this.domeStones) {
+        if (!st.heldBy) st.y = this.height(st.x, st.z) + st.r * 0.72;
+      }
+    }
+    if (this.domeCaches) {
+      for (const dc of this.domeCaches) dc.y = this.height(dc.x, dc.z) + 0.14;
+    }
+    if (this.exuvia) {
+      for (const ex of this.exuvia) ex.y = this.height(ex.x, ex.z) + 0.10;
+    }
   }
 
-  /** Local microclimate temperature (C) at (x, z) given solar hour, season, altitude, rain & geothermal vents */
+  // ---------------------------------------------------------------------------
+  // 11-Pool FP64 Kahan-Compensated First-Law Dome Energy Ledger (`GATE-03`)
+  // Pools: 0=flora, 1=gut, 2=blood, 3=stores, 4=atp, 5=tissue,
+  //        6=kinetic, 7=elastic, 8=detritus, 9=heatPhys, 10=dissNum
+  // ---------------------------------------------------------------------------
+  initEnergyLedger() {
+    const pools = new Float64Array([
+      160.0, // 0: flora chemical energy (kJ)
+      12.0,  // 1: gut chyme
+      18.0,  // 2: blood glucose/lipids
+      45.0,  // 3: hepatic/adipose stores
+      14.0,  // 4: cellular ATP pool
+      85.0,  // 5: structural somatic tissue
+      4.0,   // 6: macroscopic kinetic energy
+      3.0,   // 7: Neo-Hookean elastic potential
+      32.0,  // 8: soil/exuvia/cache detritus
+      120.0, // 9: dome thermal reservoir (heatPhys)
+      0.0,   // 10: numerical dissipation audit sink
+    ]);
+    let initSum = 0;
+    for (let i = 0; i < 11; i++) initSum += pools[i];
+    this.ledger = {
+      pools,
+      comp: new Float64Array(11),
+      initialTotal: initSum,
+      solarIn: 0.0,
+      solarComp: 0.0,
+      geothermalIn: 0.0,
+      geoComp: 0.0,
+      radiatedOut: 0.0,
+      radComp: 0.0,
+      closureErr: 0.0,
+    };
+  }
+
+  _kahanAddPool(idx, delta) {
+    const L = this.ledger;
+    const y = delta - L.comp[idx];
+    const t = L.pools[idx] + y;
+    L.comp[idx] = (t - L.pools[idx]) - y;
+    L.pools[idx] = t;
+  }
+
+  _kahanAddScalar(valKey, compKey, delta) {
+    const L = this.ledger;
+    const y = delta - L[compKey];
+    const t = L[valKey] + y;
+    L[compKey] = (t - L[valKey]) - y;
+    L[valKey] = t;
+  }
+
+  /** Conservative internal energy transfer between two Dome pools (kJ) */
+  transferEnergy(fromIdx, toIdx, amount) {
+    if (!this.ledger || amount <= 0 || fromIdx === toIdx) return 0;
+    const avail = Math.max(0, this.ledger.pools[fromIdx]);
+    const actual = Math.min(avail, amount);
+    if (actual <= 0) return 0;
+    this._kahanAddPool(fromIdx, -actual);
+    this._kahanAddPool(toIdx, actual);
+    return actual;
+  }
+
+  /** External Dome boundary influx (solar PAR or hydrothermal mantle heat) */
+  injectExternalEnergy(poolIdx, amount, source = 'solar') {
+    if (!this.ledger || amount <= 0) return;
+    this._kahanAddPool(poolIdx, amount);
+    if (source === 'geothermal') this._kahanAddScalar('geothermalIn', 'geoComp', amount);
+    else this._kahanAddScalar('solarIn', 'solarComp', amount);
+  }
+
+  /** Stefan-Boltzmann radiative heat rejection through the Geodesic Dome canopy */
+  radiateHeat(amount) {
+    if (!this.ledger || amount <= 0) return 0;
+    const actual = Math.min(Math.max(0, this.ledger.pools[9]), amount);
+    if (actual <= 0) return 0;
+    this._kahanAddPool(9, -actual);
+    this._kahanAddScalar('radiatedOut', 'radComp', actual);
+    return actual;
+  }
+
+  /** Compute normalized First-Law energy closure error (`GATE-03` requires < 1e-12) */
+  auditEnergyClosure() {
+    const L = this.ledger;
+    if (!L) return 0;
+    let sumP = 0, cP = 0;
+    for (let i = 0; i < 11; i++) {
+      const y = (L.pools[i] - L.comp[i]) - cP;
+      const t = sumP + y;
+      cP = (t - sumP) - y;
+      sumP = t;
+    }
+    const lhs = sumP + (L.radiatedOut - L.radComp);
+    const rhs = L.initialTotal + (L.solarIn - L.solarComp) + (L.geothermalIn - L.geoComp);
+    L.closureErr = Math.abs(lhs - rhs) / (Math.abs(rhs) + 1e-9);
+    return L.closureErr;
+  }
+
+  /** Enforce soft elastic containment at the Geodesic Dome shell R_DOME */
+  enforceDomeBoundary(x, z, vx = 0, vz = 0, margin = 0.45) {
+    const maxR = (this.dome?.radius || R_DOME) - margin;
+    const d = Math.hypot(x, z);
+    if (d <= maxR || d < 1e-6) return { x, z, vx, vz, hit: false };
+    const nx = x / d, nz = z / d;
+    const vn = vx * nx + vz * nz;
+    const rvx = vn > 0 ? vx - 1.65 * vn * nx : vx;
+    const rvz = vn > 0 ? vz - 1.65 * vn * nz : vz;
+    if (this.dome) this.dome.boundaryTouches++;
+    return { x: nx * maxR, z: nz * maxR, vx: rvx, vz: rvz, hit: true };
+  }
+
+  /** True when (x, z) lies inside a Big-Tree Sanctuary Refuge (`GATE-DOME-REFUGE`) */
+  isInsideSanctuary(x, z) {
+    if (!this.sanctuaries) return false;
+    for (let i = 0; i < this.sanctuaries.length; i++) {
+      const s = this.sanctuaries[i];
+      if ((x - s.x) ** 2 + (z - s.z) ** 2 < s.r * s.r) return true;
+    }
+    return false;
+  }
+
+  /** Sample local Reality-Glitch Anomaly physics seam multipliers at (x, z) */
+  sampleAnomaly(x, z, markDiscovery = false) {
+    if (!this.anomalyZones) return { gravityMul: 1, dragMul: 1, phaseNoise: 0, zoneIdx: -1 };
+    for (let i = 0; i < this.anomalyZones.length; i++) {
+      const az = this.anomalyZones[i];
+      const d2 = (x - az.x) ** 2 + (z - az.z) ** 2;
+      if (d2 < az.r * az.r) {
+        const w = 1 - Math.sqrt(d2) / az.r;
+        if (markDiscovery && az.probed < 1) {
+          az.probed = 1;
+          if (this.dome) this.dome.glitchDiscoveries++;
+        }
+        return {
+          gravityMul: 1 + (az.gravityMul - 1) * w,
+          dragMul: 1 + (az.dragMul - 1) * w,
+          phaseNoise: az.phaseNoise * w,
+          zoneIdx: i,
+          kind: az.kind,
+        };
+      }
+    }
+    return { gravityMul: 1, dragMul: 1, phaseNoise: 0, zoneIdx: -1, kind: null };
+  }
+
+  /** Sample Physarum slime highway drag multiplier at (x, z) (down to 0.80 = -20% drag) */
+  sampleSlimeDrag(x, z) {
+    if (!this.slimeTrails || this.slimeTrails.length === 0) return 1.0;
+    let best = 0;
+    for (let i = 0; i < this.slimeTrails.length; i++) {
+      const sl = this.slimeTrails[i];
+      const d2 = (x - sl.x) ** 2 + (z - sl.z) ** 2;
+      if (d2 < 1.44) best = Math.max(best, sl.strength * (1 - d2 / 1.44));
+    }
+    return 1.0 - 0.20 * clamp(best, 0, 1);
+  }
+
+  depositSlime(x, z, strength = 0.65) {
+    if (!this.slimeTrails) return;
+    for (let i = 0; i < this.slimeTrails.length; i++) {
+      const sl = this.slimeTrails[i];
+      if ((x - sl.x) ** 2 + (z - sl.z) ** 2 < 0.64) {
+        sl.strength = Math.min(1.0, sl.strength + 0.35 * strength);
+        return;
+      }
+    }
+    if (this.slimeTrails.length >= 48) this.slimeTrails.shift();
+    this.slimeTrails.push({ x, z, strength: clamp(strength, 0.1, 1.0) });
+  }
+
+  spawnExuvia(x, z, hue = 0.72) {
+    if (!this.exuvia) return;
+    if (this.exuvia.length >= 16) this.exuvia.shift();
+    this.exuvia.push({ x, z, y: this.height(x, z) + 0.10, mineral: 1.0, hue, age: 0 });
+    this.transferEnergy(5, 8, 0.45); // shed somatic chitin tissue -> detritus pool!
+  }
+
+  /** Push nearby movable DomeStones when a body/limb contacts them, returning impulse reaction */
+  pushDomeStones(x, z, radius, vx, vz) {
+    if (!this.domeStones) return 0;
+    let hits = 0;
+    for (let i = 0; i < this.domeStones.length; i++) {
+      const st = this.domeStones[i];
+      if (st.heldBy) continue;
+      const dx = st.x - x, dz = st.z - z;
+      const minD = radius + st.r;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < minD * minD && d2 > 1e-6) {
+        const d = Math.sqrt(d2);
+        const nx = dx / d, nz = dz / d;
+        const pen = minD - d;
+        st.x += nx * pen * 0.65;
+        st.z += nz * pen * 0.65;
+        st.vx += nx * 1.4 + vx * 0.25;
+        st.vz += nz * 1.4 + vz * 0.25;
+        hits++;
+      }
+    }
+    return hits;
+  }
+
+  /** Local microclimate temperature (C) at (x, z) given solar hour, season, altitude, rain, vents, Daisyworld & Sanctuaries */
   ambientTemp(x, z, hour = 12) {
     const sAng = this.seasonPhase * Math.PI * 2;
     const seasonal = 5.5 * Math.sin(sAng); // +5.5C summer, -5.5C winter
@@ -272,7 +641,19 @@ export class World {
       const d2 = (x - v.x) ** 2 + (z - v.z) ** 2;
       if (d2 < 36) ventWarmth += 14.0 * v.heat * Math.exp(-d2 / 9.5);
     }
-    return 21.5 + seasonal + diurnal + altCool + rainCool + ventWarmth;
+    let tLoc = 21.5 + seasonal + diurnal + altCool + rainCool + ventWarmth + (this.dome?.greenhouseDeltaC || 0);
+    // Big-Tree Sanctuary canopies buffer extreme microclimate swings toward 23.0 C
+    if (this.sanctuaries) {
+      for (let i = 0; i < this.sanctuaries.length; i++) {
+        const sc = this.sanctuaries[i];
+        const d2 = (x - sc.x) ** 2 + (z - sc.z) ** 2;
+        if (d2 < sc.r * sc.r) {
+          const w = 0.45 * (1 - d2 / (sc.r * sc.r));
+          tLoc = tLoc * (1 - w) + 23.0 * w;
+        }
+      }
+    }
+    return tLoc;
   }
 
   soilIndex(x, z) {
@@ -542,6 +923,157 @@ export class World {
     P.set(T);
     this.totalPheromone = pSum;
     this.pherMean = pSum / (N_PHER * N_PHER * 3);
+
+    // 6) Pass 20: Geodesic Biodome Homeostasis, FMO ENAQT Photosynthesis, p-Bit Ising Mycelia,
+    //    Reality-Glitch Seams, DomeStones, DomeCaches, Exuvia & 11-Pool FP64 First-Law Ledger
+    this.stepDomePhysics(dt, seasonGrow);
+  }
+
+  /** Step Two-Layer Geodesic Biodome physics, quantum flora/mycelia, manipulable Things & FP64 First-Law Ledger */
+  stepDomePhysics(dt, seasonGrow = 1.0) {
+    const D = this.dome;
+    const rd = this.rd;
+    if (!D || !rd) return;
+
+    // 6a) FMO Vibronic-Exciton ENAQT Photosynthesis + Watson-Lovelock Daisyworld Albedo Co-Regulation
+    let albSum = 0, enaqtMean = 0, photoKJ = 0;
+    for (let k = 0; k < SITES; k++) {
+      const q = this.plants[k];
+      const tLeaf = this.ambientTemp(q.x, q.z, 12.5) + 3.2 * (0.5 - (q.albedoTrait ?? 0.4));
+      // Thermal dephasing rate gamma_phi(T_leaf) -> authentic ENAQT bell curve (Anderson freeze < optimal ~24C < Zeno trap)
+      const gammaRatio = Math.exp((tLeaf - 24.0) / 11.5);
+      q.enaqtEff = clamp((0.96 * gammaRatio) / (0.36 + 0.62 * gammaRatio + 0.34 * gammaRatio * gammaRatio), 0.18, 0.95);
+      // Classical Förster incoherent hopping surrogate (monotonically slower, lacks vibronic delocalization peak)
+      q.forsterEff = clamp(0.74 * (gammaRatio / (0.85 + gammaRatio)), 0.15, 0.76);
+
+      // Daisyworld selection: cool microclimates favor dark heat-absorbing crowns (low albedo); hot favor pale reflective crowns
+      const targetAlb = tLeaf < 22.0 ? 0.16 : tLeaf > 24.0 ? 0.78 : 0.42;
+      q.albedoTrait = clamp((q.albedoTrait ?? 0.42) + dt * 0.015 * (targetAlb - (q.albedoTrait ?? 0.42)), 0.12, 0.85);
+      albSum += q.albedoTrait;
+      enaqtMean += q.enaqtEff;
+      photoKJ += dt * 0.035 * q.enaqtEff * seasonGrow * (0.4 + 0.6 * q.fruit);
+    }
+    D.albedo = albSum / SITES;
+    D.meanEnaqt = enaqtMean / SITES;
+    // Daisyworld planetary energy balance: absorbed solar (1 - albedo) vs radiative cooling buffers greenhouseDeltaC!
+    const solarAbsorbed = 1.0 - D.albedo; // [0.15 .. 0.88]
+    const co2Forcing = 0.85 * Math.log2(Math.max(200, D.co2) / 410.0);
+    const eqDeltaC = 2.6 * (solarAbsorbed - 0.58) + co2Forcing;
+    D.greenhouseDeltaC = clamp(D.greenhouseDeltaC + dt * 0.08 * (eqDeltaC - D.greenhouseDeltaC), -2.5, 2.8);
+
+    // 6b) Cahan-Datta Room-Temperature Stochastic p-Bit Ising Root Network (classical Boltzmann network)
+    if (this.isingSpins) {
+      let mSum = 0;
+      for (let k = 0; k < SITES; k++) {
+        let hField = 1.6 * ((this.plants[k].stress || 0) - 0.25);
+        for (let e = 0; e < this.mycelia.length; e++) {
+          const ed = this.mycelia[e];
+          if (ed.a === k) hField += 0.45 * ed.cond * this.isingSpins[ed.b];
+          else if (ed.b === k) hField += 0.45 * ed.cond * this.isingSpins[ed.a];
+        }
+        const pUp = 0.5 * (1 + Math.tanh(1.35 * hField));
+        this.isingSpins[k] = rd() < pUp ? 1 : -1;
+        mSum += this.isingSpins[k];
+      }
+      D.isingOrder = Math.abs(mSum) / SITES;
+    }
+
+    // 6c) Atmospheric O2 / CO2 biogeochemical balance & Cosmic-Ray Aurora Storms (clamped <= 0.4 Hz smooth envelope!)
+    D.auroraPhase = (D.auroraPhase + dt * 0.14) % (Math.PI * 2);
+    const stormWave = Math.max(0, Math.sin(D.auroraPhase) * Math.sin(D.auroraPhase * 0.37 + 1.1) - 0.52) / 0.48;
+    D.auroraStorm = clamp(0.88 * D.auroraStorm + 0.12 * stormWave, 0, 1);
+    D.humidity = clamp(0.48 + 0.38 * (this.wind.rain || 0) + 0.08 * Math.sin(this.t * 0.03), 0.25, 0.96);
+    // Photosynthesis fixes CO2 -> O2; soil microbe + fauna respiration oxidizes C -> CO2
+    const respRate = 0.018 * (this.microbeTotalPop / 5.2e6);
+    D.o2 = clamp(D.o2 + dt * (0.042 * D.meanEnaqt - 0.034 * respRate + 0.01 * (20.95 - D.o2)), 19.2, 22.8);
+    D.co2 = clamp(D.co2 + dt * (4.2 * respRate - 4.8 * D.meanEnaqt + 0.08 * (412 - D.co2)), 320, 620);
+    D.pressureKPa = 101.32 + 0.45 * Math.sin(this.t * 0.015) - 0.35 * (this.wind.rain || 0);
+
+    // 6d) Orbiting Reality-Glitch Anomaly Seams, Quantum Monoliths & Big-Tree Sanctuaries
+    for (let i = 0; i < this.anomalyZones.length; i++) {
+      const az = this.anomalyZones[i];
+      az.ang = (az.ang + dt * az.omega) % (Math.PI * 2);
+      az.x = Math.cos(az.ang) * az.dist;
+      az.z = Math.sin(az.ang) * az.dist;
+      az.y = this.height(az.x, az.z) + 0.35;
+    }
+    for (let i = 0; i < this.monoliths.length; i++) {
+      const mn = this.monoliths[i];
+      mn.phase = (mn.phase + dt * 1.6) % (Math.PI * 2); // ~0.25 Hz (< 3 Hz photosensitive limit!)
+      mn.charge = clamp(mn.charge + dt * 0.025, 0.2, 1.0);
+    }
+    for (let i = 0; i < this.sanctuaries.length; i++) {
+      const sc = this.sanctuaries[i];
+      sc.nectar = clamp(sc.nectar + dt * 0.018 * seasonGrow, 0, 1.0);
+    }
+
+    // 6e) Movable DomeStones friction + Cairn Shelter Detection, Spoiling DomeCaches, Slime & Exuvia Recycling
+    for (let i = 0; i < this.domeStones.length; i++) {
+      const st = this.domeStones[i];
+      if (!st.heldBy) {
+        st.x += st.vx * dt;
+        st.z += st.vz * dt;
+        const damp = Math.exp(-dt * 4.2);
+        st.vx *= damp;
+        st.vz *= damp;
+        const b = this.enforceDomeBoundary(st.x, st.z, st.vx, st.vz, 0.8);
+        st.x = b.x; st.z = b.z; st.vx = b.vx; st.vz = b.vz;
+        st.y = this.height(st.x, st.z) + st.r * 0.72;
+      }
+      let nbrs = 0;
+      for (let j = 0; j < this.domeStones.length; j++) {
+        if (i !== j && (st.x - this.domeStones[j].x) ** 2 + (st.z - this.domeStones[j].z) ** 2 < 1.69) nbrs++;
+      }
+      st.cairnNeighbors = nbrs;
+    }
+
+    for (let i = 0; i < this.domeCaches.length; i++) {
+      const dc = this.domeCaches[i];
+      if (dc.energy > 0.02) {
+        const spoil = Math.min(dc.energy, dt * 0.0025);
+        dc.energy -= spoil;
+        dc.freshness = clamp(dc.freshness - dt * 0.003, 0.1, 1.0);
+        this.transferEnergy(0, 8, spoil); // cache spoilage -> detritus!
+        const sIdx = this.soilIndex(dc.x, dc.z);
+        this.soilC[sIdx] = Math.min(2.0, this.soilC[sIdx] + spoil * 0.25);
+      } else if (rd() < dt * 0.04) {
+        // Replenish cache from flora surplus conservatively
+        const refill = this.transferEnergy(0, 1, 0.65);
+        if (refill > 0.1) {
+          this.transferEnergy(1, 0, refill); // stays in flora/cache chemical store until eaten
+          dc.energy = refill;
+          dc.freshness = 1.0;
+        }
+      }
+    }
+
+    for (let i = this.slimeTrails.length - 1; i >= 0; i--) {
+      this.slimeTrails[i].strength -= dt * 0.018;
+      if (this.slimeTrails[i].strength <= 0.02) this.slimeTrails.splice(i, 1);
+    }
+
+    for (let i = this.exuvia.length - 1; i >= 0; i--) {
+      const ex = this.exuvia[i];
+      ex.age += dt;
+      const decay = Math.min(ex.mineral, dt * 0.012);
+      ex.mineral -= decay;
+      const sIdx = this.soilIndex(ex.x, ex.z);
+      this.soilN[sIdx] = Math.min(2.0, this.soilN[sIdx] + decay * 0.18);
+      this.soilC[sIdx] = Math.min(2.0, this.soilC[sIdx] + decay * 0.15);
+      if (ex.mineral <= 0.03) this.exuvia.splice(i, 1);
+    }
+
+    // 6f) First-Law Dome Energy Ledger Fluxes + Exact Stefan-Boltzmann Radiative Cap + Closure Audit
+    const geoKJ = dt * 0.095 * this.vents.length;
+    this.injectExternalEnergy(0, photoKJ * (1 - 0.35 * D.albedo), 'solar');
+    this.injectExternalEnergy(9, geoKJ + photoKJ * 0.25, 'geothermal');
+    this.transferEnergy(8, 9, dt * 0.04 * respRate); // microbial respiration: detritus -> heatPhys
+    // Stefan-Boltzmann radiative rejection sigma * A * T^4 linearized around 295 K
+    const tKelvinRatio = (273.15 + 21.5 + D.greenhouseDeltaC) / 295.0;
+    const radKJ = dt * 0.34 * Math.pow(tKelvinRatio, 4);
+    const actualRad = this.radiateHeat(radKJ);
+    D.stefanBoltzmannKW = actualRad / Math.max(1e-4, dt);
+    this.auditEnergyClosure();
   }
 
   /** one environment step (dt seconds of sim time); tick = metabolic minute counter */

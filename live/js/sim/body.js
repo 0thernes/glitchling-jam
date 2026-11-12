@@ -606,7 +606,7 @@ export class Body {
 
   step(dt, iters = 6, lesionMuscles = false) {
     const W = this.world, n = this.n, X = this.x, Y = this.y, Z = this.z, OX = this.ox, OY = this.oy, OZ = this.oz;
-    const g = W.g, gx = W.gx * g, gz = W.gz * g, gy = -g * Math.sqrt(Math.max(0, 1 - W.gx * W.gx - W.gz * W.gz));
+    const g = W.g * (W.anomGravityMul ?? 1), gx = W.gx * g, gz = W.gz * g, gy = -g * Math.sqrt(Math.max(0, 1 - W.gx * W.gx - W.gz * W.gz));
     const F = this.frames();
     const wx = W.wind.x, wz = W.wind.z, damp = 0.995;
     const fFx = this.fsiFx, fFy = this.fsiFy, fFz = this.fsiFz, IM = this.im;

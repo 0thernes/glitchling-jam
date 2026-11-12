@@ -24,6 +24,7 @@ import { Metab } from './metab.js';
 import { SelectiveSSM, WorldModel, Sleep, PredictiveCoding, HTNPlanner, N_VIS_PATCH } from './mind.js';
 import { Skin } from './skin.js';
 import { Ecosystem } from './ecosystem.js';
+import { HeptarchCouncil } from './heptarch.js';
 
 export const CLOCK_MODES = {
   circadian: { framesPerMin: 15, scale: 240, label: '240× (6-min day · fast demo)' },
@@ -98,6 +99,7 @@ export class Creature {
     this.metacog = mEval
       ? { achGain: 1, exploreTemp: 1, step: () => {}, auditAndConsolidate: () => {} }
       : new Metacognition(seed, 96);
+    this.heptarch = mEval ? null : new HeptarchCouncil(seed);
     this.htn = mEval ? null : new HTNPlanner(seed, NSTR_OPT);
     this.metaFeat = new Float64Array(96);
     this.ofcApp = new Float32Array(NSTR_OPT);
@@ -131,7 +133,7 @@ export class Creature {
     this.lesion = {
       mot: false, cpg: false, mn: false, stdp: false, wm: false, astro: false, learnMotor: false,
       efe: false, veto: false, dream: false, vision: false, metacog: false, ssmLearn: false, qrng: false, homeo: false,
-      fem: false, fluid: false, dg: false,
+      fem: false, fluid: false, dg: false, heptarch: false, magneto: false, bioelec: false,
     };
     this.t = 0; this.frame = 0; this.tick = 0; this.hour = 8; this.dayLen = 1440;
     const initClock = opts.clockMode || globalThis.CLOCK_MODE || globalThis.TW?.clock ||
@@ -213,6 +215,7 @@ export class Creature {
     this.stats = {
       eats: 0, rewards: 0, tries: 0, vetoes: 0, races: 0, dreams: 0, replays: 0,
       mirrored: 0, rewires: 0, misfires: 0, dist: 0, stings: 0, snacks: 0, urine: 0, feces: 0, drinks: 0,
+      sanctuaryFeeds: 0, cachesOpened: 0, stonesMoved: 0, monolithResonances: 0,
     };
     this.events = [];
     this.motorHist = [];
@@ -693,7 +696,8 @@ export class Creature {
       if (v < bv) { bv = v; bx = ex; bz = ez; }
     }
     const prag = 0.12;
-    const epi = (this.lesion.efe ? 0.25 : 0.42 * temp * clamp(1.1 - hunger - M.thirst, 0.2, 1.0)) + 0.25 * (this.metacog?.regret ?? 0);
+    const curGate = this.lesion.heptarch ? 1 : (this.heptarch?.curiosityGate ?? 1);
+    const epi = ((this.lesion.efe ? 0.25 : 0.42 * temp * clamp(1.1 - hunger - M.thirst, 0.2, 1.0)) + 0.25 * (this.metacog?.regret ?? 0)) * curGate;
     const { tTravel, baseCost } = this.travelTerms(bx, bz);
     return { G: -(prag + epi - baseCost * 0.7), prag, epi, cost: baseCost * 0.7, tTravel, harm: 0, x: bx, z: bz };
   }
@@ -702,6 +706,8 @@ export class Creature {
   drawGauss() { return this.lesion.qrng ? gauss(this.r) : this.qrng.gauss(); }
 
   startRace(exclude = new Set()) {
+    // Raider ColdStrike Phase 5 freezes striatal re-deliberation mid-commit (zero mid-strike hesitation!)
+    if (!this.lesion.heptarch && this.heptarch?.gatesFrozen && this.goal && exclude.size === 0) return;
     let htnPrior = null;
     if (this.htn && !this.lesion.wm && !this.lesion.efe) {
       const hd = this.body.head();
@@ -902,9 +908,17 @@ export class Creature {
     }
     this.wm.lesion = !!this.lesion.wm;
 
-    for (let c = 0; c < CH.N; c++) B.u[c] = clamp((this.muscleGain ?? 2.4) * (this.mnAct[2 * c] - this.mnAct[2 * c + 1]), -1, 1);
+    const csForceGain = this.lesion.heptarch ? 1.0 : (this.heptarch?.forceGain ?? 1.0);
+    for (let c = 0; c < CH.N; c++) B.u[c] = clamp((this.muscleGain ?? 2.4) * csForceGain * (this.mnAct[2 * c] - this.mnAct[2 * c + 1]), -1, 1);
     B.limbs.forEach((L, k) => {
       const sw = L.kind === 'leg' ? CH.leg + L.idx * 2 : CH.arm + L.idx * 3;
+      const limbInt = this.heptarch ? (this.heptarch.limbIntegrity[k % 10] ?? 1.0) : 1.0;
+      if (limbInt < 0.999) {
+        B.u[sw] *= limbInt;
+        B.u[sw + 1] *= limbInt;
+        if (L.kind === 'arm') B.u[sw + 2] *= limbInt;
+        B.u[L.grip] *= limbInt;
+      }
       this.limbUse[k] += Math.abs(B.u[sw]) + Math.abs(B.u[sw + 1]) + 0.5 * Math.abs(B.u[L.grip]);
     });
     this.limbUseN++;
@@ -922,12 +936,42 @@ export class Creature {
     this.hop.lesionDG = !!this.lesion.dg;
 
     const com = B.com();
+    // Layer-1 Geodesic Dome physics seams (low-g / chrono-visc / sensory-crack), Physarum slime drag, stone tool pushing & boundary shell
+    if (this.world.sampleAnomaly) {
+      const anom = this.world.sampleAnomaly(com[0], com[2], true);
+      const slimeDrag = this.world.sampleSlimeDrag ? this.world.sampleSlimeDrag(com[0], com[2]) : 1.0;
+      this.world.anomGravityMul = anom.gravityMul;
+      const effDrag = anom.dragMul * slimeDrag;
+      if (Math.abs(effDrag - 1.0) > 0.01) {
+        const vScale = clamp(1 - dt * 0.65 * (effDrag - 1.0), 0.85, 1.08);
+        for (let i = 0; i < B.n; i++) {
+          B.ox[i] = B.x[i] - (B.x[i] - B.ox[i]) * vScale;
+          B.oz[i] = B.z[i] - (B.z[i] - B.oz[i]) * vScale;
+        }
+      }
+      if (Math.hypot(com[0], com[2]) > 20.6 && this.world.dome) {
+        const maxR = (this.world.dome.radius || 21.6) - 0.45;
+        let hitShell = false;
+        for (let i = 0; i < B.n; i++) {
+          const d = Math.hypot(B.x[i], B.z[i]);
+          if (d > maxR && d > 1e-6) {
+            B.x[i] = (B.x[i] / d) * maxR;
+            B.z[i] = (B.z[i] / d) * maxR;
+            hitShell = true;
+          }
+        }
+        if (hitShell) this.world.dome.boundaryTouches++;
+      }
+      if (this.world.pushDomeStones && this.world.pushDomeStones(com[0], com[2], 0.52, (com[0] - this.lastCom[0]) * 60, (com[2] - this.lastCom[2]) * 60) > 0) {
+        this.stats.stonesMoved = (this.stats.stonesMoved || 0) + 1;
+      }
+    }
     this.vel = [com[0] - this.lastCom[0], com[1] - this.lastCom[1], com[2] - this.lastCom[2]];
     this.navStep(dt, com);
     this.stats.dist += Math.hypot(this.vel[0], this.vel[2]);
     this.lastCom = com;
     this.nociception *= 0.97;
-    // Microclimate thermoregulation, chromatophore camouflage & syrinx vocalization
+    // Microclimate thermoregulation, chromatophore camouflage, Raider ColdStrike emission clamp & syrinx vocalization
     this.ambientTemp = this.world.ambientTemp(com[0], com[2], this.hour);
     {
       let instEffort = 0;
@@ -945,9 +989,10 @@ export class Creature {
           if (dp < 8.5) predNear = Math.max(predNear, 1 - dp / 8.5);
         }
       }
-      const targetCamo = clamp(0.75 * predNear + 0.45 * this.pherAlarm + 0.35 * this.nociception, 0, 1);
+      const emitScale = this.lesion.heptarch ? 1.0 : (1.0 - 0.6 * (this.heptarch?.deceive ?? 0));
+      const targetCamo = clamp(0.75 * predNear + 0.45 * this.pherAlarm + 0.35 * this.nociception + 0.55 * (1 - emitScale), 0, 1);
       this.camoLevel += dt * 1.8 * (targetCamo - this.camoLevel);
-      const callDrive = awake ? clamp(0.8 * Math.max(0, this.rpe) + 0.55 * predNear + 0.35 * this.pherMate, 0, 1) : 0;
+      const callDrive = awake ? clamp(0.8 * Math.max(0, this.rpe) + 0.55 * predNear + 0.35 * this.pherMate, 0, 1) * emitScale : 0;
       this.vocalAmp += dt * 4.0 * (callDrive - this.vocalAmp);
       this.vocalFreq = 290 + 240 * (this.gen.pigmentHue ?? 0.72) + 190 * predNear + 90 * Math.sin(this.t * 5.5);
       const jawTgt = awake
@@ -987,15 +1032,19 @@ export class Creature {
       let nearNest = false;
       for (const sh of W.shelters) if (Math.hypot(sh.x - gx, sh.z - gz) < 2.1) nearNest = true;
       for (const v of W.vents) if (Math.hypot(v.x - gx, v.z - gz) < 2.4) nearNest = true;
+      if (this.heldItem.kind === 'stone' && W.domeCaches) {
+        for (const dc of W.domeCaches) if (dc.hardShell && dc.energy > 0.2 && Math.hypot(dc.x - gx, dc.z - gz) < 1.3) nearNest = true;
+      }
       if ((nearNest && this.heldItem.holdT > 2.5) || this.heldItem.holdT > 18 || this.sleep.stage > 0) {
         it.held = false;
-        this.ev('carry', `cached ${this.heldItem.kind} near shelter/vent`);
+        if ('heldBy' in it) it.heldBy = null;
+        this.ev('carry', `cached ${this.heldItem.kind} near shelter/cache`);
         this.heldItem = null;
       }
       return;
     }
     if (this.sleep.stage > 0 || gripDrive < 0.25) return;
-    // Grasp & cache snack when sated, or carry unhatched egg toward warm vent/shelter
+    // Grasp & cache snack when sated, carry unhatched egg toward warm vent/shelter, or carry lithic DomeStone tool!
     if (this.metab.hunger() < 0.28) {
       for (const s of W.snacks) {
         if (!s.held && Math.hypot(s.x - gx, s.z - gz) < 0.85) {
@@ -1012,6 +1061,17 @@ export class Creature {
           eg.held = true;
           this.heldItem = { kind: 'egg', ref: eg, holdT: 0 };
           this.ev('carry', 'carrying egg toward warmer microclimate');
+          return;
+        }
+      }
+    }
+    if (W.domeStones) {
+      for (const st of W.domeStones) {
+        if (!st.heldBy && Math.hypot(st.x - gx, st.z - gz) < 0.78) {
+          st.heldBy = 'focal';
+          this.heldItem = { kind: 'stone', ref: st, holdT: 0 };
+          this.stats.stonesMoved = (this.stats.stonesMoved || 0) + 1;
+          this.ev('carry', 'grasped lithic DomeStone tool');
           return;
         }
       }
@@ -1040,7 +1100,10 @@ export class Creature {
     w = Math.atan2(Math.sin(w), Math.cos(w));
     this.prevHdg = h;
     const omega = (w / dt) * (1 + 0.05 * gauss(this.gr));
-    const az = this.light > 0.35 ? Math.atan2(Math.sin(SUN_AZ - h), Math.cos(SUN_AZ - h)) : null;
+    let az = this.light > 0.35 ? Math.atan2(Math.sin(SUN_AZ - h), Math.cos(SUN_AZ - h)) : null;
+    if (az === null && this.heptarch && !this.lesion.magneto) {
+      az = this.heptarch.stepCryptochrome4(dt, h, com, this.world, false);
+    }
     N.step(dt, omega, az);
     this.omega = omega;
     this.babbleStep(dt);
@@ -1156,6 +1219,13 @@ export class Creature {
       this.metacog.step(mf, wmStepSE, this.wm.predVar, this.familiar, this.progEMA, this.lastRaceAltG, this.lastRaceBestG, !!this.lesion.metacog);
       if (!this.lesion.metacog && this.frame % 60 === 0) this.metacog.auditAndConsolidate(this, false);
     }
+
+    // HEPTARCH v0.2 7-Seat Council, Raider ColdStrike, NESTOR 23-Rung Governor & Levin Bioelectric Regeneration
+    if (this.heptarch) {
+      this.heptarch.step(0.1, this);
+      this.heptarch.stepBioelectric(0.1, this.metab, !!this.lesion.bioelec);
+    }
+    this.world.transferEnergy?.(4, 9, 0.006);
 
     // Sleep consolidation on entering deep NREM (stage 3): Hopfield trisynaptic mDAE + DG + InfoNCE, HDC cross-spectral Wiener, EWC + Vidal MPS
     if (this.sleep.stage === 0) this.consolidated = false;
@@ -1299,7 +1369,8 @@ export class Creature {
   }
 
   motorLearn(delta) {
-    const achMod = (0.5 + this.brain.nm.ACh) * (this.lesion.metacog ? 1 : (this.metacog?.achGain ?? 1));
+    const zenkaiMod = this.lesion.heptarch ? 1.0 : (this.heptarch?.zenkaiGain ?? 1.0);
+    const achMod = (0.5 + this.brain.nm.ACh) * (this.lesion.metacog ? 1 : (this.metacog?.achGain ?? 1)) * zenkaiMod;
     // Asymmetric 3-factor RPE: reinforce positive progress strongly, damp negative RPE on steep slopes so CPG coordination isn't erased
     const effDelta = delta >= 0 ? clamp(delta, 0, 1) : 0.25 * clamp(delta, -1, 0);
     const lr = 0.0022 * achMod * effDelta;
@@ -1401,6 +1472,73 @@ export class Creature {
           this.outcome(null, 0.9);
           this.ev('eat', 'snapped photonic bio-mite');
           break;
+        }
+      }
+    }
+
+    // Dome Sanctuary Nectar, Spoiling Caches (lithic DomeStone tool cracking) & Quantum Crystal Monoliths + C3 Twins
+    if (this.sleep.stage === 0) {
+      if (W.sanctuaries && this.metab.hunger() > 0.18) {
+        for (let i = 0; i < W.sanctuaries.length; i++) {
+          const sc = W.sanctuaries[i];
+          if (sc.nectar > 0.35 && Math.hypot(sc.x - hd[0], sc.z - hd[2]) < sc.r * 0.72) {
+            sc.nectar = Math.max(0, sc.nectar - 0.30);
+            this.metab.eat('sugar', 0.9);
+            W.transferEnergy?.(0, 1, 0.25);
+            this.hdcFood.learn(sc.x, sc.z, 0.75);
+            this.stats.sanctuaryFeeds = (this.stats.sanctuaryFeeds || 0) + 1;
+            this.ev('eat', 'drank bioluminescent Big-Tree sanctuary nectar');
+            break;
+          }
+        }
+      }
+      if (W.domeCaches && this.metab.hunger() > 0.20) {
+        for (let i = 0; i < W.domeCaches.length; i++) {
+          const dc = W.domeCaches[i];
+          if (dc.energy > 0.20 && Math.hypot(dc.x - hd[0], dc.z - hd[2]) < 1.15) {
+            let canOpen = !dc.hardShell;
+            if (dc.hardShell && W.domeStones) {
+              for (const st of W.domeStones) {
+                if (Math.hypot(st.x - dc.x, st.z - dc.z) < 1.8) { canOpen = true; break; }
+              }
+            }
+            if (canOpen) {
+              const gain = 1.1 * Math.max(0.25, dc.freshness);
+              dc.energy = 0;
+              this.metab.eat('fat', gain);
+              W.transferEnergy?.(0, 1, 0.32 * gain);
+              this.hdcFood.learn(dc.x, dc.z, 0.8);
+              this.stats.cachesOpened = (this.stats.cachesOpened || 0) + 1;
+              this.ev('eat', dc.hardShell ? 'cracked hard-shell DomeCache with lithic stone tool!' : 'foraged DomeCache');
+              break;
+            }
+          }
+        }
+      }
+      if (W.monoliths && this.frame % 30 === 0) {
+        for (let i = 0; i < W.monoliths.length; i++) {
+          const mn = W.monoliths[i];
+          if (mn.charge > 0.40 && Math.hypot(mn.x - hd[0], mn.z - hd[2]) < 1.95) {
+            mn.charge = Math.max(0.05, mn.charge - 0.28);
+            if (this.heptarch) this.heptarch.capacitor = clamp(this.heptarch.capacitor + 0.22, 0, 1);
+            if (mn.kind === 'ck31' && this.flaws.leaky.on) {
+              // CK-31 ray anchor stabilizes phase-drift flaw bursts temporarily
+              this.ev('monolith', 'Conway-Kochen 31-ray monolith anchored phase drift');
+            } else if (mn.kind === 'hoggar64') {
+              // C3 Cospectral Twins (sigma_0 vs sigma_1): intact QGT/Jordan sensing taps safe sigma_1; lesioned misfires on sigma_0!
+              if (!this.lesion.metacog && !this.lesion.heptarch) {
+                this.metab.atp = clamp(this.metab.atp + 0.12, 0, 1);
+                this.ev('monolith', 'Hoggar-64 + C3 Jordan trace discriminated safe twin σ1 (+ATP)');
+              } else {
+                this.nociception = Math.max(this.nociception, 0.5);
+                this.ev('monolith', 'blind to C3 cospectrality: misfired on contextual twin σ0!');
+              }
+            } else {
+              this.ev('monolith', `resonated with ${mn.label} (+Capacitor)`);
+            }
+            this.stats.monolithResonances = (this.stats.monolithResonances || 0) + 1;
+            break;
+          }
         }
       }
     }
