@@ -11,7 +11,7 @@ export class Metab {
   constructor() { this.gut = { glc: 4, fat: 2, prot: 1.5, water: 3, residue: 0 }; this.blood = { glc: 3, ffa: 1, aa: 2, ket: 0.2, urea: 0, water: 5 }; this.liverGly = 20; this.fat = 400; this.muscle = 120; this.brainGlc = 0.6; this.atp = 2; this.heat = 0;
     this.insulin = 0.3; this.glucagon = 0.3; this.cortisol = 0.3; this.ghrelin = 0.3; this.leptin = 0.5; this.symp = 0.3; this.para = 0.4; this.hr = 70; this.pidI = 0; this.pidPrev = 0; this.motility = 0.4;
     this.bladder = 0; this.colon = 0; this.excreted = 0; this.eaten = 0; this.integrity = 1; this.tissue = 0; this.thirst = 0; this.events = []; this.t = 0; }
-  eat(kind, amount = 1) { const g = this.gut; if (kind === 'fat') { g.fat += 1.2 * amount; g.glc += 0.4 * amount; g.water += 0.2 * amount; } else if (kind === 'sugar') { g.glc += 2 * amount; g.water += 0.25 * amount; } else { g.glc += 1.2 * amount; g.fat += 0.5 * amount; g.prot += 0.6 * amount; g.water += 0.32 * amount; } g.residue += 0.4 * amount; this.eaten += amount; }
+  eat(kind, amount = 1) { const g = this.gut; if (kind === 'fat') { g.fat += 1.2 * amount; g.glc += 0.4 * amount; } else if (kind === 'sugar') { g.glc += 2 * amount; } else { g.glc += 1.2 * amount; g.fat += 0.5 * amount; g.prot += 0.6 * amount; } g.water += 0.8 * amount; g.residue += 0.4 * amount; this.eaten += amount; }
   drink(a = 1) { this.gut.water += a; }
   /** one simulated minute. hour: circadian clock (0..24); ens: enteric neuron rate 0..1; motorCost: summed |muscle| activation; spikes: neural activity this tick; asleep/forced flags */
   tick({ hour, ens, motorCost, spikes, stress, scnLesion = false }) {
@@ -36,13 +36,9 @@ export class Metab {
     f = mv(b.aa, 0.004 * (this.glucagon + this.cortisol)); b.aa -= f; b.glc += 0.75 * f; b.urea += 0.1 * f; this.heat += 0.15 * f;
     f = mv(this.muscle, 0.00015 * this.cortisol * (1 - this.insulin)); this.muscle -= f; b.aa += f;
     f = mv(b.aa, 0.002 * this.insulin * clamp((180 - this.muscle) / 60)); b.aa -= f; this.muscle += f; this.tissue += 0.02 * f; // anabolic growth (feeds morphological growth)
-    // kidneys + respiratory/cutaneous evaporative loss (scales with exertion & sympathetic tone)
-    f = mv(b.urea, 0.01); b.urea -= f; this.bladder += f;
-    f = mv(b.water, 0.004 * Math.max(0, b.water - 4)); b.water -= f; this.bladder += 0.3 * f;
-    const evap = 0.00055 + 0.00075 * clamp(motorCost / 18) + 0.0003 * this.symp;
-    f = mv(b.water, evap); b.water -= f;
-    // Osmoreceptive + anticipatory oropharyngeal/gastric stretch hydration signal
-    this.thirst = clamp((4.65 - (b.water + 0.22 * Math.min(4, g.water))) / 1.85);
+    // kidneys: urea + excess water -> bladder
+    f = mv(b.urea, 0.01); b.urea -= f; this.bladder += f; f = mv(b.water, 0.004 * Math.max(0, b.water - 4)); b.water -= f; this.bladder += 0.3 * f; f = mv(b.water, 0.0005); b.water -= f; // insensible loss (pass 8: was 0.0015, which drained blood water in ~2 simulated min)
+    this.thirst = clamp((4.5 - b.water) / 2);
     // brain glucose transport
     f = Math.max(0, 0.3 * (b.glc / 3 - this.brainGlc / 0.6)); f = Math.min(f, b.glc); b.glc -= f; this.brainGlc += f;
     // ATP demand: basal + per spike + muscle work + heart

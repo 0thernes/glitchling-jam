@@ -12,11 +12,8 @@ export class CPG {
     const w = (i, j, v) => { this.W[i * N + j] += v; }; // j -> i
     for (let o = 0; o < 12; o++) { const L = 2 * o, R = 2 * o + 1; w(L, R, -6); w(R, L, -6); }
     for (let s = 0; s < 5; s++) { // asymmetric intersegmental coupling: segment s excites segment s+1 (towards the head) on the same side -> a phase lag
-      // travels along the body; modulated by embryonic Hox-GRN somite wave gradient (cpgPhaseBias, 0.0 at starter)
-      const hb = G.cpgPhaseBias ? (G.cpgPhaseBias[s] || 0) : 0;
-      const A = (G.wvAsc ?? 1.6) * (1 + hb), D = (G.wvDesc ?? 0.4) * (1 - 0.5 * hb);
-      w(2 * (s + 1), 2 * s, A); w(2 * (s + 1) + 1, 2 * s + 1, A); w(2 * s, 2 * (s + 1), D); w(2 * s + 1, 2 * (s + 1) + 1, D);
-    }
+      // travels along the body; on this body (anisotropic scale friction) that wave direction propels it forward (measured in test/gait_probe.mjs)
+      const A = G.wvAsc ?? 1.6, D = G.wvDesc ?? 0.4; w(2 * (s + 1), 2 * s, A); w(2 * (s + 1) + 1, 2 * s + 1, A); w(2 * s, 2 * (s + 1), D); w(2 * s + 1, 2 * (s + 1) + 1, D); }
     const legSeg = [1, 1, 3, 3]; for (let l = 0; l < 4; l++) { const F = 12 + 2 * l, B = F + 1, s = legSeg[l]; const same = l % 2 === 0; const [cS, cO] = l < 2 ? [G.cS, G.cO] : [G.rS, G.rO]; w(F, 2 * s + (same ? 0 : 1), cS); w(B, 2 * s + (same ? 1 : 0), cS); w(F, 2 * s + (same ? 1 : 0), cO); w(B, 2 * s + (same ? 0 : 1), cO); }
     for (let a = 0; a < 2; a++) { const F = 20 + 2 * a, B = F + 1; w(F, 10 + a, 1.0); w(B, 11 - a, 1.0); }
     for (let i = 0; i < N; i++) { this.x[i] = r() * 0.5; this.a[i] = r() * 0.5; for (let j = 0; j < N; j++) this.W[i * N + j] += (r() - 0.5) * 0.2; }

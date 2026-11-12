@@ -1,1665 +1,274 @@
-// Glitchling v2 "live" (pass 19 architecture):
-// Spiking 16-compartment discrete-Markov HH laminar brain (S=436..GIGA=14,156,048 neurons / 1.13B synapses) + LTC CPG + 122 sLTC motor neurons +
-// 128-gene zygote-cleavage/gastrulation 5-clade (0L..10L + patagium + angler-lure) 336..360-tet anisotropic FEM soft body & 32 Henneman muscle fascicles +
-// 64-vessel Murray's-Law vascular tree + 24x8x8 D3Q19 LBM + 1,024 WCSPH Erythrocytes & chemotactic Leukocytes +
-// dual 256x128 foveated retinas (65,536 receptors / 196,608 cone+rod & 6 RGC mosaics) -> V1 -> V2 -> V4 -> 65,536-concept Ontology-grounded IT/PRh + EKF-SLAM +
-// 32,768-neuron 14-population conductance-based spiking hippocampal-subicular loop (6 interneuron classes + Predictive Successor Representation) +
-// online RTRL selective SSM + Multimodal Transformer-XL world model (std .. omega 28.7M, 32x16x3 Patch-VAE + Flow + 5-min +300s HTN+MCTS planner) +
-// 48-peer multi-clade biosphere + 256 embodied 3D micro-fauna + >5.2M microbial continuum +
-// Tsotchke 16Q WASM / 18Q WebGPU + 32Q chi=32 Vidal MPS + 5-layer Binary MERA + pulse-level qutrit Transmon DRAG + PEC/ZNE.
-import { mulberry, clamp, gauss, betaIG, IG0 } from './util.js';
+// Glitchling v2 "live": one creature = spiking brain + LTC central pattern generator + motor-neuron pool + soft body + metabolism
+// + selective SSM memory + learned world model + Beta beliefs over 16 feeding sites + striatal D1/D2 spike race with expected-free-
+// energy terms and a veto + sleep with NREM replay and REM dreaming (world-model rollouts). DOM-free: runs in Node for tests.
+import { mulberry, clamp, gauss, betaIG, IG0, sig } from './util.js';
 import { World, SITES } from './world.js';
 import { Body, CH, NS } from './body.js';
-import { Hemodynamics } from './fluid.js';
 import { HDCMap, Hopfield } from './memory.js';
 import { develop, developSteer } from './genome.js';
 import { Nav, VIEW } from './nav.js';
-import { Retina, STEREO_RANGE } from './vision.js';
-import { Metacognition } from './metacog.js';
-import { TsotchkeQRNG } from '../tsotchke/qrng.js';
+import { ProtoLayers, K1, K2 } from './protolayers.js';
 import { STARTER, STARTER_INFO } from './starter_genome.js';
-import { Brain, R0, RN, NSTR_OPT } from './brain.js';
+import { PredictiveCoding } from './mind.js';
+import { Brain, R0, RN, NNEU } from './brain.js';
 import { CPG, NCPG } from './cpg.js';
 import { Metab } from './metab.js';
-import { SelectiveSSM, WorldModel, Sleep, PredictiveCoding, HTNPlanner, N_VIS_PATCH } from './mind.js';
+import { SelectiveSSM, WorldModel, Sleep, STAGES } from './mind.js';
 import { Skin } from './skin.js';
-import { Ecosystem } from './ecosystem.js';
-
-export const CLOCK_MODES = {
-  circadian: { framesPerMin: 15, scale: 240, label: '240× (6-min day · fast demo)' },
-  ultradian: { framesPerMin: 60, scale: 60, label: '60× (24-min day)' },
-  realtime:  { framesPerMin: 3600, scale: 1, label: '1× Biological real-time (24-hr day)' },
-  wall:      { framesPerMin: 3600, scale: 1, label: '1× Local Wall-Clock Solar Sync' },
-};
-
-export const DEFAULT_FLAWS = {
-  scramble: { on: false, period: 90, noise: 0.25 },
-  leaky: { on: false, rate: 0.06 },
-  backwards: { on: false },
-  misfire: { on: false, period: 60, sd: 0.3, jolts: 20 },
-};
+export const DEFAULT_FLAWS = { scramble: { on: false, period: 90, noise: 0.25 }, leaky: { on: false, rate: 0.06 }, backwards: { on: false }, misfire: { on: false, period: 60, sd: 0.3, jolts: 20 } };
 export const MOT_NAMES = ['forward', 'turn L', 'turn R', 'rear up', 'reach', 'grip', 'jump', 'curl'];
 export const GAIT = { sF: 2.2, sB: 0, gF: 1.8, gB: 0, eF: 1.0, eB: 0, eB2: 0, cS: 1.2, cO: 0, rS: 1.2, rO: 0, wv: 1, tauA: 0.35, gk: 5, cf: 1.3 };
 const PCMIX = globalThis.TW?.pcMix ?? 0.25;
-const SUN_AZ = 0.8;
-const NMN = CH.N * 2, NPHI = 20, NY = 25, NZ = 64 + 8;
-
+const SUN_AZ = 0.8; /* fixed world azimuth of the sun (the compass cue) */
+const NMN = CH.N * 2, NPHI = 16, NY = 25, NZ = 64 + 8;
+const PHI_NAMES = ['bearL', 'bearR', 'forage', 'obstacle', 'nearGoal', 'rockTouch', 'stuck', 'nocicept', 'upsideDown', 'springNear', 'bearSin', 'goalUp', 'dreamPrior', 'bias'];
+const PG = { thal: 1.2, hip: 1.0, lc: 1.2, ...(globalThis.TW?.protoGain || {}) }; // e-means layer -> brain current gains (pass 15)
 export class Creature {
   constructor(seed = 1, opts = {}) {
-    this.seed = seed;
-    const mEval0 = !!opts.motorEval;
-    const r = (this.r = mulberry(seed));
-    this.gr = mulberry(seed * 9973 + 7);
-    this.qrng = mEval0
-      ? { uniform: () => this.gr(), gauss: () => 0, evolve: () => {}, initWebGPU18Q: async () => false, initWebGPU16Q: async () => false }
-      : new TsotchkeQRNG(seed);
-    this.flaws = JSON.parse(JSON.stringify(opts.flaws || DEFAULT_FLAWS));
-
-    this.world = new World(seed);
-    this.gen = { ...STARTER, ...(opts.genome || globalThis.TW?.genome || {}) };
-    const gn = this.gen;
-    const initHdg = r() * Math.PI * 2;
-    this.body = new Body(this.world, 0, 0, initHdg, gn);
-    this.fluid = mEval0
-      ? { segO2: new Float64Array(7).fill(0.97), step: () => {} }
-      : new Hemodynamics(seed);
-    this.body.segO2 = this.fluid.segO2;
-    this.brain = new Brain(seed, opts.brainScale || null, gn);
-    this.eco = opts.eco ? new Ecosystem(this.world, seed, typeof opts.eco === 'object' ? opts.eco : {}) : null;
-    this.G = {
-      ...GAIT,
-      cS: gn.cS, cO: gn.cO, rS: gn.rS, rO: gn.rO, tauA: gn.tauA, cf: gn.cf, wvAsc: gn.wvAsc, wvDesc: gn.wvDesc,
-      cpgPhaseBias: this.body.hox?.cpgPhaseBias || null,
-      ...(globalThis.TW?.gait || {}),
-    };
-    this.cpg = new CPG(seed, this.G);
-    this.liftK = globalThis.TW?.lift ?? gn.lift;
-    if (globalThis.TW?.coulomb) this.body.coulomb = globalThis.TW.coulomb;
-
-    this.metab = new Metab();
-    this.sleep = new Sleep();
-    {
-      const F3 = this.body.F[3], c0 = this.body.com();
-      this.prevHdg = Math.atan2(F3.f[2], F3.f[0]);
-      this.prevSy = F3.s[1];
-      this.rollVelEMA = 0;
-      this.nav = new Nav(seed, this.prevHdg);
-      this.nav.px = c0[0];
-      this.nav.pz = c0[2];
-      this.navErr = { hd: 0, pos: 0 };
-    }
-    const mEval = (this.motorEval = !!opts.motorEval);
-    this.retina = new Retina(seed, SITES, this.world.pools.length);
-    if (mEval) this.retina.skipSheet = true;
-    this.ssm = new SelectiveSSM(NY + 8, 32, seed);
-    this.wm = mEval
-      ? { surprise: 0, predVar: 0.05, lesion: true, learn: () => 0 }
-      : new WorldModel(NZ, NY, seed, opts.wmScale || null);
-    this.metacog = mEval
-      ? { achGain: 1, exploreTemp: 1, step: () => {}, auditAndConsolidate: () => {} }
-      : new Metacognition(seed, 96);
-    this.htn = mEval ? null : new HTNPlanner(seed, NSTR_OPT);
-    this.metaFeat = new Float64Array(96);
-    this.ofcApp = new Float32Array(NSTR_OPT);
-    this.ofcAv = new Float32Array(NSTR_OPT);
-    this.dreamAct40 = new Float64Array(40);
-    this.dreamPlan32 = new Float64Array(32);
-    this.dreamMacroAct8 = new Float64Array(8);
-    this.dreamY5 = new Float64Array(NY);
-    this.dreamY20 = new Float64Array(NY);
-    this.dreamMacro8 = new Float64Array(8);
-    this.visPrev = new Float32Array(N_VIS_PATCH);
-    this.hasVisPrev = false;
-
-    this.z = new Float64Array(NZ);
-    this.y = new Float64Array(NY);
-    this.yPrev = new Float64Array(NY);
-    this.zPrev = new Float64Array(NZ);
-
-    // Biosphere thermoregulation, antennal chemotaxis, camouflage, syrinx vocalization & active carrying
-    this.bodyTemp = gn.thermOpt ?? 24.0;
-    this.ambientTemp = 22.0;
-    this.pherFood = 0;
-    this.pherAlarm = 0;
-    this.pherMate = 0;
-    this.camoLevel = 0;
-    this.vocalFreq = 340 + 220 * (gn.pigmentHue ?? 0.72);
-    this.vocalAmp = 0;
-    this.heldItem = null;
-    this.wakingSWRs = 0;
-
-    this.lesion = {
-      mot: false, cpg: false, mn: false, stdp: false, wm: false, astro: false, learnMotor: false,
-      efe: false, veto: false, dream: false, vision: false, metacog: false, ssmLearn: false, qrng: false, homeo: false,
-      fem: false, fluid: false, dg: false,
-    };
+    this.seed = seed; const r = (this.r = mulberry(seed)); this.gr = mulberry(seed * 9973 + 7); this.flaws = JSON.parse(JSON.stringify(opts.flaws || DEFAULT_FLAWS));
+    this.world = new World(seed); this.body = new Body(this.world, 0, 0, r() * Math.PI * 2); this.brain = new Brain(seed); this.gen = { ...STARTER, ...(globalThis.TW?.genome || {}) }; const gn = this.gen; this.G = { ...GAIT, cS: gn.cS, cO: gn.cO, rS: gn.rS, rO: gn.rO, tauA: gn.tauA, cf: gn.cf, wvAsc: gn.wvAsc, wvDesc: gn.wvDesc, ...(globalThis.TW?.gait || {}) }; this.cpg = new CPG(seed, this.G); this.liftK = globalThis.TW?.lift ?? gn.lift; if (globalThis.TW?.coulomb) this.body.coulomb = globalThis.TW.coulomb; this.metab = new Metab(); this.sleep = new Sleep(); { const F3 = this.body.F[3], c0 = this.body.com(); this.prevHdg = Math.atan2(F3.f[2], F3.f[0]); this.nav = new Nav(seed, this.prevHdg); this.nav.px = c0[0]; this.nav.pz = c0[2]; this.navErr = { hd: 0, pos: 0 }; } this.protos = new ProtoLayers(seed);
+    this.ssm = new SelectiveSSM(NY + 8, 32, seed); this.wm = new WorldModel(NZ, NY); this.z = new Float64Array(NZ); this.y = new Float64Array(NY); this.yPrev = new Float64Array(NY); this.zPrev = new Float64Array(NZ);
+    this.lesion = { mot: false, cpg: false, mn: false, stdp: false, wm: false, astro: false, learnMotor: false, efe: false, veto: false, dream: false };
     this.t = 0; this.frame = 0; this.tick = 0; this.hour = 8; this.dayLen = 1440;
-    const initClock = opts.clockMode || globalThis.CLOCK_MODE || globalThis.TW?.clock ||
-      (typeof location !== 'undefined' ? new URLSearchParams(location.search).get('clock') : null) || 'circadian';
-    this.setClockMode(initClock);
-
-    // Motor connectome: innate genome-developed W*0 + learned plastic W* + intrinsic biases + diagonal Fisher EWC anchors
-    this.mnAct = new Float64Array(NMN);
-    this.xi = new Float64Array(NMN);
-    this.phi = new Float64Array(NPHI);
-    this.motRate = new Float64Array(8);
-    this.mnHomeo = new Float64Array(NMN);
-    this.motBias = new Float64Array(8);
-    this.mnAvg = new Float64Array(NMN).fill(0.1);
-    this.motDrive = new Float64Array(8);
-
-    this.Wc = new Float64Array(NMN * NCPG);
-    this.Wm = new Float64Array(NMN * 8);
-    this.Wp = new Float64Array(NMN * NPHI);
-    this.Wmot = new Float64Array(8 * NPHI);
-    this.Ec = new Float64Array(NMN * NCPG);
-    this.Em = new Float64Array(NMN * 8);
-    this.Ep = new Float64Array(NMN * NPHI);
-    this.Emot = new Float64Array(8 * NPHI);
-
-    this.yAvg = new Float64Array(NCPG);
-    this.mAvg = new Float64Array(8);
-    this.initMotorWiring();
-
-    // Innate ("unlearned") snapshots vs EWC consolidated anchors & Fisher precision
-    this.Wc0 = Float64Array.from(this.Wc);
-    this.Wm0 = Float64Array.from(this.Wm);
-    this.Wp0 = Float64Array.from(this.Wp);
-    this.Wmot0 = Float64Array.from(this.Wmot);
-    this.WcAnc = Float64Array.from(this.Wc);
-    this.WmAnc = Float64Array.from(this.Wm);
-    this.WmotAnc = Float64Array.from(this.Wmot);
-    this.fishWc = new Float32Array(this.Wc.length);
-    this.fishWm = new Float32Array(this.Wm.length);
-    this.fishWmot = new Float32Array(this.Wmot.length);
-    this.ewcEnergy = 0;
-
-    // Beliefs & spatial/episodic memories
-    this.wSite = new Float32Array(SITES).fill(0.25);
-    this.bA = new Float64Array(SITES).fill(1);
-    this.bB = new Float64Array(SITES).fill(1);
-    this.wAv = new Float64Array(SITES);
-    this.visits = new Float64Array(SITES);
-    this.featC = new Float64Array(4).fill(0.15);
-    this.featS = new Float64Array(4).fill(0.15);
-    this.senPerm = [...Array(16).keys()];
-
-    this.goal = null; this.race = null; this.goalT = 0; this.lastDist = null;
-    this.rBar = 0; this.da = 0; this.rpe = 0; this.nociception = 0; this.stuck = 0; this.progEMA = 0;
-    this.recent = new Float64Array(SITES);
-    this.selfV = 0.35; this.selfW = 0.45;
-    this.goalBest = 1e9; this.goalBestT = 0;
-    this.lastRaceBestG = 0; this.lastRaceAltG = 0;
-
-    this.Vimg = new Float64Array(8);
-    this.episodes = [];
-    this.hdcVisit = new HDCMap(seed, 1024, 0.45);
-    this.hdcFood = new HDCMap(seed + 1, 1024, 0.35);
-    this.hdcWater = new HDCMap(seed + 2, 1024, 0.35);
-    this.hop = mEval
-      ? { X: [], lastIdx: -1, lesionDG: true, ca1Novelty: 0, eventsSkipped: 0, sleep: () => 0, retrieve: () => null, shouldStore: () => false, store: () => {} }
-      : new Hopfield(NZ, 1024, 24, seed);
-    this.consolidated = false;
-    this.zMean = new Float64Array(NZ);
-    this.familiar = 0;
-    this.drinking = 0;
-    this.cephalic = 0;
-    this.limbUse = new Float64Array(this.body.limbs.length);
-    this.limbUseEMA = new Float64Array(this.body.limbs.length);
-    this.limbUseN = 0;
-    this.pc = new PredictiveCoding(seed, NY);
-
-    this.memStats = { stored: 0, retrievals: 0, dreamSim: 0, famMean: 0 };
-    this.stats = {
-      eats: 0, rewards: 0, tries: 0, vetoes: 0, races: 0, dreams: 0, replays: 0,
-      mirrored: 0, rewires: 0, misfires: 0, dist: 0, stings: 0, snacks: 0, urine: 0, feces: 0, drinks: 0,
-    };
-    this.events = [];
-    this.motorHist = [];
-    this.entropy = 0;
-    this.lastCom = this.body.com();
-    this.growth = 0;
-    this.raceLog = new Float64Array(NSTR_OPT * 2);
-    this.dreamLog = [];
-    this.skin = new Skin();
-    this.speedEMA = 0;
-
-    // Initial retinal look around starting pose
-    if (!opts.noVision) this.retina.step(this.body, this.world, this.nav, false, false);
+    // motor system
+    this.mnAct = new Float64Array(NMN); this.xi = new Float64Array(NMN); this.phi = new Float64Array(NPHI); this.motRate = new Float64Array(8); this.mnHomeo = new Float64Array(NMN); this.mnAvg = new Float64Array(NMN).fill(0.1); this.motDrive = new Float64Array(8);
+    this.Wc = new Float64Array(NMN * NCPG); this.Wm = new Float64Array(NMN * 8); this.Wp = new Float64Array(NMN * NPHI); this.Wmot = new Float64Array(8 * NPHI);
+    this.Ec = new Float64Array(NMN * NCPG); this.Em = new Float64Array(NMN * 8); this.Ep = new Float64Array(NMN * NPHI); this.Emot = new Float64Array(8 * NPHI); this.yAvg = new Float64Array(NCPG); this.mAvg = new Float64Array(8); this.win = 0;
+    this.initMotorWiring(); this.Wc0 = Float64Array.from(this.Wc); this.Wm0 = Float64Array.from(this.Wm); this.Wp0 = Float64Array.from(this.Wp); this.Wmot0 = Float64Array.from(this.Wmot);
+    // values and beliefs over the 16 sites (names follow the reference organism)
+    this.wSite = new Float32Array(SITES).fill(0.25); this.bA = new Float64Array(SITES).fill(1); this.bB = new Float64Array(SITES).fill(1); this.wAv = new Float64Array(SITES); this.visits = new Float64Array(SITES); this.featC = new Float64Array(4).fill(0.15); this.featS = new Float64Array(4).fill(0.15);
+    this.senPerm = [...Array(16).keys()]; this.goal = null; this.race = null; this.goalT = 0; this.lastDist = null; this.rBar = 0; this.da = 0; this.rpe = 0; this.nociception = 0; this.stuck = 0; this.progEMA = 0; this.recent = new Float64Array(SITES); this.selfV = 0.3; this.selfW = 0.25; this.goalBest = 1e9; this.goalBestT = 0;
+    this.Vimg = new Float64Array(8); this.episodes = []; this.novelty = new Float32Array(24 * 24); this.hdcVisit = new HDCMap(seed, 1024, 0.45); this.hdcFood = new HDCMap(seed + 1, 1024, 0.35); this.hop = new Hopfield(NZ, 1024, 24, seed); this.consolidated = false; this.zMean = new Float64Array(NZ); this.familiar = 0; this.hdcWater = new HDCMap(seed + 2, 1024, 0.35); this.drinking = 0; this.cephalic = 0; this.limbUse = new Float64Array(6); this.limbUseEMA = new Float64Array(6); this.limbUseN = 0; this.pc = new PredictiveCoding(seed, NY); this.memStats = { stored: 0, retrievals: 0, dreamSim: 0, famMean: 0 }; this.stats = { eats: 0, rewards: 0, tries: 0, vetoes: 0, races: 0, dreams: 0, replays: 0, mirrored: 0, rewires: 0, misfires: 0, dist: 0, stings: 0, snacks: 0, urine: 0, feces: 0 };
+    this.events = []; this.motorHist = []; this.entropy = 0; this.lastCom = this.body.com(); this.growth = 0; this.raceLog = new Float64Array(SITES * 2); this.dreamLog = [];
+    this.skin = new Skin(); this.speedEMA = 0;
   }
-
-  setClockMode(mode = 'circadian') {
-    const key = CLOCK_MODES[mode] ? mode : 'circadian';
-    this.clockMode = key;
-    this.framesPerSimMin = CLOCK_MODES[key].framesPerMin;
-    this.timeCompression = CLOCK_MODES[key].scale;
-    if (key === 'wall' && typeof Date !== 'undefined') {
-      const now = new Date();
-      this.hour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
-    }
-  }
-
   ev(type, msg) { this.events.push({ t: this.tick, type, msg }); if (this.events.length > 80) this.events.shift(); }
   mn(ch, ant) { return ch * 2 + (ant ? 1 : 0); }
-
-  initMotorWiring() {
-    const r = mulberry(this.seed * 211 + 9), C = NCPG;
-    const wc = (ch, ant, k, v) => { this.Wc[this.mn(ch, ant) * C + k] += v; };
-    const wm = (ch, ant, m, v) => { this.Wm[this.mn(ch, ant) * 8 + m] += v; };
-    const wp = (ch, ant, p, v) => { this.Wp[this.mn(ch, ant) * NPHI + p] += v; };
-    for (let i = 0; i < this.Wc.length; i++) this.Wc[i] = (r() - 0.5) * 0.25;
-    for (let i = 0; i < this.Wm.length; i++) this.Wm[i] = (r() - 0.5) * 0.12;
-    for (let i = 0; i < this.Wp.length; i++) this.Wp[i] = (r() - 0.5) * 0.08;
-    // 100% of innate motor, righting, roll-damping, synergy, stalk, gaze & steering weights grow from the genome!
-    develop(this.gen, CH, wc, wm, wp);
-    const M = (m, p, v) => { this.Wmot[m * NPHI + p] = v; };
-    developSteer(this.gen, M);
-  }
-
-  updateSwingVel() {
-    const B = this.body;
-    if (!this.gripOf) {
-      this.gripOf = new Int8Array(CH.N).fill(-1);
-      B.limbs.forEach((L, k) => { this.gripOf[L.grip] = k; });
-      this.swingVel = new Float64Array(B.limbs.length);
-      this.swingPrev = new Float64Array(B.limbs.length);
-    }
-    B.limbs.forEach((L, k) => {
-      const sw = L.kind === 'leg' ? CH.leg + L.idx * 2 : CH.arm + L.idx * 3;
-      const st = B.stretch[sw];
-      const v = (st - this.swingPrev[k]) * 60;
-      this.swingPrev[k] = st;
-      this.swingVel[k] += 0.3 * (v - this.swingVel[k]);
-    });
-  }
-
-  setFlaws(f) {
-    const was = this.flaws.scramble.on;
-    this.flaws = JSON.parse(JSON.stringify(f));
-    if (this.flaws.scramble.on && !was) this.rewire();
-    if (!this.flaws.scramble.on) this.senPerm = [...Array(16).keys()];
-  }
-
-  rewire() {
-    const p = [...Array(16).keys()];
-    for (let i = 15; i > 0; i--) { const j = Math.floor(this.gr() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
-    this.senPerm = p;
-    this.stats.rewires++;
-    this.ev('scramble', 'senses rewired: SENS neurons now report through a new permutation');
-  }
-
-  // ------------------------------------------------------------------ sensing & binocular retinal-hippocampal navigation
-  target() {
-    const g = this.goal;
-    if (!g) return null;
-    if (g.type === 'site') {
-      if (globalThis.TW?.omni) {
-        const P = this.world.plants[g.k];
-        return [P.x, P.y + 0.3, P.z];
-      }
-      // Use hippocampal remembered landmark coordinates learned from binocular visual sightings (not omniscient map!)
-      const mp = this.retina.sitePos(g.k, this.world);
-      // If never glimpsed yet (conf=0) and probe forced a site goal directly, allow coarse floral plume / horizon prior
-      if (mp.conf === 0) {
-        const P = this.world.plants[g.k];
-        return [P.x, P.y + 0.3, P.z];
-      }
-      return [mp.x, this.world.height(mp.x, mp.z) + 0.3, mp.z];
-    }
-    if (g.type === 'water') {
-      if (g.pool !== undefined && !globalThis.TW?.omni) {
-        const mp = this.retina.poolPos(g.pool, this.world);
-        if (mp) return [mp.x, this.world.height(mp.x, mp.z), mp.z];
-      }
-      return [g.x, this.world.height(g.x, g.z), g.z];
-    }
-    if (g.type === 'snack') {
-      const s = this.world.snacks.find((q) => q.id === g.id);
-      if (!s) { this.goal = null; return null; }
-      return [s.x, s.y, s.z];
-    }
-    return [g.x, this.world.height(g.x, g.z), g.z];
-  }
-
+  initMotorWiring() { const r = mulberry(this.seed * 211 + 9), C = NCPG; const wc = (ch, ant, k, v) => { this.Wc[this.mn(ch, ant) * C + k] += v; }, wm = (ch, ant, m, v) => { this.Wm[this.mn(ch, ant) * 8 + m] += v; }, wp = (ch, ant, p, v) => { this.Wp[this.mn(ch, ant) * NPHI + p] += v; };
+    for (let i = 0; i < this.Wc.length; i++) this.Wc[i] = (r() - 0.5) * 0.3; for (let i = 0; i < this.Wm.length; i++) this.Wm[i] = (r() - 0.5) * 0.15; for (let i = 0; i < this.Wp.length; i++) this.Wp[i] = (r() - 0.5) * 0.1;
+    develop(this.gen, CH, wc, wm, wp); /* innate locomotion / turning / righting wiring grown from the genome (genome.js) */
+    for (let s = 0; s < 6; s++) wm(CH.long + s * 4, 0, 3, 1.6); /* hand-set: pitch synergy */
+    for (let s = 0; s < 6; s++) { wm(CH.long + s * 4 + 2, 0, 7, 1.6); wm(CH.radial + s, 1, 7, 0.8); } wm(CH.radial + 6, 0, 6, 1.5);
+    for (let a = 0; a < 2; a++) { wm(CH.arm + a * 3, 0, 4, 1.5); wm(CH.arm + a * 3 + 1, 0, 4, 1.2); wm(CH.arm + a * 3 + 2, 0, 3, 1.4); wm(CH.armGrip + a, 0, 5, 1.6); }
+    for (let l = 0; l < 4; l++) { wm(CH.legGrip + l, 0, 5, 1.4); wm(CH.leg + l * 2 + 1, 0, 6, 2.4); } for (let i = 0; i < 7; i++) wm(CH.radial + i, 0, 6, 1.4);
+    for (let s = 0; s < 2; s++) { wm(CH.stalk + s * 2, 0, 1, 0.8); wm(CH.stalk + s * 2, 1, 2, 0.8); }
+    for (let e = 0; e < 3; e++) { wp(CH.gaze + e * 2, 0, 10, 1.6); wp(CH.gaze + e * 2, 1, 10, -1.6); wp(CH.gaze + e * 2 + 1, 0, 11, 1.2); wp(CH.gaze + e * 2 + 1, 1, 11, -1.2); }
+    const M = (m, p, v) => { this.Wmot[m * NPHI + p] = v; }; // innate sense -> MOT drive (learning reweights these)
+    developSteer(this.gen, M); }
+  /** per limb: rate of change of the swing muscle's stretch (muscle-spindle velocity signal), low-passed */
+  updateSwingVel() { const B = this.body; if (!this.gripOf) { this.gripOf = new Int8Array(CH.N).fill(-1); B.limbs.forEach((L, k) => { this.gripOf[L.grip] = k; }); this.swingVel = new Float64Array(B.limbs.length); this.swingPrev = new Float64Array(B.limbs.length); }
+    B.limbs.forEach((L, k) => { const sw = L.kind === 'leg' ? CH.leg + L.idx * 2 : CH.arm + L.idx * 3; const st = B.stretch[sw]; const v = (st - this.swingPrev[k]) * 60; this.swingPrev[k] = st; this.swingVel[k] += 0.3 * (v - this.swingVel[k]); }); }
+  setFlaws(f) { const was = this.flaws.scramble.on; this.flaws = JSON.parse(JSON.stringify(f)); if (this.flaws.scramble.on && !was) this.rewire(); if (!this.flaws.scramble.on) this.senPerm = [...Array(16).keys()]; }
+  rewire() { const p = [...Array(16).keys()]; for (let i = 15; i > 0; i--) { const j = Math.floor(this.gr() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; } this.senPerm = p; this.stats.rewires++; this.ev('scramble', 'senses rewired: SENS neurons now report through a new permutation'); }
+  // ------------------------------------------------------------------ sensing
+  target() { const g = this.goal; if (!g) return null; if (g.type === 'site') { const P = this.world.plants[g.k]; return [P.x, P.y + 0.3, P.z]; } if (g.type === 'water') return [g.x, this.world.height(g.x, g.z), g.z]; if (g.type === 'snack') { const s = this.world.snacks.find((q) => q.id === g.id); if (!s) { this.goal = null; return null; } return [s.x, s.y, s.z]; } return [g.x, this.world.height(g.x, g.z), g.z]; }
   sense() {
-    const B = this.body, F = B.F, W = this.world, hd = B.head(), fr = F[this.bearSeg ?? (+(globalThis.process?.env?.BSEG ?? 6))];
-    const frAz = Math.atan2(fr.f[2], fr.f[0]);
-    const wrapAz = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-    B.curvature();
-
-    // Estimate current goal bearing/distance prior to retinal pass so boulder-tangent symmetry breaking knows goal side
-    const tgPre = this.target();
-    let preBear = 0, preDist = 1e9;
-    if (tgPre) {
-      if (this.lesion.nav) {
-        preDist = Math.hypot(tgPre[0] - hd[0], tgPre[2] - hd[2]);
-      } else {
-        const ex = tgPre[0] - this.nav.px, ez = tgPre[2] - this.nav.pz;
-        preBear = wrapAz(Math.atan2(ez, ex) - this.nav.heading());
-        preDist = Math.hypot(ex, ez);
-      }
-    }
-
-    // Update binocular ommatidial retina + hippocampal landmark SLAM at 60 Hz while awake (20 Hz in sleep)
-    if (this.sleep.stage === 0 || this.frame % 3 === 1) {
-      this.retina.step(B, W, this.nav, !!this.lesion.nav, !!this.lesion.vision, preBear, preDist);
-    }
-
-    const tg = this.target(), g = this.goal;
-    let bear = 0, dist = 0, up = 0;
-    this.navMode = 'sight';
-
-    if (tg) {
-      // Check if goal landmark is currently visible on the unoccluded binocular retina
-      const lmId = g?.type === 'site' ? g.k : g?.type === 'water' && g.pool !== undefined ? SITES + g.pool : -1;
-      if (globalThis.TW?.omni) {
-        const dx = tg[0] - hd[0], dy = tg[1] - hd[1], dz = tg[2] - hd[2];
-        bear = wrapAz(Math.atan2(dz, dx) - frAz);
-        dist = Math.hypot(dx, dz);
-        up = clamp(dy / 3, -1, 1);
-      } else if (lmId >= 0 && !this.lesion.vision && this.retina.vis[lmId] === 1) {
-        // High-acuity close binocular stereo fix (<= 9 u, unoccluded, inside 260-deg FOV)
-        bear = this.retina.visBear[lmId];
-        dist = this.retina.visDist[lmId];
-        up = clamp((tg[1] - hd[1]) / 3, -1, 1);
-        this.navMode = 'sight';
-      } else if (g?.type === 'snack') {
-        const dx = tg[0] - hd[0], dy = tg[1] - hd[1], dz = tg[2] - hd[2];
-        const dTrue = Math.hypot(dx, dz);
-        if (dTrue <= VIEW) {
-          bear = wrapAz(Math.atan2(dz, dx) - frAz);
-          dist = dTrue;
-          up = clamp(dy / 3, -1, 1);
-        } else if (this.lesion.nav) {
-          bear = 0; this.navMode = 'none';
-        } else {
-          const N = this.nav, ex = tg[0] - N.px, ez = tg[2] - N.pz;
-          bear = wrapAz(Math.atan2(ez, ex) - N.heading());
-          dist = Math.hypot(ex, ez);
-          this.navMode = 'path-integration';
-        }
-      } else {
-        // Occluded by rock/ridge or outside 260-deg FOV -> vector navigation from hippocampal landmark + path integration
-        if (this.lesion.nav) {
-          bear = 0;
-          dist = Math.hypot(tg[0] - hd[0], tg[2] - hd[2]);
-          this.navMode = 'none';
-        } else {
-          const N = this.nav;
-          const neckHdg = N.heading();
-          const hx = N.px + 1.15 * Math.cos(neckHdg), hz = N.pz + 1.15 * Math.sin(neckHdg);
-          const ex = tg[0] - hx, ez = tg[2] - hz;
-          bear = wrapAz(Math.atan2(ez, ex) - neckHdg);
-          dist = Math.hypot(ex, ez);
-          this.navMode = 'path-integration';
-        }
-      }
-    }
-
-    // Course-over-ground optic-flow drift compensation
-    {
-      const v = this.vel || [0, 0, 0];
-      this.vEMA = this.vEMA || [0, 0];
-      this.vEMA[0] += 0.05 * (v[0] - this.vEMA[0]);
-      this.vEMA[1] += 0.05 * (v[2] - this.vEMA[1]);
-      const sp = Math.hypot(this.vEMA[0], this.vEMA[1]) * 60;
-      if (tg && sp > 0.12 && !this.lesion.course) {
-        const hdgHead = Math.atan2(fr.f[2], fr.f[0]), course = Math.atan2(this.vEMA[1], this.vEMA[0]);
-        let off = course - hdgHead;
-        off = Math.atan2(Math.sin(off), Math.cos(off));
-        const w = (this.gen.kCourse ?? 0) * Math.min(1, (sp - 0.12) / 0.2);
-        bear = Math.atan2(Math.sin(bear - w * off), Math.cos(bear - w * off));
-      }
-    }
-
-    this.bear = bear;
-    this.dist = dist;
-    const [vx, vy, vz] = this.vel || [0, 0, 0];
-    const vf = (vx * fr.f[0] + vy * fr.f[1] + vz * fr.f[2]) * 60;
-    const vl = (vx * fr.s[0] + vy * fr.s[1] + vz * fr.s[2]) * 60;
-    this.vf = vf;
-    this.speedEMA += 0.02 * (Math.hypot(vx, vz) * 60 - this.speedEMA);
-
-    // Retinal obstacle looming (central + lateralised left/right hemifields)
-    const obst = this.lesion.vision ? 0 : this.retina.obstAhead;
-    const obstL = this.lesion.vision ? 0 : this.retina.obstL;
-    const obstR = this.lesion.vision ? 0 : this.retina.obstR;
-
-    let spring = 0;
-    for (const S of W.springs) { const d = Math.hypot(S.x - hd[0], S.z - hd[2]); if (d < 3) spring = Math.max(spring, 1 - d / 3); }
-    let rockT = 0;
-    for (let i = 0; i < B.n; i++) if (B.contact[i] === 2) rockT++;
-    rockT = clamp(rockT / 6);
-
-    const upY = F[3].u[1];
-    const upside = clamp(-upY * 1.5);
-    const sy = F[3].s[1];
-    const rollRate = clamp((sy - (this.prevSy ?? sy)) * 60, -6, 6);
-    this.prevSy = sy;
-    this.rollVelEMA = 0.65 * (this.rollVelEMA || 0) + 0.35 * rollRate;
-
-    const hunger = this.metab.hunger();
-    const awake = this.sleep.stage === 0;
-    // Proprioceptive uphill load recruitment (Golgi-tendon / spindle effort reflex) + posture-gated stride
-    const driveLevel = Math.max(hunger, this.lesion.thirst ? 0 : this.metab.thirst);
-    const upGate = clamp((upY + 0.25) / 0.55, 0.35, 1);
-    const loadBoost = awake && this.goal && !this.drinking ? clamp((0.32 - vf) * 0.55, 0, 0.32) : 0;
-    const forage = awake && this.goal ? (this.drinking ? 0.08 : (0.94 + 0.28 * driveLevel + loadBoost) * upGate) : 0;
-
-    // Vestibulospinal roll-stability gating: attenuate hard lateral turns when tilted so righting plants the down-side feet first
-    const turnStab = clamp((upY - 0.25) / 0.42, 0.05, 1);
-    const P = this.phi;
-    const turnGoalGate = 1 - 0.5 * Math.max(bear < 0 ? obstL : 0, bear > 0 ? obstR : 0);
-    P[0] = clamp(-bear / 0.7) * (tg ? turnStab * turnGoalGate : 0);
-    P[1] = clamp(bear / 0.7) * (tg ? turnStab * turnGoalGate : 0);
-    P[2] = forage;
-    P[3] = obst;
-    P[4] = tg ? clamp(1 - dist / 1.8) : 0;
-    P[5] = rockT;
-    P[6] = clamp(this.stuck);
-    P[7] = clamp(this.nociception);
-    P[8] = upside;
-    P[9] = spring * (tg ? 1 : 0.2);
-    P[10] = Math.sin(bear);
-    P[11] = up;
-    P[12] = clamp(this.Vimg[0] * 2, -1, 1) * 0.5;
-    P[13] = 1;
-    // Vestibular utricle static tilt (dead-zone latch only near 180-deg apex |sy|<=0.18; always track true lower side when |sy|>0.18)
-    const tilt = clamp((0.82 - upY) * 1.65);
-    if (upY > 0.55) {
-      this.rightSide = 0;
-    } else if (Math.abs(sy) > 0.18 || !this.rightSide) {
-      this.rightSide = sy >= 0 ? 1 : -1;
-    }
-    const rSide = this.rightSide || (sy >= 0 ? 1 : -1);
-    P[14] = tilt * (rSide > 0 ? 1 : 0);
-    P[15] = tilt * (rSide < 0 ? 1 : 0);
-    const rGate = clamp((0.83 - upY) * 1.9);
-    P[16] = sy > 0.12 && this.rollVelEMA > 0 ? clamp(this.rollVelEMA * 0.3) * rGate : 0;
-    P[17] = sy < -0.12 && this.rollVelEMA < 0 ? clamp(-this.rollVelEMA * 0.3) * rGate : 0;
-    if (globalThis.TW?.noTilt) P[14] = P[15] = P[16] = P[17] = 0;
-    // Retinal lateral boulder looming (left vs right hemifield), roll-stabilised
-    P[18] = obstL * (tg ? Math.max(0.35, turnStab) : 0.4);
-    P[19] = obstR * (tg ? Math.max(0.35, turnStab) : 0.4);
-
-    // World-model 25-dim proprioceptive + vestibular + contact + bearing vector y
-    const y = this.y;
-    for (let i = 0; i < 6; i++) { y[i] = clamp(B.curvL[i] / 3, -2, 2); y[6 + i] = clamp(B.curvU[i] / 3, -2, 2); }
-    y[12] = clamp(vf / 3, -2, 2); y[13] = clamp(vl / 3, -2, 2); y[14] = clamp(vy * 20, -2, 2); y[15] = upY; y[16] = sy;
-    for (let k = 0; k < 6; k++) { y[17 + k] = B.limbs[k] && B.contact[B.limbs[k].foot] ? 1 : 0; }
-    y[23] = Math.sin(bear); y[24] = Math.cos(bear) * (tg ? 1 : 0);
-
-    // Neural drive currents for all non-motor brain regions (O(1) sparse sheet reset on MEGA/GIGA!)
-    const ext = this.brain.ext, nm = this.brain.nm;
-    this.brain.prepareExt(awake, this.sleep.stage);
-    const sens = new Float64Array(16);
-    for (let i = 0; i < 8; i++) {
-      const ph = -Math.PI + ((i + 0.5) * 2 * Math.PI) / 8;
-      let d = Math.abs(bear - ph);
-      if (d > Math.PI) d = 2 * Math.PI - d;
-      sens[i] = tg ? 1.5 * Math.exp(-(d * d) / 0.4) : 0;
-    }
-    // 2D retinotopic V1 Gabor orientation energy + V4 chromatic/form + MT 2D radial optic-flow divergence
-    let rSum = 0, gSum = 0, bSum = 0;
-    for (let b = 0; b < 32; b++) {
-      rSum += this.retina.rgb[3 * b];
-      gSum += this.retina.rgb[3 * b + 1];
-      bSum += this.retina.rgb[3 * b + 2];
-    }
-    const v1E = this.lesion.vision ? 0 : (this.retina.v1EnergyMean || 0);
-    const mtD = this.lesion.vision ? 0 : Math.max(0, this.retina.mtDiv || 0);
-    sens[8] = clamp(gSum / 6 + 0.55 * v1E) * 1.4;
-    sens[9] = clamp(rSum / 6 + 0.35 * Math.abs(this.retina.v4Fovea?.[4] || 0)) * 1.4;
-    sens[10] = clamp(bSum / 6 + 0.35 * Math.abs(this.retina.v4Fovea?.[6] || 0)) * 1.4;
-    sens[11] = clamp(this.retina.opticFlowMean * 2.5 + 1.2 * mtD) * 1.25;
-    sens[12] = 2 * clamp(this.nociception);
-    sens[13] = rockT * 1.2;
-    sens[14] = this.light * 1.0;
-    sens[15] = Math.max(obst, obstL, obstR) * 1.4;
-
-    // Bilateral antennal chemotaxis over wind-advected 64x64x3 pheromone plumes (food, Schreckstoff alarm, mate)
-    if (W.pherMean > 1e-4) {
-      const [cFood, lrFood] = W.sampleAntennalPheromone(hd[0], hd[2], fr.f[0], fr.f[2], fr.s[0], fr.s[2], 0);
-      const [cAlarm] = W.sampleAntennalPheromone(hd[0], hd[2], fr.f[0], fr.f[2], fr.s[0], fr.s[2], 1);
-      const [cMate] = W.sampleAntennalPheromone(hd[0], hd[2], fr.f[0], fr.f[2], fr.s[0], fr.s[2], 2);
-      this.pherFood = cFood;
-      this.pherAlarm = cAlarm;
-      this.pherMate = cMate;
-      sens[8] = clamp(sens[8] + 0.35 * cFood, 0, 2.2);
-      sens[12] = clamp(sens[12] + 0.65 * cAlarm, 0, 2.5);
-      if (this.eco && !tg && Math.abs(lrFood) > 0.04) {
-        P[0] = clamp(P[0] + 0.28 * lrFood, 0, 1);
-        P[1] = clamp(P[1] - 0.28 * lrFood, 0, 1);
-      }
-    } else {
-      this.pherFood = 0; this.pherAlarm = 0; this.pherMate = 0;
-    }
-
-    const sc = this.flaws.scramble;
-    for (let i = 0; i < 16; i++) ext[R0.SENS + this.senPerm[i]] = 0.6 + sens[i] + (sc.on ? sc.noise * gauss(this.gr) : 0);
-    for (let i = 0; i < 6; i++) {
-      ext[R0.PROP + 2 * i] = 0.7 + clamp(B.curvL[i] / 2) * 1.5;
-      ext[R0.PROP + 2 * i + 1] = 0.7 + clamp(-B.curvL[i] / 2) * 1.5;
-      ext[R0.PROP + 12 + 2 * i] = 0.7 + clamp(B.curvU[i] / 2) * 1.5;
-      ext[R0.PROP + 13 + 2 * i] = 0.7 + clamp(-B.curvU[i] / 2) * 1.5;
-    }
-    B.limbs.forEach((L, k) => { if (k < 6) ext[R0.PROP + 24 + k] = 0.6 + 1.2 * (B.contact[L.foot] ? 1 : 0); });
-    ext[R0.PROP + 30] = 0.6 + 1.5 * upside;
-    ext[R0.PROP + 31] = 0.6 + clamp(Math.abs(vf) / 2) * 1.2;
-
-    const M = this.metab;
-    const intero = [clamp(0.95 - M.blood.glc / 3) * 2, M.ghrelin, clamp(M.bladder / 1.2), clamp(M.colon / 1.5), clamp(1 - M.atp / 2), M.thirst, M.cortisol, clamp((M.hr - 60) / 60)];
+    const B = this.body, F = B.F, W = this.world, hd = B.head(), fr = F[this.bearSeg ?? (+(globalThis.process?.env?.BSEG ?? 6))]; B.curvature(); const tg = this.target(); let bear = 0, dist = 0, up = 0;
+    if (tg) { const dx = tg[0] - hd[0], dy = tg[1] - hd[1], dz = tg[2] - hd[2]; const ff = dx * fr.f[0] + dz * fr.f[2], ss = dx * fr.s[0] + dz * fr.s[2]; bear = Math.atan2(ss, ff); dist = Math.hypot(dx, dz); up = clamp(dy / 3, -1, 1); }
+    this.navMode = 'sight'; if (tg && dist > VIEW && !globalThis.TW?.omni) { /* beyond view range the goal is not seen: steer by the head-direction / path-integration estimate (vector navigation) */
+      if (this.lesion.nav) { bear = 0; this.navMode = 'none'; } else { const N = this.nav, ex = tg[0] - N.px, ez = tg[2] - N.pz; const a = Math.atan2(ez, ex) - N.heading(); bear = Math.atan2(Math.sin(a), Math.cos(a)); dist = Math.hypot(ex, ez); this.navMode = 'path-integration'; } }
+    /* course over ground (optic-flow direction of travel, ~0.3 s smoothing): steering compares the goal direction with where the body is actually going, so a gait that travels at an angle to the head still homes in */
+    { const v = this.vel || [0, 0, 0]; this.vEMA = this.vEMA || [0, 0]; this.vEMA[0] += 0.05 * (v[0] - this.vEMA[0]); this.vEMA[1] += 0.05 * (v[2] - this.vEMA[1]); const sp = Math.hypot(this.vEMA[0], this.vEMA[1]) * 60;
+      if (tg && sp > 0.12 && !this.lesion.course) { const hdgHead = Math.atan2(fr.f[2], fr.f[0]), course = Math.atan2(this.vEMA[1], this.vEMA[0]); let off = course - hdgHead; off = Math.atan2(Math.sin(off), Math.cos(off)); const w = (this.gen.kCourse ?? 0) * Math.min(1, (sp - 0.12) / 0.2); bear = Math.atan2(Math.sin(bear - w * off), Math.cos(bear - w * off)); } }
+    this.bear = bear; this.dist = dist; const [vx, vy, vz] = this.vel || [0, 0, 0];
+    const vf = (vx * fr.f[0] + vy * fr.f[1] + vz * fr.f[2]) * 60, vl = (vx * fr.s[0] + vy * fr.s[1] + vz * fr.s[2]) * 60; this.vf = vf; this.speedEMA += 0.02 * (Math.hypot(vx, vz) * 60 - this.speedEMA);
+    // rock directly ahead? (obstacle), spring nearby?, tilt
+    let obst = 0; for (const R of W.rocks) { const dx = R.x - hd[0], dz = R.z - hd[2]; const d = Math.hypot(dx, dz) - R.r; const a = (dx * fr.f[0] + dz * fr.f[2]) / (Math.hypot(dx, dz) || 1); if (d < 1.6 && a > 0.5) obst = Math.max(obst, 1 - d / 1.6); }
+    let spring = 0; for (const S of W.springs) { const d = Math.hypot(S.x - hd[0], S.z - hd[2]); if (d < 3) spring = Math.max(spring, 1 - d / 3); }
+    let rockT = 0; for (let i = 0; i < B.n; i++) if (B.contact[i] === 2) rockT++; rockT = clamp(rockT / 6); const upY = F[3].u[1]; const upside = clamp(-upY * 1.5);
+    const hunger = this.metab.hunger(); const awake = this.sleep.stage === 0; const forage = awake && this.goal ? 0.6 + 0.6 * hunger : 0;
+    const P = this.phi; P[0] = clamp(-bear / 0.7) * (tg ? 1 : 0); P[1] = clamp(bear / 0.7) * (tg ? 1 : 0); P[2] = forage; P[3] = obst; P[4] = tg ? clamp(1 - dist / 1.8) : 0; P[5] = rockT; P[6] = clamp(this.stuck); P[7] = clamp(this.nociception); P[8] = upside; P[9] = spring * (tg ? 1 : 0.3); P[10] = Math.sin(bear); P[11] = up; P[12] = clamp(this.Vimg[0] * 2, -1, 1) * 0.5; P[13] = 1;
+    /* vestibular tilt (utricle-like): magnitude of tilt split by which side faces down; drives the righting reflex below */ const tilt = clamp((0.75 - upY) * 1.6), sy = F[3].s[1]; P[14] = tilt * (sy > 0 ? 1 : 0); P[15] = tilt * (sy > 0 ? 0 : 1); if (globalThis.TW?.noTilt) P[14] = P[15] = 0;
+    // world-model target vector y (proprioception + vestibular + contacts + goal bearing)
+    const y = this.y; for (let i = 0; i < 6; i++) { y[i] = clamp(B.curvL[i] / 3, -2, 2); y[6 + i] = clamp(B.curvU[i] / 3, -2, 2); } y[12] = clamp(vf / 3, -2, 2); y[13] = clamp(vl / 3, -2, 2); y[14] = clamp(vy * 20, -2, 2); y[15] = upY; y[16] = F[3].s[1];
+    B.limbs.forEach((L, k) => { y[17 + k] = B.contact[L.foot] ? 1 : 0; }); y[23] = Math.sin(bear); y[24] = Math.cos(bear) * (tg ? 1 : 0);
+    // neural drive currents for every non-motor region
+    const ext = this.brain.ext, nm = this.brain.nm; ext.fill(0);
+    const sens = new Float64Array(16); for (let i = 0; i < 8; i++) { const ph = -Math.PI + ((i + 0.5) * 2 * Math.PI) / 8; let d = Math.abs(bear - ph); if (d > Math.PI) d = 2 * Math.PI - d; sens[i] = tg ? 1.5 * Math.exp(-(d * d) / 0.4) : 0; }
+    let near = null, nd = 1e9; for (const Pl of W.plants) { const d = Math.hypot(Pl.x - hd[0], Pl.z - hd[2]); if (d < nd && Pl.fruit > 0.3) { nd = d; near = Pl; } } if (near && nd < 8) sens[8 + near.c] = 1.3 * (1 - nd / 8);
+    sens[12] = 2 * clamp(this.nociception); sens[13] = rockT * 1.2; sens[14] = this.light * 1.0; sens[15] = obst * 1.4;
+    const sc = this.flaws.scramble; for (let i = 0; i < 16; i++) ext[R0.SENS + this.senPerm[i]] = 0.6 + sens[i] + (sc.on ? sc.noise * gauss(this.gr) : 0);
+    for (let i = 0; i < 6; i++) { ext[R0.PROP + 2 * i] = 0.7 + clamp(B.curvL[i] / 2) * 1.5; ext[R0.PROP + 2 * i + 1] = 0.7 + clamp(-B.curvL[i] / 2) * 1.5; ext[R0.PROP + 12 + 2 * i] = 0.7 + clamp(B.curvU[i] / 2) * 1.5; ext[R0.PROP + 13 + 2 * i] = 0.7 + clamp(-B.curvU[i] / 2) * 1.5; }
+    B.limbs.forEach((L, k) => { if (k < 6) ext[R0.PROP + 24 + k] = 0.6 + 1.2 * (B.contact[L.foot] ? 1 : 0); }); ext[R0.PROP + 30] = 0.6 + 1.5 * upside; ext[R0.PROP + 31] = 0.6 + clamp(Math.abs(vf) / 2) * 1.2;
+    const M = this.metab, intero = [clamp(0.95 - M.blood.glc / 3) * 2, M.ghrelin, clamp(M.bladder / 1.2), clamp(M.colon / 1.5), clamp(1 - M.atp / 2), M.thirst, M.cortisol, clamp((M.hr - 60) / 60)];
     for (let i = 0; i < 8; i++) ext[R0.INS + i] = 0.6 + 1.2 * intero[i];
-    for (let i = 0; i < 16; i++) ext[R0.HYP + i] = 0.5 + (i < 8 ? 1.2 * hunger : 1.0 * M.thirst + 0.6 * this.sleep.S);
-    const ph = (2 * Math.PI * this.hour) / 24;
-    for (let i = 0; i < 8; i++) ext[R0.SCN + i] = 0.7 + 0.6 * Math.max(0, Math.cos(ph - (i * 2 * Math.PI) / 8));
-    for (let i = 0; i < 6; i++) {
-      ext[R0.VTA + i] = 0.9 + 3 * Math.max(0, this.rpe) - 1.5 * Math.max(0, -this.rpe);
-      ext[R0.LC + i] = 0.8 + 2.5 * ((1 - PCMIX) * this.wm.surprise + PCMIX * this.pc.surprise) + 2 * clamp(this.nociception) + (awake ? 0.2 : -0.3);
-      ext[R0.RAPHE + i] = 0.8 + 0.5 * clamp(1 - hunger) + (awake ? 0.2 : -0.2) * (this.sleep.stage === 4 ? -2 : 1);
-      ext[R0.BF + i] = 0.8 + 0.6 * this.uncert() * (this.metacog?.achGain ?? 1) + (awake || this.sleep.stage === 4 ? 0.3 : -0.3);
-    }
-    const ens = clamp((M.gut.glc + M.gut.fat + M.gut.prot) / 6);
-    for (let i = 0; i < 48; i++) ext[R0.ENS + i] = 0.6 + 0.8 * ens + 0.4 * M.para;
-
-    if (!this.brain.sparseSheetExt) {
-      for (let i = 0; i < RN.STR; i++) ext[R0.STR + i] = 0.4;
-      for (let i = 0; i < RN.CTX; i++) ext[R0.CTX + i] = 0.55 + 0.3 * nm.ACh;
-      for (let i = 0; i < RN.THAL; i++) ext[R0.THAL + i] = awake ? 0.5 : this.sleep.stage === 4 ? 0.45 : 0.2;
-      for (let i = 0; i < RN.HIP; i++) ext[R0.HIP + i] = 0.45;
-    }
-    if (!this.brain.delegated && awake) {
-      if (!this.lesion.nav) this.brain.drivePlaceCells(this.nav.px, this.nav.pz, 1.15);
-      if (!this.lesion.vision) {
-        this.brain.driveVisualCortex(this.retina.v1Complex, 0.75);
-        this.brain.driveITCortex(this.retina.itAct, 0.65);
-      }
-    }
-    if (this.familiar > 0 && this.hop.lastIdx >= 0) {
-      for (let j = 0; j < 8; j++) {
-        this.brain._markExt(R0.HIP + ((this.hop.lastIdx * 7 + j * 5) % RN.HIP), 1.4 * this.familiar);
-      }
-    }
+    for (let i = 0; i < 16; i++) ext[R0.HYP + i] = 0.5 + (i < 8 ? 1.2 * hunger : 0.8 * M.thirst + 0.6 * this.sleep.S);
+    const ph = (2 * Math.PI * this.hour) / 24; for (let i = 0; i < 8; i++) ext[R0.SCN + i] = 0.7 + 0.6 * Math.max(0, Math.cos(ph - (i * 2 * Math.PI) / 8));
+    for (let i = 0; i < 6; i++) { ext[R0.VTA + i] = 0.9 + 3 * Math.max(0, this.rpe) - 1.5 * Math.max(0, -this.rpe); ext[R0.LC + i] = 0.8 + 2.5 * ((1 - PCMIX) * this.wm.surprise + PCMIX * this.pc.surprise) /* arousal from both world-model and predictive-coding surprise */ + (this.lesion.protos ? 0 : PG.lc * (this.protos.novelty - this.protos.novMean)) /* novelty relative to its running mean, so mean arousal is unchanged */ /* novelty: distance from the nearest learned percept */ + 2 * clamp(this.nociception) + (awake ? 0.2 : -0.3); ext[R0.RAPHE + i] = 0.8 + 0.5 * clamp(1 - hunger) + (awake ? 0.2 : -0.2) * (this.sleep.stage === 4 ? -2 : 1); ext[R0.BF + i] = 0.8 + 0.6 * this.uncert() + (awake || this.sleep.stage === 4 ? 0.3 : -0.3); }
+    const ens = clamp((M.gut.glc + M.gut.fat + M.gut.prot) / 6); for (let i = 0; i < 48; i++) ext[R0.ENS + i] = 0.6 + 0.8 * ens + 0.4 * M.para;
+    for (let i = 0; i < RN.STR; i++) ext[R0.STR + i] = 0.4; for (let i = 0; i < RN.CTX; i++) ext[R0.CTX + i] = 0.55 + 0.3 * nm.ACh; for (let i = 0; i < RN.THAL; i++) ext[R0.THAL + i] = awake ? 0.5 : this.sleep.stage === 4 ? 0.45 : 0.2; for (let i = 0; i < RN.HIP; i++) ext[R0.HIP + i] = 0.5; if (!this.lesion.protos && awake && this.protos.L1.ready) { const Pt = this.protos, nT = RN.THAL, nH = RN.HIP; /* e-means percepts drive thalamic groups, concepts drive hippocampal groups (range mapping so S and M/L brains both get every prototype) */ const vT = this._vT || (this._vT = new Float64Array(nT)); let mT = 0; for (let i = 0; i < nT; i++) { const a = Math.floor((i * K1) / nT), b = Math.max(a + 1, Math.floor(((i + 1) * K1) / nT)); let v = 0; for (let j = a; j < b; j++) v += Pt.s1[j]; vT[i] = v; mT += v / nT; } for (let i = 0; i < nT; i++) ext[R0.THAL + i] += PG.thal * (vT[i] - mT); /* zero-mean: a pattern, not extra total drive */ const vH = this._vH || (this._vH = new Float64Array(nH)); let mH = 0; for (let i = 0; i < nH; i++) { const a = Math.floor((i * K2) / nH), b = Math.max(a + 1, Math.floor(((i + 1) * K2) / nH)); let v = 0; for (let j = a; j < b; j++) v += Pt.s2[j]; vH[i] = v; mH += v / nH; } for (let i = 0; i < nH; i++) ext[R0.HIP + i] += PG.hip * (vH[i] - mH); }
+    if (this.familiar > 0 && this.hop.lastIdx >= 0) for (let j = 0; j < 8; j++) ext[R0.HIP + ((this.hop.lastIdx * 7 + j * 5) % RN.HIP)] += 1.4 * this.familiar; /* Hopfield recognition re-activates that memory's index assembly */
     if (this.race) this.raceDrive(ext);
-
-    // Sense -> MOT drive (genome-grown Wmot + plastic updates + learned intrinsic motBias)
-    for (let m = 0; m < 8; m++) {
-      let s = this.motBias[m];
-      for (let p = 0; p < NPHI; p++) s += this.Wmot[m * NPHI + p] * P[p];
-      this.motDrive[m] = s;
-      ext[R0.MOT + m] = awake ? s : -1;
-    }
+    // MOT: innate sense -> drive matrix (plastic) + imagined synergy values from dreams
+    for (let m = 0; m < 8; m++) { let s = 0; for (let p = 0; p < NPHI; p++) s += this.Wmot[m * NPHI + p] * P[p]; this.motDrive[m] = s; ext[R0.MOT + m] = awake ? s : -1; }
     this.light = clamp(0.5 + 0.6 * Math.cos(((this.hour - 13) * 2 * Math.PI) / 24));
   }
-
-  uncert() {
-    let s = 0;
-    for (let k = 0; k < SITES; k++) s += Math.sqrt((this.bA[k] * this.bB[k]) / ((this.bA[k] + this.bB[k]) ** 2 * (this.bA[k] + this.bB[k] + 1)));
-    return clamp((s / SITES) * 3.5);
-  }
-
-  // ------------------------------------------------------------------ Unified 21-channel Striatal D1/D2 Race
-  // Channels: 0..15 = plant sites, 16..18 = water pools, 19 = dropped snack, 20 = HDC epistemic exploration.
-  travelTerms(tx, tz) {
-    const hd = this.body.head(), F = this.body.F[NS - 1];
-    const px = this.lesion.nav ? hd[0] : this.nav.px, pz = this.lesion.nav ? hd[2] : this.nav.pz;
-    const d = Math.hypot(tx - px, tz - pz);
-    const bear = Math.abs(Math.atan2((tx - px) * F.s[0] + (tz - pz) * F.s[2], (tx - px) * F.f[0] + (tz - pz) * F.f[2]));
-    const tTravel = d / Math.max(0.1, this.selfV) + bear / Math.max(0.12, this.selfW);
-    const baseCost = this.lesion.selfModel ? 0.012 * d * (1 + this.metab.cortisol) : 0.015 * tTravel * (1 + this.metab.cortisol);
-    return { d, bear, tTravel, baseCost };
-  }
-
-  efe(k) {
-    const M = this.metab, hunger = M.hunger(), temp = this.metacog?.exploreTemp ?? 1;
-    if (k < SITES) {
-      const P = this.world.plants[k];
-      const mp = this.retina.sitePos(k, this.world);
-      const mean = this.bA[k] / (this.bA[k] + this.bB[k]);
-      const hdcV = this.lesion.hdc ? 0 : clamp(this.hdcFood.recall(mp.x, mp.z), -1, 1);
-      const foodDrive = 0.45 + 0.95 * hunger;
-      const pherBonus = this.eco ? 0.14 * this.world.samplePheromone(mp.x, mp.z, 0) : 0;
-      const prag = foodDrive * (this.lesion.hdc ? 0.5 * this.wSite[k] + 0.5 * mean : 0.45 * this.wSite[k] + 0.45 * mean + 0.25 * hdcV) + pherBonus;
-      const epi = this.lesion.efe ? 0 : temp * (0.28 * (0.5 + this.brain.nm.ACh + 0.5 * this.brain.nm.NE) * (betaIG(this.bA[k], this.bB[k]) / IG0 - 0.5) + 0.14 * (1 - mp.conf));
-      const { tTravel, baseCost } = this.travelTerms(mp.x, mp.z);
-      const visFruitPenalty = this.retina.vis[k] > 0 && P.fruit < 0.3 ? 0.55 : 0;
-      const iorCost = this.lesion.ior ? 0 : 1.15 * this.recent[k] + (this.recent[k] > 0.86 ? 1.35 : 0);
-      const cost = baseCost + visFruitPenalty + iorCost;
-      const featGen = this.visits[k] === 0 ? clamp(this.featC[P.c] + this.featS[P.s], 0, 1) : (0.5 * this.wSite[k] + 0.5 * mean);
-      const visBonus = !this.lesion.vision && this.retina.vis[k] > 0 ? (P.fruit > 0.45 ? 0.38 * P.fruit : -0.45) : 0;
-      const ofcApp = clamp(prag + foodDrive * 0.42 * featGen + visBonus - 0.65 * cost, 0, 2.2);
-      const ofcAv = clamp(1.3 * this.wAv[k] + visFruitPenalty * 1.5 + 1.1 * iorCost, 0, 2.2);
-      return { G: -(prag + epi - cost), prag, epi, cost, tTravel, harm: this.wAv[k] * (1 + M.cortisol), ofcApp, ofcAv };
-    }
-    if (k < SITES + 3) {
-      // Water pool channel (p = k - 16)
-      if (this.lesion.thirst || M.thirst < 0.16) return null;
-      const p = k - SITES, Wp = this.world.pools[p], hd = this.body.head();
-      const mp = this.retina.poolPos(p, this.world);
-      // Hygroreception (humidity gradient within 22 u) + visual memory + HDC water value map
-      const dHumid = Math.hypot(Wp.x - hd[0], Wp.z - hd[2]);
-      let tx = mp ? mp.x : null, tz = mp ? mp.z : null;
-      if (tx === null && dHumid < 22) { tx = Wp.x; tz = Wp.z; }
-      if (tx === null) {
-        // Search HDC water map or explore outward for humidity
-        let bestV = -1e9, bx = 0, bz = 0;
-        for (let q = 0; q < 24; q++) {
-          const ex = (this.draw01() - 0.5) * 34, ez = (this.draw01() - 0.5) * 34;
-          const v = this.hdcWater.recall(ex, ez);
-          if (v > bestV) { bestV = v; bx = ex; bz = ez; }
-        }
-        if (bestV > 0.12) { tx = bx; tz = bz; }
-        else { const a = (p * 2.094) + this.t * 0.05; tx = clamp(hd[0] + 11 * Math.cos(a), -16, 16); tz = clamp(hd[2] + 11 * Math.sin(a), -16, 16); }
-      }
-      const wMem = this.lesion.hdc ? 0.5 : clamp(0.5 + 0.5 * this.hdcWater.recall(tx, tz), 0.2, 1.2);
-      const prag = 2.8 * M.thirst * wMem;
-      const epi = this.lesion.efe ? 0 : 0.2 * (mp ? 1 - mp.conf : 0.8);
-      const { tTravel, baseCost } = this.travelTerms(tx, tz);
-      return { G: -(prag + epi - baseCost * 0.85), prag, epi, cost: baseCost * 0.85, tTravel, harm: 0, x: tx, z: tz, pool: p };
-    }
-    if (k === SITES + 3) {
-      // Dropped snack channel (competes in striatal race rather than hardcoded bypass!)
-      const hd = this.body.head();
-      let bestS = null, bd = 16;
-      for (const s of this.world.snacks) {
-        const d = Math.hypot(s.x - hd[0], s.z - hd[2]);
-        if (d < bd) { bd = d; bestS = s; }
-      }
-      if (!bestS) return null;
-      const prag = 1.15 + 0.8 * hunger;
-      const { tTravel, baseCost } = this.travelTerms(bestS.x, bestS.z);
-      return { G: -(prag - baseCost), prag, epi: 0.1, cost: baseCost, tTravel, harm: 0, snackId: bestS.id };
-    }
-    // k === 20: Epistemic curiosity / HDC least-visited place + hydrothermal vent thermoregulation when chilled
-    const hd = this.body.head();
-    const thermDeficit = (this.gen.thermOpt ?? 24.0) - (this.bodyTemp ?? 24.0);
-    if (thermDeficit > 2.6 && this.world.vents.length > 0) {
-      let bestV = this.world.vents[0], bd = 1e9;
-      for (const v of this.world.vents) {
-        const dd = Math.hypot(v.x - hd[0], v.z - hd[2]);
-        if (dd < bd) { bd = dd; bestV = v; }
-      }
-      const prag = clamp(0.45 + 0.22 * thermDeficit, 0.4, 1.8);
-      const { tTravel, baseCost } = this.travelTerms(bestV.x, bestV.z);
-      return { G: -(prag - baseCost * 0.7), prag, epi: 0.15, cost: baseCost * 0.7, tTravel, harm: 0, x: bestV.x, z: bestV.z, vent: true };
-    }
-    let bx = 0, bz = 0, bv = 1e9;
-    for (let q = 0; q < 36; q++) {
-      const ex = (this.draw01() - 0.5) * 34, ez = (this.draw01() - 0.5) * 34;
-      const dd = Math.hypot(ex - hd[0], ez - hd[2]);
-      if (dd < 4.5) continue;
-      const vis = this.lesion.hdc ? 0 : this.hdcVisit.recall(ex, ez);
-      const v = vis + 0.025 * dd + 0.25 * this.draw01();
-      if (v < bv) { bv = v; bx = ex; bz = ez; }
-    }
-    const prag = 0.12;
-    const epi = (this.lesion.efe ? 0.25 : 0.42 * temp * clamp(1.1 - hunger - M.thirst, 0.2, 1.0)) + 0.25 * (this.metacog?.regret ?? 0);
-    const { tTravel, baseCost } = this.travelTerms(bx, bz);
-    return { G: -(prag + epi - baseCost * 0.7), prag, epi, cost: baseCost * 0.7, tTravel, harm: 0, x: bx, z: bz };
-  }
-
-  draw01() { return this.lesion.qrng ? this.r() : this.qrng.next01(); }
-  drawGauss() { return this.lesion.qrng ? gauss(this.r) : this.qrng.gauss(); }
-
-  startRace(exclude = new Set()) {
-    let htnPrior = null;
-    if (this.htn && !this.lesion.wm && !this.lesion.efe) {
-      const hd = this.body.head();
-      let bestSite = 0, bestSc = -1e9, mostUnc = 0, maxUnc = -1e9;
-      for (let k = 0; k < SITES; k++) {
-        const sp = this.retina.sitePos(k, this.world);
-        const d = Math.hypot(sp.x - hd[0], sp.z - hd[2]);
-        const meanY = this.bA[k] / (this.bA[k] + this.bB[k]);
-        const sc = (meanY * this.wSite[k]) / (1 + 0.12 * d);
-        if (sc > bestSc) { bestSc = sc; bestSite = k; }
-        const unc = (1 - sp.conf) + 1 / (this.bA[k] + this.bB[k]);
-        if (unc > maxUnc) { maxUnc = unc; mostUnc = k; }
-      }
-      let bestPool = 0, bestPD = 1e9;
-      for (let p = 0; p < this.world.pools.length; p++) {
-        const Wp = this.world.pools[p];
-        const d = Math.hypot(Wp.x - hd[0], Wp.z - hd[2]);
-        if (d < bestPD) { bestPD = d; bestPool = p; }
-      }
-      htnPrior = this.htn.plan({
-        hunger: this.metab.hunger(),
-        thirst: this.metab.thirst,
-        tempErr: Math.abs((this.gen.thermOpt ?? 24.0) - (this.bodyTemp ?? 24.0)) / 10.0,
-        uncert: clamp(this.retina.egoVar * 0.25, 0.05, 1.0),
-        kinFit: clamp((this.retina.socialSeen || 0) * 0.25, 0, 1),
-        predatorLoom: this.retina.predatorLoom || 0,
-        hasSnack: this.world.snacks.length > 0,
-        socialDrive: this.pherMate || 0.2,
-        peerNear: this.retina.socialSeen || 0,
-        bestYieldSite: bestSite,
-        mostUncertSite: mostUnc,
-        bestPool,
-      }, this.wm);
-    }
-    const terms = [];
-    for (let k = 0; k < NSTR_OPT; k++) {
-      const t = exclude.has(k) ? null : this.efe(k);
-      if (t && htnPrior) t.G -= 0.05 * htnPrior[k];
-      terms.push(t);
-    }
-    this.race = { terms, cnt: new Float64Array(NSTR_OPT), cntD2: new Float64Array(NSTR_OPT), t: 0, exclude };
-    this.stats.races++;
-  }
-
-  raceDrive(ext) {
-    const R = this.race;
-    let tot = 0;
-    for (let k = 0; k < NSTR_OPT; k++) tot += this.brain.rate[R0.STR + k];
-    const inhib = 0.0035 * tot;
-    this.ofcApp.fill(0);
-    this.ofcAv.fill(0);
-    for (let k = 0; k < NSTR_OPT; k++) {
-      const T = R.terms[k];
-      if (!T) { ext[R0.STR + k] = -1; ext[R0.STR + NSTR_OPT + k] = 0.2; continue; }
-      ext[R0.STR + k] = 0.85 + 1.6 * -T.G - inhib;
-      ext[R0.STR + NSTR_OPT + k] = 0.8 + 1.5 * T.harm + 0.8 * T.cost;
-      this.ofcApp[k] = clamp((T.ofcApp ?? -T.G) * 0.95, 0, 1.8);
-      this.ofcAv[k] = clamp((T.ofcAv ?? (T.harm + 0.5 * T.cost)) * 0.85, 0, 1.8);
-    }
-    if (!this.brain.delegated) this.brain.driveOFCColumns(this.ofcApp, this.ofcAv);
-  }
-
-  raceCount() {
-    const R = this.race, b = this.brain;
-    for (let k = 0; k < NSTR_OPT; k++) {
-      if (b.spk[R0.STR + k]) R.cnt[k] += 1;
-      if (b.spk[R0.STR + NSTR_OPT + k]) R.cntD2[k] += 1;
-    }
-  }
-
-  raceCheck(dt) {
-    const R = this.race;
-    R.t += dt;
-    let best = -1, bv = -1e9, secondG = 0;
-    for (let k = 0; k < NSTR_OPT; k++) {
-      if (!R.terms[k]) continue;
-      const v = R.cnt[k] - 0.6 * R.cntD2[k];
-      this.raceLog[k] = R.cnt[k];
-      this.raceLog[NSTR_OPT + k] = R.cntD2[k];
-      if (v > bv) { bv = v; best = k; }
-    }
-    const needSpikes = this.lesion.metacog ? 8 : (this.metacog?.delibThr ?? 8);
-    if (bv < needSpikes && R.t < 1.25) return;
-    if (best < 0) { this.race = null; return; }
-
-    let bestAltG = 1e9;
-    for (let k = 0; k < NSTR_OPT; k++) if (k !== best && R.terms[k] && R.terms[k].G < bestAltG) bestAltG = R.terms[k].G;
-    secondG = bestAltG < 1e8 ? bestAltG : R.terms[best].G;
-
-    const k = best, T = R.terms[k];
-    if (!this.lesion.veto && T.harm > 0.3 * (1 + this.brain.nm['5HT'])) {
-      this.stats.vetoes++;
-      this.ev('veto', `veto: cancelled option ${k} (predicted harm ${T.harm.toFixed(2)}), re-racing`);
-      const ex = new Set(R.exclude); ex.add(k);
-      this.startRace(ex);
-      return;
-    }
-    this.lastRaceBestG = T.G;
-    this.lastRaceAltG = secondG;
-    this.race = null;
-    this.lastDist = null;
-
-    if (k < SITES) {
-      let ke = k;
-      if (this.flaws.backwards.on) { ke = SITES - 1 - k; this.stats.mirrored++; this.ev('backwards', `chose site ${k}, body heads to mirrored site ${ke}`); }
-      this.goal = { type: 'site', k: ke, chosen: k, since: this.t };
-      this.ev('decide', `race won by site ${k} (G=${T.G.toFixed(2)}: val ${T.prag.toFixed(2)}, info ${T.epi.toFixed(2)}, cost ${T.cost.toFixed(2)})`);
-    } else if (k < SITES + 3) {
-      this.goal = { type: 'water', pool: T.pool, x: T.x, z: T.z, since: this.t };
-      this.ev('thirst', `striatal race chose water pool ${T.pool} (thirst ${this.metab.thirst.toFixed(2)}, G=${T.G.toFixed(2)})`);
-    } else if (k === SITES + 3) {
-      this.goal = { type: 'snack', id: T.snackId, since: this.t };
-      this.ev('decide', `striatal race chose dropped food (G=${T.G.toFixed(2)})`);
-    } else {
-      this.goal = { type: 'explore', x: T.x, z: T.z, since: this.t };
-      this.ev('explore', `striatal race chose HDC epistemic search (G=${T.G.toFixed(2)})`);
-    }
-  }
-
+  uncert() { let s = 0; for (let k = 0; k < SITES; k++) s += Math.sqrt((this.bA[k] * this.bB[k]) / ((this.bA[k] + this.bB[k]) ** 2 * (this.bA[k] + this.bB[k] + 1))); return clamp((s / SITES) * 3.5); }
+  // ------------------------------------------------------------------ the striatal race (D1 = STR 0..15 "go" for site k, D2 = STR 16..31 "no-go")
+  efe(k) { const P = this.world.plants[k], hd = this.body.head(); const mean = this.bA[k] / (this.bA[k] + this.bB[k]); const hdcV = this.lesion.hdc ? 0 : clamp(this.hdcFood.recall(P.x, P.z), -1, 1); const prag = this.lesion.hdc ? 0.5 * this.wSite[k] + 0.5 * mean : 0.45 * this.wSite[k] + 0.45 * mean + 0.25 * hdcV; /* + spatial generalisation from the HDC food map */
+    const epi = this.lesion.efe ? 0 : 0.3 * (0.5 + this.brain.nm.ACh + 0.5 * this.brain.nm.NE) * (betaIG(this.bA[k], this.bB[k]) / IG0 - 0.5); const d = Math.hypot(P.x - hd[0], P.z - hd[2]), F = this.body.F[NS - 1]; const bear = Math.abs(Math.atan2((P.x - hd[0]) * F.s[0] + (P.z - hd[2]) * F.s[2], (P.x - hd[0]) * F.f[0] + (P.z - hd[2]) * F.f[2]));
+    // cost = predicted travel time from the creature's own measured approach speed and turn rate (a learned self-model), x energy price
+    const tTravel = d / Math.max(0.08, this.selfV) + bear / Math.max(0.08, this.selfW); const cost = this.lesion.selfModel ? 0.012 * d * (1 + this.metab.cortisol) : 0.018 * tTravel * (1 + this.metab.cortisol) + (P.fruit < 0.3 ? 0.4 : 0) + (this.lesion.ior ? 0 : 0.9 * this.recent[k]); /* inhibition of return: recently visited sites are discounted for ~1 min */
+    return { G: -(prag + epi - cost), prag, epi, cost, tTravel, harm: this.wAv[k] * (1 + this.metab.cortisol) }; }
+  startRace(exclude = new Set()) { const terms = []; for (let k = 0; k < SITES; k++) terms.push(exclude.has(k) ? null : this.efe(k)); this.race = { terms, cnt: new Float64Array(SITES), cntD2: new Float64Array(SITES), t: 0, exclude }; this.stats.races++; }
+  raceDrive(ext) { const R = this.race; let tot = 0; for (let k = 0; k < SITES; k++) tot += this.brain.rate[R0.STR + k]; const inhib = 0.004 * tot;
+    for (let k = 0; k < SITES; k++) { const T = R.terms[k]; if (!T) { ext[R0.STR + k] = -1; continue; } ext[R0.STR + k] = 0.85 + 1.6 * -T.G - inhib; ext[R0.STR + 16 + k] = 0.8 + 1.5 * T.harm + 0.8 * T.cost; } }
+  raceCount() { const R = this.race, b = this.brain; for (let k = 0; k < SITES; k++) { if (b.spk[R0.STR + k]) R.cnt[k] += 1; if (b.spk[R0.STR + 16 + k]) R.cntD2[k] += 1; } }
+  raceCheck(dt) { const R = this.race; R.t += dt; let best = -1, bv = -1e9; for (let k = 0; k < SITES; k++) { if (!R.terms[k]) continue; const v = R.cnt[k] - 0.6 * R.cntD2[k]; this.raceLog[k] = R.cnt[k]; this.raceLog[16 + k] = R.cntD2[k]; if (v > bv) { bv = v; best = k; } }
+    if (bv < 8 && R.t < 1.2) return; if (best < 0) { this.race = null; return; } let k = best; const T = R.terms[k];
+    if (!this.lesion.veto && T.harm > 0.3 * (1 + this.brain.nm['5HT'])) { this.stats.vetoes++; this.ev('veto', `veto: cancelled site ${k} (predicted harm ${T.harm.toFixed(2)}), re-racing`); const ex = new Set(R.exclude); ex.add(k); this.startRace(ex); return; }
+    let ke = k; if (this.flaws.backwards.on) { ke = SITES - 1 - k; this.stats.mirrored++; this.ev('backwards', `chose site ${k}, body heads to mirrored site ${ke}`); }
+    this.goal = { type: 'site', k: ke, chosen: k, since: this.t }; this.race = null; this.lastDist = null; this.ev('decide', `race won by site ${k} (G=${T.G.toFixed(2)}: value ${T.prag.toFixed(2)}, info ${T.epi.toFixed(2)}, cost ${T.cost.toFixed(2)})`); }
   // ------------------------------------------------------------------ main step (dt = 1/60 s)
   step() {
-    const dt = 1 / 60, B = this.body, br = this.brain, cpg = this.cpg;
-    this.frame++;
-    this.t += dt;
-    this.world.step(dt, this.tick);
-    if (this.eco) this.eco.step(dt, this);
-    this.sense();
-
-    const stage = this.sleep.stage, awake = stage === 0;
-    br.atonia = stage >= 2 ? 3 : stage === 1 ? 0.8 : 0;
-    br.sleepStage = stage;
-    br.lesion.stdp = !!this.lesion.stdp;
-    br.lesion.astro = !!this.lesion.astro;
-    br.lesion.mot = !!this.lesion.mot;
-    br.lesion.homeo = !!this.lesion.homeo;
-    this.ssm.fixedProj = !!this.lesion.ssmLearn;
-
-    const back = this.flaws.backwards.on;
-    const cext = new Float64Array(NCPG);
-    const mnI = new Float64Array(NMN);
-    const GK = this.lesion.gripReflex ? 0 : this.G.gk;
-    this.updateSwingVel();
-
+    const dt = 1 / 60, B = this.body, br = this.brain, cpg = this.cpg; this.frame++; this.t += dt; this.world.step(dt, this.tick); this.sense();
+    const stage = this.sleep.stage, awake = stage === 0; br.atonia = stage >= 2 ? 3 : stage === 1 ? 0.8 : 0; br.sleepStage = stage; br.lesion.stdp = this.lesion.stdp; br.lesion.astro = this.lesion.astro; br.lesion.mot = this.lesion.mot;
+    const back = this.flaws.backwards.on; const cext = new Float64Array(NCPG); const mnI = new Float64Array(NMN); const GK = this.lesion.gripReflex ? 0 : this.G.gk; this.updateSwingVel();
     for (let s = 0; s < 8; s++) {
-      for (let m = 0; m < 8; m++) {
-        this.motRate[m] = this.forceMot
-          ? this.forceMot[m]
-          : this.babble?.on
-          ? this.babble.mot[m]
-          : 1.05 * Math.tanh(br.rate[R0.MOT + (back ? 7 - m : m)] / 36);
-      }
-      const mr = this.motRate;
-      if (!this.forceMot && !this.babble?.on && !this.lesion.motNorm) {
-        let tot = 0;
-        for (let m = 0; m < 8; m++) tot += mr[m];
-        for (let m = 0; m < 8; m++) mr[m] = mr[m] / (1 + 0.3 * (tot - mr[m]));
-      }
-      const fwd = mr[0], turn = mr[1] - mr[2];
+      for (let m = 0; m < 8; m++) this.motRate[m] = this.forceMot ? this.forceMot[m] : this.babble?.on ? this.babble.mot[m] : (globalThis.TW?.motSat ? 1.2 * Math.tanh(br.rate[R0.MOT + (back ? 7 - m : m)] / 45) : br.rate[R0.MOT + (back ? 7 - m : m)] / 40);
+      const mr = this.motRate; if (!this.forceMot && !this.babble?.on && !this.lesion.motNorm) { let tot = 0; for (let m = 0; m < 8; m++) tot += mr[m]; for (let m = 0; m < 8; m++) mr[m] = mr[m] / (1 + 0.3 * (tot - mr[m])); } /* divisive normalisation across MOT synergies (shared inhibitory pool) */ const fwd = mr[0], turn = mr[1] - mr[2];
       for (let i = 0; i < NCPG; i++) cext[i] = this.lesion.cpg ? -6 : (awake ? 0.15 : -0.6) + this.G.cf * fwd + 0.5 * mr[6] + 0.3 * mr[4];
-      for (let o = 2; o < 6; o++) { cext[2 * o] += this.gen.cturn * turn; cext[2 * o + 1] -= this.gen.cturn * turn; }
-      {
-        const kL = this.gen.legTurn;
-        for (let l = 0; l < 4; l++) {
-          const sgn = l & 1 ? 1 : -1;
-          cext[12 + 2 * l] += kL * sgn * turn;
-          cext[13 + 2 * l] += kL * sgn * turn;
-        }
-      }
-      for (let o = 0; o < 6; o++) {
-        cext[2 * o] += 0.35 * clamp(B.stretch[CH.long + o * 4 + 3] * 4, -1, 1);
-        cext[2 * o + 1] += 0.35 * clamp(B.stretch[CH.long + o * 4 + 1] * 4, -1, 1);
-      }
-      cpg.step(0.002, cext);
-      const y = cpg.x;
-
-      for (let n = 0; n < NMN; n++) {
-        let I = 0.55 + this.xi[n] + this.mnHomeo[n];
-        const oc = n * NCPG, om = n * 8, op = n * NPHI;
-        for (let k = 0; k < NCPG; k++) I += this.Wc[oc + k] * y[k];
-        for (let m = 0; m < 8; m++) I += this.Wm[om + m] * mr[m];
-        for (let p = 0; p < NPHI; p++) I += this.Wp[op + p] * this.phi[p];
-        const ch = n >> 1;
-        I -= 0.4 * clamp(B.stretch[ch] * (n & 1 ? -1 : 1) * -3, -1, 1);
-        if (this.gripOf[ch] >= 0) {
-          const sv = this.swingVel[this.gripOf[ch]];
-          I += (n & 1 ? -1 : 1) * clamp(GK * sv, -1.5, 1.5);
-        }
-        if (ch >= CH.gaze) I += br.atonia * (stage === 4 ? 1.1 : 0.9);
-        mnI[n] = I;
-        br.ext[R0.MN + n] = this.lesion.mn ? -5 : I;
-      }
-      br.step(0.002);
-      if (this.race) this.raceCount();
-      for (let n = 0; n < NMN; n++) this.mnAct[n] = this.mnAct[n] * 0.976 + (br.spk[R0.MN + n] ? 0.12 : 0);
-      for (let k = 0; k < NCPG; k++) this.yAvg[k] += y[k] / 48;
-      for (let m = 0; m < 8; m++) this.mAvg[m] += mr[m] / 48;
-      if ((this.frame * 8 + s) % 10 === 0) br.slow(0.02, stage, this.lesion.metacog ? 1 : (this.metacog?.achGain ?? 1));
+      for (let o = 2; o < 6; o++) { cext[2 * o] += this.gen.cturn * turn; cext[2 * o + 1] -= this.gen.cturn * turn; } { const kL = this.gen.legTurn; for (let l = 0; l < 4; l++) { const sgn = l & 1 ? 1 : -1; /* right legs (odd) speed up, left legs slow down for a left turn */ cext[12 + 2 * l] += kL * sgn * turn; cext[13 + 2 * l] += kL * sgn * turn; } } for (let o = 0; o < 6; o++) { cext[2 * o] += 0.35 * clamp(B.stretch[CH.long + o * 4 + 3] * 4, -1, 1); cext[2 * o + 1] += 0.35 * clamp(B.stretch[CH.long + o * 4 + 1] * 4, -1, 1); } // stretch-receptor (edge cell) feedback entrains the rhythm
+      cpg.step(0.002, cext); const y = cpg.x;
+      for (let n = 0; n < NMN; n++) { let I = 0.55 + this.xi[n] + this.mnHomeo[n]; const oc = n * NCPG; for (let k = 0; k < NCPG; k++) I += this.Wc[oc + k] * y[k]; const om = n * 8; for (let m = 0; m < 8; m++) I += this.Wm[om + m] * mr[m]; const op = n * NPHI; for (let p = 0; p < NPHI; p++) I += this.Wp[op + p] * this.phi[p];
+        const ch = n >> 1; I -= 0.4 * clamp(B.stretch[ch] * (n & 1 ? -1 : 1) * -3, -1, 1); // stretch reflex: a lengthened agonist is excited
+        if (this.gripOf[ch] >= 0) { const sv = this.swingVel[this.gripOf[ch]]; I += (n & 1 ? -1 : 1) * clamp(GK * sv, -1.5, 1.5); } // stance/swing reflex: swing-muscle velocity (chordotonal-like) gates foot grip
+        if (ch >= CH.gaze) I += br.atonia * (stage === 4 ? 1.1 : 0.9); // eye muscles escape sleep atonia (REM eye movements)
+        mnI[n] = I; br.ext[R0.MN + n] = this.lesion.mn ? -5 : I; }
+      br.step(0.002); if (this.race) this.raceCount();
+      for (let n = 0; n < NMN; n++) { this.mnAct[n] = this.mnAct[n] * 0.976 + (br.spk[R0.MN + n] ? 0.12 : 0); }
+      for (let k = 0; k < NCPG; k++) this.yAvg[k] += y[k] / 48; for (let m = 0; m < 8; m++) this.mAvg[m] += mr[m] / 48;
+      if ((this.frame * 8 + s) % 10 === 0) br.slow(0.02, stage);
     }
-    this.wm.lesion = !!this.lesion.wm;
-
     for (let c = 0; c < CH.N; c++) B.u[c] = clamp((this.muscleGain ?? 2.4) * (this.mnAct[2 * c] - this.mnAct[2 * c + 1]), -1, 1);
-    B.limbs.forEach((L, k) => {
-      const sw = L.kind === 'leg' ? CH.leg + L.idx * 2 : CH.arm + L.idx * 3;
-      this.limbUse[k] += Math.abs(B.u[sw]) + Math.abs(B.u[sw + 1]) + 0.5 * Math.abs(B.u[L.grip]);
-    });
-    this.limbUseN++;
-    B.lesionFEM = !!this.lesion.fem;
-    B.scaleLift = this.lesion.scales ? 0 : this.liftK;
-    B.step(1 / 120);
-    B.step(1 / 120);
-
-    // Advance coupled 1D Navier-Stokes vascular network + 120 3D SPH blood parcels + baroreceptor reflex
-    this.fluid.lesion = !!this.lesion.fluid;
-    if (!(this.motorEval && this.lesion.fluid)) {
-      this.fluid.step(dt, B, this.metab, this.world, br.spikes);
-      this.metab.hr = clamp(this.metab.hr + 0.06 * this.fluid.baroDrive, 42, 195);
-    }
-    this.hop.lesionDG = !!this.lesion.dg;
-
-    const com = B.com();
-    this.vel = [com[0] - this.lastCom[0], com[1] - this.lastCom[1], com[2] - this.lastCom[2]];
-    this.navStep(dt, com);
-    this.stats.dist += Math.hypot(this.vel[0], this.vel[2]);
-    this.lastCom = com;
-    this.nociception *= 0.97;
-    // Microclimate thermoregulation, chromatophore camouflage & syrinx vocalization
-    this.ambientTemp = this.world.ambientTemp(com[0], com[2], this.hour);
-    {
-      let instEffort = 0;
-      for (let c = 0; c < CH.N; c++) instEffort += Math.abs(B.u[c]);
-      instEffort /= CH.N;
-      const eqTemp = this.ambientTemp + 3.2 * instEffort + 1.1 * this.metab.atp;
-      const evapCool = this.bodyTemp > 27.5 ? 0.38 * (this.bodyTemp - 27.5) : 0;
-      this.bodyTemp = clamp(this.bodyTemp + dt * 0.14 * (eqTemp - evapCool - this.bodyTemp), 8.0, 41.0);
-    }
-    {
-      let predNear = 0;
-      if (this.eco) {
-        for (const pr of this.eco.predators) {
-          const dp = Math.hypot(pr.x - com[0], pr.z - com[2]);
-          if (dp < 8.5) predNear = Math.max(predNear, 1 - dp / 8.5);
-        }
-      }
-      const targetCamo = clamp(0.75 * predNear + 0.45 * this.pherAlarm + 0.35 * this.nociception, 0, 1);
-      this.camoLevel += dt * 1.8 * (targetCamo - this.camoLevel);
-      const callDrive = awake ? clamp(0.8 * Math.max(0, this.rpe) + 0.55 * predNear + 0.35 * this.pherMate, 0, 1) : 0;
-      this.vocalAmp += dt * 4.0 * (callDrive - this.vocalAmp);
-      this.vocalFreq = 290 + 240 * (this.gen.pigmentHue ?? 0.72) + 190 * predNear + 90 * Math.sin(this.t * 5.5);
-      const jawTgt = awake
-        ? clamp(0.65 * this.drinking + 0.55 * this.vocalAmp + (this.dist < 1.8 && this.goal ? 0.45 : 0) + 0.25 * Math.max(0, this.motRate[4]), 0, 1)
-        : 0.04;
-      B.jawOpen += dt * 8.0 * (jawTgt - (B.jawOpen || 0));
-    }
-    this.updateCarry(dt);
-    if (this.race) this.raceCheck(dt);
-    this.interact();
-    if (this.frame % 6 === 0) this.tenHz();
-    if (!this.noSkin && this.frame % 4 === 0) this.skin.step(this);
-    if (this.frame % this.framesPerSimMin === 0) this.minute();
-    // In 1x biological real-time / wall-clock solar sync, run waking hippocampal SWR micro-consolidation every 30 s
-    if (this.timeCompression <= 1 && this.frame % 1800 === 0) this.wakingMicroConsolidate();
+    B.limbs.forEach((L, k) => { const sw = L.kind === 'leg' ? CH.leg + L.idx * 2 : CH.arm + L.idx * 3; this.limbUse[k] += Math.abs(B.u[sw]) + Math.abs(B.u[sw + 1]) + 0.5 * Math.abs(B.u[L.grip]); }); this.limbUseN++;
+    B.scaleLift = this.lesion.scales ? 0 : this.liftK; B.step(1 / 120); B.step(1 / 120); const com = B.com(); this.vel = [com[0] - this.lastCom[0], com[1] - this.lastCom[1], com[2] - this.lastCom[2]]; this.navStep(dt, com); this.stats.dist += Math.hypot(this.vel[0], this.vel[2]); this.lastCom = com;
+    this.nociception *= 0.97; if (this.race) this.raceCheck(dt); this.interact();
+    if (this.frame % 6 === 0) this.tenHz(); if (this.frame % 4 === 0) this.skin.step(this); if (this.frame % 15 === 0) this.minute();
     this.updateNM(dt);
   }
-
-  updateCarry(dt) {
-    const B = this.body, W = this.world;
-    if (B.limbs.length < 6) return;
-    let gx, gy, gz, gripDrive;
-    if (B.limbs[4].vestigial) {
-      // 0L Serpent clade uses prehensile jaws/snout for item caching & brood transport
-      const hd = B.head(), Fh = B.F[NS - 1];
-      gx = hd[0] + 0.32 * Fh.f[0]; gy = hd[1] + 0.08; gz = hd[2] + 0.32 * Fh.f[2];
-      gripDrive = Math.max(this.motRate[5], (B.jawOpen || 0) * 0.8);
-    } else {
-      const fL = B.limbs[4].foot, fR = B.limbs[5].foot;
-      gx = 0.5 * (B.x[fL] + B.x[fR]); gy = 0.5 * (B.y[fL] + B.y[fR]); gz = 0.5 * (B.z[fL] + B.z[fR]);
-      gripDrive = Math.max(B.u[CH.arm + 2], B.u[CH.arm + 5], this.motRate[5]);
-    }
-    if (this.heldItem) {
-      const it = this.heldItem.ref;
-      it.x = gx; it.y = Math.max(W.height(gx, gz) + 0.16, gy); it.z = gz;
-      this.heldItem.holdT += dt;
-      let nearNest = false;
-      for (const sh of W.shelters) if (Math.hypot(sh.x - gx, sh.z - gz) < 2.1) nearNest = true;
-      for (const v of W.vents) if (Math.hypot(v.x - gx, v.z - gz) < 2.4) nearNest = true;
-      if ((nearNest && this.heldItem.holdT > 2.5) || this.heldItem.holdT > 18 || this.sleep.stage > 0) {
-        it.held = false;
-        this.ev('carry', `cached ${this.heldItem.kind} near shelter/vent`);
-        this.heldItem = null;
-      }
-      return;
-    }
-    if (this.sleep.stage > 0 || gripDrive < 0.25) return;
-    // Grasp & cache snack when sated, or carry unhatched egg toward warm vent/shelter
-    if (this.metab.hunger() < 0.28) {
-      for (const s of W.snacks) {
-        if (!s.held && Math.hypot(s.x - gx, s.z - gz) < 0.85) {
-          s.held = true;
-          this.heldItem = { kind: s.kind, ref: s, holdT: 0 };
-          this.ev('carry', `grasped ${s.kind} in forelimbs to cache`);
-          return;
-        }
-      }
-    }
-    if (this.eco) {
-      for (const eg of this.eco.eggs) {
-        if (!eg.held && Math.hypot(eg.x - gx, eg.z - gz) < 0.9 && W.ambientTemp(eg.x, eg.z, this.hour) < 24.5) {
-          eg.held = true;
-          this.heldItem = { kind: 'egg', ref: eg, holdT: 0 };
-          this.ev('carry', 'carrying egg toward warmer microclimate');
-          return;
-        }
-      }
-    }
-  }
-
-  wakingMicroConsolidate() {
-    if (this.clockMode === 'wall' && typeof Date !== 'undefined') {
-      const now = new Date();
-      this.hour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
-    }
-    if (this.sleep.stage !== 0) return;
-    this.replay();
-    if (!this.lesion.hopfield && this.hop.X.length >= 6 && (this.wakingSWRs % 3 === 0)) {
-      this.hop.sleep();
-      this.hdcFood.sleep();
-      this.hdcWater.sleep();
-    }
-    this.wakingSWRs++;
-  }
-
-  navStep(dt, com) {
-    const F3 = this.body.F[3], N = this.nav;
-    const h = Math.atan2(F3.f[2], F3.f[0]);
-    let w = h - this.prevHdg;
-    w = Math.atan2(Math.sin(w), Math.cos(w));
-    this.prevHdg = h;
-    const omega = (w / dt) * (1 + 0.05 * gauss(this.gr));
-    const az = this.light > 0.35 ? Math.atan2(Math.sin(SUN_AZ - h), Math.cos(SUN_AZ - h)) : null;
-    N.step(dt, omega, az);
-    this.omega = omega;
-    this.babbleStep(dt);
-    const [vx, , vz] = this.vel;
-    const ch = Math.cos(h), sh = Math.sin(h);
-    const vf = (vx * ch + vz * sh) / dt, vl = (-vx * sh + vz * ch) / dt;
-    N.integrate(dt, vf, vl);
-    if (this.frame % 6 === 0) {
-      let e = N.heading() - h;
-      this.navErr.hd = Math.abs(Math.atan2(Math.sin(e), Math.cos(e)));
-      this.navErr.pos = Math.hypot(N.px - com[0], N.pz - com[2]);
-    }
-  }
-
-  babbleStep(dt) {
-    if (!this.babble) {
-      this.babble = {
-        on: !this.lesion.babble && !this.forceMot && !globalThis.TW?.noBabble,
-        t: 0, next: 0, blockStart: 0, mot: new Float64Array(8), sc: 0, cc: 0, yaw: 0, stepIdx: 0,
-      };
-    }
-    const b = this.babble;
-    if (!b.on) return;
-    b.t += dt;
-    // Accumulate yaw only after the 0.40 s neuromuscular + CPG reversal transient has settled!
-    if (b.t - b.blockStart >= 0.4) b.yaw += this.omega * dt;
-    if (b.t >= b.next) {
-      if (b.t > 1.3 && b.t - b.blockStart >= 0.75) {
-        const win = b.t - b.blockStart - 0.4;
-        const c = b.mot[1] - b.mot[2], y = -b.yaw / Math.max(0.2, win);
-        b.sc += c * y;
-        b.cc += c * c;
-      }
-      b.yaw = 0;
-      b.blockStart = b.t;
-      b.next += 1.2;
-      b.mot.fill(0);
-      // 1.2-s steady synergy blocks sweep left/right cleanly (calibrating true steady-state yaw gain AND scanning the 260-deg retina)
-      const k = (b.stepIdx++) % 5;
-      b.mot[0] = k < 4 ? 0.85 + 0.15 * this.gr() : 0.5;
-      if (k === 0 || k === 2) b.mot[1] = 0.65 + 0.35 * this.gr();
-      if (k === 1 || k === 3) b.mot[2] = 0.65 + 0.35 * this.gr();
-    }
-    if (b.t >= 12) {
-      b.on = false;
-      this.turnGain = b.sc / Math.max(1e-6, b.cc);
-      const g0 = globalThis.TW?.turnGain0 ?? (STARTER_INFO.turnGain0 || 1.55);
-      const k = clamp(g0 / Math.max(0.25, this.turnGain), 0.55, 1.75);
-      this.babbleScale = k;
-      for (const [m, p] of [[1, 0], [2, 1]]) { this.Wmot[m * NPHI + p] *= k; this.Wmot0[m * NPHI + p] *= k; this.WmotAnc[m * NPHI + p] *= k; }
-      this.selfW = Math.max(this.selfW ?? 0.35, 0.6 * Math.max(0.2, this.turnGain));
-      this.ev('babble', `motor babbling done: turn gain ${this.turnGain.toFixed(2)} rad/s, steering x${k.toFixed(2)}, landmarks seen ${this.retina.seenCount}`);
-    }
-  }
-
-  updateNM(dt) {
-    const br = this.brain, nm = br.nm;
-    const lp = (k, v, tau) => { nm[k] += (dt / tau) * (v - nm[k]); };
-    const vta = br.regionRate('VTA');
-    this.vtaBase = (this.vtaBase ?? vta) + 0.002 * (vta - (this.vtaBase ?? vta));
-    lp('DA', clamp(0.3 + (vta - this.vtaBase) / 20, 0, 1.2), 0.3);
-    lp('NE', clamp(0.2 + br.regionRate('LC') / 50, 0, 1.2), 0.4);
-    lp('5HT', clamp(0.2 + br.regionRate('RAPHE') / 45, 0, 1.2), 1.0);
-    lp('ACh', clamp(0.1 + br.regionRate('BF') / 40, 0, 1.2), 0.6);
-    nm.cortisol = this.metab.cortisol;
-  }
-
-  // ------------------------------------------------------------------ 10 Hz: SSM + deep WM + metacognition + thought curvature + plasticity
+  /** head-direction ring + path integration (nav.js): vestibular yaw rate, sun compass (daytime), proprioceptive velocity */
+  navStep(dt, com) { const F3 = this.body.F[3], N = this.nav; const h = Math.atan2(F3.f[2], F3.f[0]); let w = h - this.prevHdg; w = Math.atan2(Math.sin(w), Math.cos(w)); this.prevHdg = h; const omega = (w / dt) * (1 + 0.05 * gauss(this.gr));
+    const az = this.light > 0.35 ? Math.atan2(Math.sin(SUN_AZ - h), Math.cos(SUN_AZ - h)) : null; N.step(dt, omega, az); this.omega = omega; this.babbleStep(dt); const [vx, , vz] = this.vel; const vf = (vx * F3.f[0] + vz * F3.f[2]) / dt, vl = (vx * F3.s[0] + vz * F3.s[2]) / dt; N.integrate(dt, vf, vl);
+    if (this.frame % 6 === 0) { const hd = this.body.head(); let fix = false; for (const L of [...this.world.plants, ...this.world.pools]) { const dx = L.x - hd[0], dz = L.z - hd[2], d = Math.hypot(dx, dz); if (d < 5 && (dx * F3.f[0] + dz * F3.f[2]) > 0) { fix = true; break; } } if (fix && !this.lesion.nav) N.reset(com[0], com[2], 0.15); /* a recognised landmark nearby gives a position fix */
+      let e = N.heading() - h; this.navErr.hd = Math.abs(Math.atan2(Math.sin(e), Math.cos(e))); this.navErr.pos = Math.hypot(N.px - com[0], N.pz - com[2]); } }
+  /** neonatal motor babbling (pass 12): for the first 12 s of life random synergy commands replace the brain's MOT output while
+   *  the creature regresses its measured yaw rate on the turn command. The resulting turn gain rescales the evolved
+   *  bearing -> turn weights so the steering loop has the same gain on this particular body as on the bodies evolution used. */
+  babbleStep(dt) { if (!this.babble) { this.babble = { on: !this.lesion.babble && !this.forceMot && !globalThis.TW?.noBabble, t: 0, next: 0, mot: new Float64Array(8), sc: 0, cc: 0, yaw: 0 }; } const b = this.babble; if (!b.on) return;
+    b.t += dt; b.yaw += this.omega * dt; if (b.t >= b.next) { if (b.t > 1.5) { const c = b.mot[1] - b.mot[2], y = -b.yaw / 0.75; b.sc += c * y; b.cc += c * c; } b.yaw = 0; b.next += 0.75; b.mot.fill(0); const k = Math.floor(this.gr() * 5); b.mot[0] = k < 3 ? 0.4 + 0.6 * this.gr() : 0.2; if (k === 1 || k === 3) b.mot[1] = 0.3 + 0.7 * this.gr(); if (k === 2 || k === 4) b.mot[2] = 0.3 + 0.7 * this.gr(); }
+        if (b.t >= 12) { b.on = false; this.turnGain = b.sc / Math.max(1e-6, b.cc); const g0 = globalThis.TW?.turnGain0 ?? (STARTER_INFO.turnGain0 || 1); const k = clamp(g0 / Math.max(0.05, this.turnGain), 0.4, 2.5); this.babbleScale = k;
+      for (const [m, p] of [[1, 0], [2, 1]]) { this.Wmot[m * NPHI + p] *= k; this.Wmot0[m * NPHI + p] *= k; } this.selfW = Math.max(this.selfW ?? 0, 0.5 * Math.abs(this.turnGain));
+      this.ev('babble', `motor babbling done: turn gain ${this.turnGain.toFixed(2)} rad/s per unit command, steering weights x${k.toFixed(2)}`); } }
+  updateNM(dt) { const br = this.brain, nm = br.nm; const lp = (k, v, tau) => { nm[k] += (dt / tau) * (v - nm[k]); };
+    const vta = br.regionRate('VTA'); this.vtaBase = (this.vtaBase ?? vta) + 0.002 * (vta - (this.vtaBase ?? vta)); lp('DA', clamp(0.3 + (vta - this.vtaBase) / 20, 0, 1.2), 0.3); /* DA = phasic VTA firing relative to its own slow baseline */ lp('NE', clamp(0.2 + br.regionRate('LC') / 50, 0, 1.2), 0.4); lp('5HT', clamp(0.2 + br.regionRate('RAPHE') / 45, 0, 1.2), 1.0); lp('ACh', clamp(0.1 + br.regionRate('BF') / 40, 0, 1.2), 0.6); nm.cortisol = this.metab.cortisol; }
+  // ------------------------------------------------------------------ 10 Hz: SSM, world model, motor learning, behaviour statistics
   tenHz() {
-    const u = new Float64Array(NY + 8);
-    u.set(this.y);
-    for (let m = 0; m < 8; m++) u[NY + m] = this.mAvg[m];
-    this.ssm.step(u);
-    const z = this.z;
-    this.ssm.features(z);
-    for (let m = 0; m < 8; m++) z[64 + m] = this.mAvg[m];
-
-    const zPrevSnap = Float64Array.from(this.zPrev);
-    const curVis = this.lesion.vision ? null : this.retina.fovealPatch;
-    let wmStepSE = 0;
-    if (this.frame > 12) {
-      const achMod = (0.5 + this.brain.nm.ACh) * (this.lesion.metacog ? 1 : (this.metacog?.achGain ?? 1));
-      wmStepSE = this.wm.learn(
-        this.zPrev,
-        this.y,
-        0.045 * achMod,
-        this.lesion.ssmLearn ? null : this.ssm,
-        true,
-        this.hasVisPrev ? this.visPrev : null,
-        curVis
-      );
-    }
-    if (curVis) {
-      this.visPrev.set(curVis);
-      this.hasVisPrev = true;
-    } else {
-      this.hasVisPrev = false;
-    }
-    this.zPrev.set(z);
-    for (let i = 0; i < NZ; i++) this.zMean[i] += 0.01 * (z[i] - this.zMean[i]);
-    this.pc.lesionLearn = !!this.lesion.pc;
-    this.pc.step(this.y, 0.6 + 0.8 * this.brain.nm.ACh);
-
-    // Build 96-D cortical + hippocampal + SSM neural manifold state & evaluate Eshkol Taylor-jet thought curvature + metacognition
-    {
-      const mf = this.metaFeat;
-      for (let i = 0; i < 64; i++) mf[i] = z[i] - this.zMean[i];
-      const ctxSt = Math.max(1, Math.floor(RN.CTX / 16)), hipSt = Math.max(1, Math.floor(RN.HIP / 16));
-      for (let i = 0; i < 16; i++) {
-        mf[64 + i] = this.brain.rate[R0.CTX + Math.min(RN.CTX - 1, i * ctxSt)] / 20;
-        mf[80 + i] = this.brain.rate[R0.HIP + Math.min(RN.HIP - 1, i * hipSt)] / 20;
-      }
-      this.metacog.step(mf, wmStepSE, this.wm.predVar, this.familiar, this.progEMA, this.lastRaceAltG, this.lastRaceBestG, !!this.lesion.metacog);
-      if (!this.lesion.metacog && this.frame % 60 === 0) this.metacog.auditAndConsolidate(this, false);
-    }
-
-    // Sleep consolidation on entering deep NREM (stage 3): Hopfield trisynaptic mDAE + DG + InfoNCE, HDC cross-spectral Wiener, EWC + Vidal MPS
-    if (this.sleep.stage === 0) this.consolidated = false;
-    else if (this.sleep.stage === 3 && !this.consolidated) {
-      this.consolidated = true;
-      const L = !!this.lesion.memLearn;
-      this.hop.learnKeys = !L;
-      for (const H of [this.hdcFood, this.hdcWater]) H.fixed = L;
-      if (!this.lesion.hopfield) this.memStats.merged = (this.memStats.merged || 0) + this.hop.sleep();
-      this.hdcFood.sleep();
-      this.hdcWater.sleep();
-      // Consolidate motor weights via Moonlab Jacobi SVD + Vidal canonical MPS denoising and update EWC synaptic anchors
-      this.metacog.auditAndConsolidate(this, true);
-      for (let i = 0; i < this.Wc.length; i++) this.WcAnc[i] = 0.6 * this.WcAnc[i] + 0.4 * this.Wc[i];
-      for (let i = 0; i < this.Wm.length; i++) this.WmAnc[i] = 0.6 * this.WmAnc[i] + 0.4 * this.Wm[i];
-      for (let i = 0; i < this.Wmot.length; i++) this.WmotAnc[i] = 0.6 * this.WmotAnc[i] + 0.4 * this.Wmot[i];
-      this.memStats.consolidations = (this.memStats.consolidations || 0) + 1;
-    }
-
-    if (this.timeCompression < 240 && this.frame % 30 === 0 && this.sleep.stage === 0 && !this.babble?.on && !this.goal && !this.race) {
-      this.startRace();
-    }
-
-    if (this.frame % 60 === 0 && this.sleep.stage === 0 && !this.lesion.hopfield) {
-      const c = Float64Array.from(z, (v, i) => v - this.zMean[i]);
-      const R = this.hop.retrieve(c);
-      this.familiar = R ? clamp((R.sim - 0.4) / 0.5) : 0;
-      this.memStats.famMean += 0.02 * (this.familiar - this.memStats.famMean);
-      this.memStats.ca1Novelty = this.hop.ca1Novelty;
-      this.memStats.retrievals++;
-      // CA1 Schaffer-vs-temporoammonic mismatch event-boundary segmentation gates episodic encoding into CA3
-      if (this.hop.shouldStore(c, Math.abs(this.rpe) > 0.12)) {
-        this.hop.store(c, { ep: this.episodes[this.episodes.length - 1], t: this.t }, this.r);
-        this.memStats.stored++;
-      }
-      this.memStats.eventsSkipped = this.hop.eventsSkipped;
-    }
-    if (this.sleep.stage === 0 && (this.episodes.length < 400 ? true : this.frame % 60 === 0)) {
-      const ctx = [];
-      const ctxLim = Math.min(RN.CTX, 4096);
-      for (let i = 0; i < ctxLim && ctx.length < 48; i++) if (this.brain.rate[R0.CTX + i] > 15) ctx.push(i);
-      const ep = {
-        zPrev: zPrevSnap,
-        z: Float64Array.from(z),
-        y: Float64Array.from(this.y),
-        vis: Float32Array.from(this.retina.fovealPatch),
-        ssm: [Float64Array.from(this.ssm.re), Float64Array.from(this.ssm.im)],
-        ctx,
-        vf: this.vf,
-      };
-      this.episodes.push(ep);
-      if (this.episodes.length > 400) this.episodes.splice(Math.floor(this.r() * 400), 1);
-    }
-
-    // 3-factor motor learning reward + EWC synaptic protection
-    const tg = this.target();
-    let R = 0;
-    if (tg && this.sleep.stage === 0 && !this.drinking) {
-      const d = this.dist;
-      if (this.lastDist !== null) {
-        R = (this.lastDist - d) * 10 * 0.5;
-        if (Math.abs(this.bear) < 0.6) this.selfV += 0.01 * (clamp((this.lastDist - d) * 10, 0.02, 2.5) - this.selfV);
-      }
-      this.lastDist = d;
-    } else this.lastDist = null;
-
-    {
-      const F = this.body.F[3].f, h = Math.atan2(F[2], F[0]);
-      if (this.lastYaw !== undefined) {
-        let dh = h - this.lastYaw;
-        if (dh > Math.PI) dh -= 2 * Math.PI;
-        if (dh < -Math.PI) dh += 2 * Math.PI;
-        if (tg && Math.abs(this.bear) > 0.6) this.selfW += 0.01 * (Math.abs(dh) * 10 - this.selfW);
-      }
-      this.lastYaw = h;
-    }
-
-    this.progEMA += 0.05 * ((tg && !this.drinking ? R : 0.3) - this.progEMA);
-    R -= 0.0015 * this.body.energy;
-    R -= 0.35 * clamp(0.55 - this.body.F[3].u[1]);
-    this.stuck = clamp((0.02 - this.progEMA) * 4) * (tg && this.goal && !this.drinking && this.t - this.goal.since > 6 ? 1 : 0);
-    const delta = R - this.rBar;
-    this.rBar += 0.05 * delta;
-    this.motorDelta = delta;
-    if (tg && this.sleep.stage === 0 && !this.lesion.learnMotor && !this.drinking) this.motorLearn(delta);
-
-    // Homeostatic intrinsic biases on postural MOT[3..7] (and optional MN pool if enabled via TW.mnHomeo)
-    if (!this.lesion.homeo) {
-      if (this.homeo) {
-        for (let n = 0; n < NMN; n++) {
-          this.mnAvg[n] += 0.1 * (this.mnAct[n] - this.mnAvg[n]);
-          this.mnHomeo[n] = clamp(this.mnHomeo[n] + 0.04 * ((globalThis.TW?.hs ?? 0.12) - this.mnAvg[n]), -2, globalThis.TW?.hmax ?? 0.6);
-        }
-      } else this.mnHomeo.fill(0);
-      // Keep postural/episodic MOT[3..7] from drifting into tonic hyperactivity
-      for (let m = 3; m < 8; m++) {
-        const mr = this.brain.rate[R0.MOT + m];
-        if (mr > 12) this.motBias[m] = clamp(this.motBias[m] - 0.008 * (mr - 12), -0.8, 0.3);
-        else this.motBias[m] *= 0.995;
-      }
-    } else {
-      this.mnHomeo.fill(0);
-      this.motBias.fill(0);
-    }
-
-    const temp = this.lesion.metacog ? 1 : Math.min(1.25, this.metacog?.exploreTemp ?? 1);
-    const sigma = 0.18 * temp * (0.75 + 0.55 * this.brain.nm.NE) * (this.sleep.stage === 0 ? 1 : 0.3);
-    for (let n = 0; n < NMN; n++) this.xi[n] = 0.7 * this.xi[n] + 0.7 * sigma * this.drawGauss();
-    this.yAvg.fill(0);
-    this.mAvg.fill(0);
-
-    // Behavioural repertoire entropy (raw & bias-corrected)
-    const Bu = this.body.u;
-    const avg = (a, b, st = 1) => { let s = 0, n = 0; for (let i = a; i < b; i += st) { s += Bu[i]; n++; } return s / n; };
-    const bits = [
-      avg(CH.long + 13, CH.long + 24, 2) > 0.05, avg(CH.long + 1, CH.long + 12, 2) > 0.05,
-      avg(CH.long, CH.long + 24, 4) > 0.05, avg(CH.radial, CH.radial + 7) > 0.05,
-      avg(CH.legGrip, CH.legGrip + 4) > 0, avg(CH.arm + 2, CH.arm + 6, 3) > 0.05, this.vf > 0.25,
-    ];
-    const code = bits.reduce((a, b, i) => a | ((b ? 1 : 0) << i), 0);
-    this.motorHist.push(code);
-    if (this.motorHist.length > 600) this.motorHist.shift();
-    {
-      const an = [avg(CH.long + 13, CH.long + 24, 2), avg(CH.long + 1, CH.long + 12, 2), avg(CH.long, CH.long + 24, 4), avg(CH.radial, CH.radial + 7), avg(CH.legGrip, CH.legGrip + 4), avg(CH.arm + 2, CH.arm + 6, 3), this.vf];
-      this.anMean = this.anMean || an.slice();
-      let c2 = 0;
-      for (let i = 0; i < 7; i++) { this.anMean[i] += 0.003 * (an[i] - this.anMean[i]); if (an[i] > this.anMean[i] + 0.01) c2 |= 1 << i; }
-      (this.motorHist2 = this.motorHist2 || []).push(c2);
-      if (this.motorHist2.length > 600) this.motorHist2.shift();
-      if (this.frame % 60 === 0) {
-        const c = new Map(); for (const x of this.motorHist2) c.set(x, (c.get(x) || 0) + 1);
-        let H = 0; for (const v of c.values()) { const p = v / this.motorHist2.length; H -= p * Math.log2(p); }
-        this.entropy2 = H;
-      }
-    }
-    if (this.frame % 60 === 0) {
-      const c = new Map(); for (const x of this.motorHist) c.set(x, (c.get(x) || 0) + 1);
-      let H = 0; for (const v of c.values()) { const p = v / this.motorHist.length; H -= p * Math.log2(p); }
-      this.entropy = H; this.states = c.size;
-    }
+    const u = new Float64Array(NY + 8); u.set(this.y); for (let m = 0; m < 8; m++) u[NY + m] = this.mAvg[m]; this.ssm.step(u); if (!this.lesion.protos) this.protos.step(this);
+    const z = this.z; this.ssm.features(z); for (let m = 0; m < 8; m++) z[64 + m] = this.mAvg[m];
+    if (this.frame > 12) { this.wm.learn(this.zPrev, this.y, 0.05 * (0.5 + this.brain.nm.ACh)); } this.zPrev.set(z);
+    for (let i = 0; i < NZ; i++) this.zMean[i] += 0.01 * (z[i] - this.zMean[i]); this.pc.lesionLearn = !!this.lesion.pc; this.pc.step(this.y, 0.6 + 0.8 * this.brain.nm.ACh);
+    /* sleep consolidation, once per sleep bout on entering deep NREM: Hopfield merge + contrastive key learning, HDC feature resampling */
+    if (this.sleep.stage === 0) this.consolidated = false; else if (this.sleep.stage === 3 && !this.consolidated) { this.consolidated = true; const L = !!this.lesion.memLearn; this.hop.learnKeys = !L; this.hop.emeans = !this.lesion.protoMem; for (const H of [this.hdcFood, this.hdcWater]) H.fixed = L; if (!this.lesion.hopfield) this.memStats.merged = (this.memStats.merged || 0) + this.hop.sleep(); this.hdcFood.sleep(); this.hdcWater.sleep(); this.memStats.consolidations = (this.memStats.consolidations || 0) + 1; }
+    if (this.frame % 60 === 0 && this.sleep.stage === 0 && !this.lesion.hopfield) { const c = Float64Array.from(z, (v, i) => v - this.zMean[i]); const R = this.hop.retrieve(c); this.familiar = R ? clamp((R.sim - 0.4) / 0.5) : 0; this.memStats.famMean += 0.02 * (this.familiar - this.memStats.famMean); this.memStats.retrievals++;
+      this.hop.store(c, { ep: this.episodes[this.episodes.length - 1], t: this.t }, this.r); this.memStats.stored++; }
+    if (this.sleep.stage === 0 && this.episodes.length < 400 ? true : this.frame % 60 === 0) { const ctx = []; for (let i = 0; i < RN.CTX; i++) if (this.brain.rate[R0.CTX + i] > 15) ctx.push(i); const ep = { z: Float64Array.from(z), y: Float64Array.from(this.y), ssm: [Float64Array.from(this.ssm.re), Float64Array.from(this.ssm.im)], ctx, vf: this.vf };
+      if (this.sleep.stage === 0) { this.episodes.push(ep); if (this.episodes.length > 400) this.episodes.splice(Math.floor(this.r() * 400), 1); } }
+    // reward for motor learning: progress toward the current goal, minus effort. delta = R - Rbar is the dopamine-like third factor.
+    const tg = this.target(); let R = 0; if (tg && this.sleep.stage === 0) { const d = this.dist; if (this.lastDist !== null) { R = (this.lastDist - d) * 10 * 0.5; if (Math.abs(this.bear) < 0.6) this.selfV += 0.01 * ((this.lastDist - d) * 10 - this.selfV); } this.lastDist = d; } else this.lastDist = null;
+    { const F = this.body.F[3].f, h = Math.atan2(F[2], F[0]); if (this.lastYaw !== undefined) { let dh = h - this.lastYaw; if (dh > Math.PI) dh -= 2 * Math.PI; if (dh < -Math.PI) dh += 2 * Math.PI; if (tg && Math.abs(this.bear) > 0.6) this.selfW += 0.01 * (Math.abs(dh) * 10 - this.selfW); } this.lastYaw = h; }
+    this.progEMA += 0.05 * ((tg ? R : 0.3) - this.progEMA); /* 'stuck' uses pure goal progress (not the posture/effort terms, which made a tumble -> stuck -> jump -> tumble loop) */ R -= 0.0015 * this.body.energy; R -= 0.3 * clamp(0.5 - this.body.F[3].u[1]); /* being on its back costs reward */ this.stuck = clamp((0.02 - this.progEMA) * 4) * (tg && this.goal && this.t - this.goal.since > 6 ? 1 : 0);
+    const delta = R - this.rBar; this.rBar += 0.05 * delta; this.motorDelta = delta;
+    if (tg && this.sleep.stage === 0 && !this.lesion.learnMotor) this.motorLearn(delta);
+    // homeostatic intrinsic plasticity: each motor neuron slowly shifts its own bias so its average activation tracks a set point
+    // (tau ~ 5 s). Without it, rising hunger/NE drove every motor pool into tonic co-contraction and the body thrashed and tumbled.
+    if (this.homeo) for (let n = 0; n < NMN; n++) { this.mnAvg[n] += 0.1 * (this.mnAct[n] - this.mnAvg[n]); this.mnHomeo[n] = clamp(this.mnHomeo[n] + 0.04 * ((globalThis.TW?.hs ?? 0.12) - this.mnAvg[n]), -2, globalThis.TW?.hmax ?? 0.6); } else this.mnHomeo.fill(0);
+    const sigma = 0.35 * (1 + this.brain.nm.NE) * (this.sleep.stage === 0 ? 1 : 0.3); for (let n = 0; n < NMN; n++) this.xi[n] = 0.7 * this.xi[n] + 0.7 * sigma * gauss(this.r);
+    this.yAvg.fill(0); this.mAvg.fill(0);
+    // behavioural repertoire: discretise the motor state into 7 bits, entropy over the last 60 s
+    const Bu = this.body.u; const avg = (a, b, st = 1) => { let s = 0, n = 0; for (let i = a; i < b; i += st) { s += Bu[i]; n++; } return s / n; };
+    const bits = [avg(CH.long + 13, CH.long + 24, 2) > 0.05, avg(CH.long + 1, CH.long + 12, 2) > 0.05, avg(CH.long, CH.long + 24, 4) > 0.05, avg(CH.radial, CH.radial + 7) > 0.05, avg(CH.legGrip, CH.legGrip + 4) > 0, avg(CH.arm + 2, CH.arm + 6, 3) > 0.05, this.vf > 0.25];
+    const code = bits.reduce((a, b, i) => a | ((b ? 1 : 0) << i), 0); this.motorHist.push(code); if (this.motorHist.length > 600) this.motorHist.shift();
+    /* bias-corrected repertoire (pass 14): the same 7 signals, each compared with its own ~5-s running mean instead of a fixed
+       threshold, so a wiring with a constant tonic offset in one channel is not counted as "always on" */
+    { const an = [avg(CH.long + 13, CH.long + 24, 2), avg(CH.long + 1, CH.long + 12, 2), avg(CH.long, CH.long + 24, 4), avg(CH.radial, CH.radial + 7), avg(CH.legGrip, CH.legGrip + 4), avg(CH.arm + 2, CH.arm + 6, 3), this.vf]; this.anMean = this.anMean || an.slice();
+      let c2 = 0; for (let i = 0; i < 7; i++) { this.anMean[i] += 0.003 * (an[i] - this.anMean[i]); if (an[i] > this.anMean[i] + 0.01) c2 |= 1 << i; } (this.motorHist2 = this.motorHist2 || []).push(c2); if (this.motorHist2.length > 600) this.motorHist2.shift();
+      if (this.frame % 60 === 0) { const c = new Map(); for (const x of this.motorHist2) c.set(x, (c.get(x) || 0) + 1); let H = 0; for (const v of c.values()) { const p = v / this.motorHist2.length; H -= p * Math.log2(p); } this.entropy2 = H; } }
+    if (this.frame % 60 === 0) { const c = new Map(); for (const x of this.motorHist) c.set(x, (c.get(x) || 0) + 1); let H = 0; for (const v of c.values()) { const p = v / this.motorHist.length; H -= p * Math.log2(p); } this.entropy = H; this.states = c.size; }
   }
-
-  motorLearn(delta) {
-    const achMod = (0.5 + this.brain.nm.ACh) * (this.lesion.metacog ? 1 : (this.metacog?.achGain ?? 1));
-    // Asymmetric 3-factor RPE: reinforce positive progress strongly, damp negative RPE on steep slopes so CPG coordination isn't erased
-    const effDelta = delta >= 0 ? clamp(delta, 0, 1) : 0.25 * clamp(delta, -1, 0);
-    const lr = 0.0022 * achMod * effDelta;
-    const decay = 0.85, ewcK = 0.022;
-    const posR = delta > 0.05;
-    let ewcE = 0;
-
-    for (let n = 0; n < NMN; n++) {
-      const x = this.xi[n];
-      const oc = n * NCPG;
-      for (let k = 0; k < NCPG; k++) {
-        const idx = oc + k;
-        this.Ec[idx] = decay * this.Ec[idx] + x * this.yAvg[k];
-        if (posR) this.fishWc[idx] = 0.995 * this.fishWc[idx] + 0.005 * Math.min(4, this.Ec[idx] * this.Ec[idx]);
-        const fEff = 0.12 + this.fishWc[idx];
-        const ewcPull = ewcK * fEff * (this.Wc[idx] - this.WcAnc[idx]);
-        ewcE += fEff * (this.Wc[idx] - this.WcAnc[idx]) ** 2;
-        this.Wc[idx] = clamp(this.Wc[idx] + lr * this.Ec[idx] - ewcPull, this.Wc0[idx] - 0.5, this.Wc0[idx] + 0.5);
-      }
-      const om = n * 8;
-      for (let m = 0; m < 8; m++) {
-        const idx = om + m;
-        this.Em[idx] = decay * this.Em[idx] + x * this.mAvg[m];
-        if (posR) this.fishWm[idx] = 0.995 * this.fishWm[idx] + 0.005 * Math.min(4, this.Em[idx] * this.Em[idx]);
-        const fEff = 0.12 + this.fishWm[idx];
-        const ewcPull = ewcK * fEff * (this.Wm[idx] - this.WmAnc[idx]);
-        this.Wm[idx] = clamp(this.Wm[idx] + lr * this.Em[idx] - ewcPull, this.Wm0[idx] - 0.5, this.Wm0[idx] + 0.5);
-      }
-      const op = n * NPHI;
-      for (let p = 0; p < NPHI; p++) {
-        const idx = op + p;
-        this.Ep[idx] = decay * this.Ep[idx] + x * this.phi[p];
-        this.Wp[idx] = clamp(this.Wp[idx] + 0.5 * lr * this.Ep[idx], this.Wp0[idx] - 0.5, this.Wp0[idx] + 0.5);
-      }
-    }
-    for (let m = 0; m < 8; m++) {
-      const post = this.mAvg[m] - (m < 3 ? 0.3 : 0.08);
-      for (let p = 0; p < NPHI; p++) {
-        const idx = m * NPHI + p;
-        this.Emot[idx] = decay * this.Emot[idx] + post * this.phi[p];
-        if (posR) this.fishWmot[idx] = 0.995 * this.fishWmot[idx] + 0.005 * Math.min(4, this.Emot[idx] * this.Emot[idx]);
-        const fEff = 0.1 + this.fishWmot[idx];
-        const ewcPull = ewcK * fEff * (this.Wmot[idx] - this.WmotAnc[idx]);
-        this.Wmot[idx] = clamp(this.Wmot[idx] + 0.3 * lr * this.Emot[idx] - ewcPull, this.Wmot0[idx] - 0.8, this.Wmot0[idx] + 0.8);
-      }
-    }
-    this.ewcEnergy = 0.5 * ewcE;
-  }
-
-  // ------------------------------------------------------------------ physical interaction: drinking, eating, stings, snacks
-  interact() {
-    const hd = this.body.head(), W = this.world, g = this.goal;
-
-    // Drinking: head or snout within water pool radius while awake, thirsty, and thirst reflex intact
-    let inPool = null;
-    for (const P of W.pools) if (Math.hypot(P.x - hd[0], P.z - hd[2]) < P.r + 0.35) inPool = P;
-    if (inPool && this.sleep.stage === 0 && !this.lesion.thirst && this.metab.thirst > 0.04) {
-      this.metab.drink(0.045);
-      this.stats.drinks = (this.stats.drinks || 0) + 0.045;
-      if (!this.drinking) {
-        this.ev('drink', 'drinking from pool');
-        this.hdcWater.learn(inPool.x, inPool.z, 1);
-        this.outcome(null, 0.85);
-      }
-      this.drinking = 1;
-      // Pause give-up timer while actively drinking!
-      this.goalBestT = this.t;
-    } else {
-      this.drinking = 0;
-    }
-    if (g && g.type === 'water' && this.metab.thirst < 0.07) {
-      this.ev('sated', 'thirst sated');
-      this.goal = null;
-    }
-
-    for (let i = W.snacks.length - 1; i >= 0; i--) {
-      const s = W.snacks[i];
-      if (s.held) continue;
-      if (Math.hypot(s.x - hd[0], s.y - hd[1], s.z - hd[2]) < 0.95 && this.sleep.stage === 0) {
-        W.snacks.splice(i, 1);
-        this.metab.eat(s.kind, 1.2);
-        this.hdcFood.learn(s.x, s.z, 0.65);
-        W.depositPheromone(s.x, s.z, 0, 0.75);
-        this.outcome(null, 1);
-        this.stats.snacks++;
-        this.ev('eat', `ate dropped ${s.kind}`);
-        if (g && g.type === 'snack') this.goal = null;
-      }
-    }
-
-    // Snap at low-flying photonic bio-mites when hungry
-    if (this.eco && this.sleep.stage === 0 && this.metab.hunger() > 0.24) {
-      for (let i = this.eco.mites.length - 1; i >= 0; i--) {
-        const mt = this.eco.mites[i];
-        if (Math.hypot(mt.x - hd[0], mt.y - hd[1], mt.z - hd[2]) < 0.82) {
-          this.eco.mites.splice(i, 1);
-          this.eco.stats.mitesEaten++;
-          this.metab.eat('fat', 0.85);
-          this.outcome(null, 0.9);
-          this.ev('eat', 'snapped photonic bio-mite');
-          break;
-        }
-      }
-    }
-
-    if (g && g.type === 'site') {
-      const P = W.plants[g.k];
-      if (Math.hypot(P.x - hd[0], P.z - hd[2]) < (globalThis.TW?.eatR ?? 1.3)) {
-        this.stats.tries++;
-        let r = 0;
-        if (P.fruit > 0.3 && this.r() < P.p * (0.6 + 0.4 * P.fruit) * 2.2) {
-          r = 1;
-          this.metab.eat('plant', P.sugarTrait ?? 1);
-          this.stats.eats++;
-          W.depositPheromone(P.x, P.z, 0, 0.95);
-        }
-        P.fruit = Math.max(0, P.fruit - 0.7);
-        P.stress = Math.min(1, (P.stress || 0) + 0.35);
-        if (P.s === 3 && this.r() < 0.35 * (P.defenseTrait ?? 1)) {
-          this.nociception = 1;
-          this.stats.stings++;
-          W.depositPheromone(hd[0], hd[2], 1, 1.15);
-          this.wAv[g.k] += 0.3 * (1 - this.wAv[g.k]);
-          this.ev('sting', `thorn plant ${g.k} stung (aversive value now ${this.wAv[g.k].toFixed(2)})`);
-        } else this.wAv[g.k] *= 0.95;
-        this.recent[g.k] = 1;
-        // Write outcome at hippocampal perceived position
-        const mp = this.retina.sitePos(g.k, W);
-        this.hdcFood.learn(mp.x, mp.z, r - 0.35);
-        this.outcome(g.chosen ?? g.k, r);
-        this.ev(r ? 'reward' : 'miss', `site ${g.k}: ${r ? 'fed' : 'nothing'} (true p ${P.p.toFixed(2)})`);
-        this.goal = null;
-      }
-    }
-
-    if (g && !this.drinking) {
-      if (g !== this.goalRef) { this.goalRef = g; this.goalBest = 1e9; this.goalBestT = this.t; }
-      if (this.lastDist !== null && this.dist < this.goalBest - 0.5) { this.goalBest = this.dist; this.goalBestT = this.t; }
-      const lim = Math.max(45, 3 * ((this.goalBest < 1e8 ? this.goalBest : 10) / Math.max(0.08, this.selfV)));
-      if (this.t - this.goalBestT > 22 || this.t - g.since > lim) {
-        this.ev('give-up', `gave up on goal (${(this.t - g.since).toFixed(0)} s, no progress for ${(this.t - this.goalBestT).toFixed(0)} s)`);
-        if (g.type === 'site') this.wSite[g.chosen ?? g.k] *= 0.9;
-        this.goal = null;
-      }
-    }
-  }
-
-  outcome(k, r) {
-    let q = 0.7;
-    if (k !== null && k !== undefined) {
-      q = 0.5 * this.wSite[k] + (0.5 * this.bA[k]) / (this.bA[k] + this.bB[k]);
-      this.wSite[k] += 0.25 * (r - this.wSite[k]);
-      if (r) this.bA[k] += 1; else this.bB[k] += 1;
-      this.visits[k]++;
-      const P = this.world.plants[k];
-      this.featC[P.c] += 0.1 * (r - this.featC[P.c]);
-      this.featS[P.s] += 0.1 * (r - this.featS[P.s]);
-    }
-    this.rpe = r - q;
-    this.stats.rewards += r;
-    this.rpe *= 0.85;
-  }
-
-  // ------------------------------------------------------------------ one simulated minute: metabolism, sleep, unified striatal race, growth
+  motorLearn(delta) { const lr = 0.003 * (0.5 + this.brain.nm.ACh) * clamp(delta, -1, 1); const decay = 0.85;
+    for (let n = 0; n < NMN; n++) { const x = this.xi[n]; const oc = n * NCPG; for (let k = 0; k < NCPG; k++) { this.Ec[oc + k] = decay * this.Ec[oc + k] + x * this.yAvg[k]; this.Wc[oc + k] = clamp(this.Wc[oc + k] + lr * this.Ec[oc + k], this.Wc0[oc + k] - 1, this.Wc0[oc + k] + 1); }
+      const om = n * 8; for (let m = 0; m < 8; m++) { this.Em[om + m] = decay * this.Em[om + m] + x * this.mAvg[m]; this.Wm[om + m] = clamp(this.Wm[om + m] + lr * this.Em[om + m], this.Wm0[om + m] - 1, this.Wm0[om + m] + 1); }
+      const op = n * NPHI; for (let p = 0; p < NPHI; p++) { this.Ep[op + p] = decay * this.Ep[op + p] + x * this.phi[p]; this.Wp[op + p] = clamp(this.Wp[op + p] + 0.5 * lr * this.Ep[op + p], this.Wp0[op + p] - 1, this.Wp0[op + p] + 1); } }
+    for (let m = 0; m < 8; m++) { const post = this.mAvg[m] - 0.3; for (let p = 0; p < NPHI; p++) { this.Emot[m * NPHI + p] = decay * this.Emot[m * NPHI + p] + post * this.phi[p]; this.Wmot[m * NPHI + p] = clamp(this.Wmot[m * NPHI + p] + 0.3 * lr * this.Emot[m * NPHI + p], -3, 3); } } }
+  // ------------------------------------------------------------------ physical interaction: eating, stings, snacks
+  interact() { const hd = this.body.head(), W = this.world; const g = this.goal;
+    // drinking: head inside a pool while awake and not sated -> water into the gut; the place is written into the HDC water map
+    let inPool = null; for (const P of W.pools) if (Math.hypot(P.x - hd[0], P.z - hd[2]) < P.r) inPool = P;
+    if (inPool && this.sleep.stage === 0 && this.metab.thirst > 0.03) { this.metab.drink(0.03); this.stats.drinks = (this.stats.drinks || 0) + 0.03; if (!this.drinking) { this.ev('drink', 'drinking'); this.protos.rewardPlace('water', 1); this.protos.outcome('water', true); this.hdcWater.learn(inPool.x, inPool.z, 1); } this.drinking = 1; } else this.drinking = 0;
+    if (g && g.type === 'water' && this.metab.thirst < 0.05) { this.ev('sated', 'thirst sated'); this.goal = null; }
+    for (let i = W.snacks.length - 1; i >= 0; i--) { const s = W.snacks[i]; if (Math.hypot(s.x - hd[0], s.y - hd[1], s.z - hd[2]) < 0.9 && this.sleep.stage === 0) { W.snacks.splice(i, 1); this.metab.eat(s.kind, 1.2); this.hdcFood.learn(s.x, s.z, 0.65); this.outcome(null, 1); this.stats.snacks++; this.ev('eat', `ate dropped ${s.kind}`); if (g && g.type === 'snack') this.goal = null; } }
+    if (g && g.type === 'site') { const P = W.plants[g.k]; if (Math.hypot(P.x - hd[0], P.z - hd[2]) < (globalThis.TW?.eatR ?? 1.3)) { this.stats.tries++; let r = 0; if (P.fruit > 0.3 && this.r() < P.p * (0.6 + 0.4 * P.fruit) * 2.2) { r = 1; this.metab.eat('plant', 1); this.stats.eats++; } P.fruit = Math.max(0, P.fruit - 0.7);
+        if (P.s === 3 && this.r() < 0.35) { this.nociception = 1; this.stats.stings++; this.wAv[g.k] += 0.3 * (1 - this.wAv[g.k]); this.ev('sting', `thorn plant ${g.k} stung (aversive value now ${this.wAv[g.k].toFixed(2)})`); } else this.wAv[g.k] *= 0.95;
+        this.recent[g.k] = 1; this.hdcFood.learn(P.x, P.z, r - 0.35); this.outcome(g.chosen ?? g.k, r); this.protos.rewardPlace('food', r ? 1 : 0); this.protos.outcome('eat', !!r); this.ev(r ? 'reward' : 'miss', `site ${g.k}: ${r ? 'fed' : 'nothing'} (true p ${P.p.toFixed(2)})`); this.goal = null; } }
+    if (g) { if (g !== this.goalRef) { this.goalRef = g; this.goalBest = 1e9; this.goalBestT = this.t; } if (this.lastDist !== null && this.dist < this.goalBest - 0.5) { this.goalBest = this.dist; this.goalBestT = this.t; }
+      // give up when no 0.5-unit improvement for 20 s, or after 3x the self-predicted travel time (min 45 s)
+      const lim = Math.max(45, 3 * ((this.goalBest < 1e8 ? this.goalBest : 10) / Math.max(0.08, this.selfV))); if (this.t - this.goalBestT > 20 || this.t - g.since > lim) { this.ev('give-up', `gave up on goal (${(this.t - g.since).toFixed(0)} s, no progress for ${(this.t - this.goalBestT).toFixed(0)} s)`); if (g.type === 'site') this.wSite[g.chosen ?? g.k] *= 0.9; this.protos.outcome(g.type === 'water' ? 'water' : 'eat', false); if (g.type === 'water' && g.place !== undefined) this.protos.water[g.place] *= 0.5; this.goal = null; } } }
+  outcome(k, r) { let q = 0.7; if (k !== null && k !== undefined) { q = 0.5 * this.wSite[k] + 0.5 * this.bA[k] / (this.bA[k] + this.bB[k]); this.wSite[k] += 0.25 * (r - this.wSite[k]); if (r) this.bA[k] += 1; else this.bB[k] += 1; this.visits[k]++; const P = this.world.plants[k]; this.featC[P.c] += 0.1 * (r - this.featC[P.c]); this.featS[P.s] += 0.1 * (r - this.featS[P.s]); }
+    this.rpe = r - q; this.stats.rewards += r; setTimeout0(() => { this.rpe *= 0.2; }); }
+  // ------------------------------------------------------------------ one simulated minute: metabolism, sleep, decisions, flaws, replay/dreams, growth
+  /** probability that thirst wins the decision: 1.3*thirst / (1.3*thirst + hunger), each drive weighted by the current concept's learned payoff (0.5 = no information) */
+  thirstShare(M) { const P = this.protos, c = P.id2; const wd = this.lesion.protos || c < 0 ? 1 : 0.5 + P.qDrink[c], we = this.lesion.protos || c < 0 ? 1 : 0.5 + P.qEat[c]; const a = 1.3 * M.thirst * wd, b = M.hunger() * we; return a / (a + b); }
   minute() {
-    for (let k = 0; k < SITES; k++) this.recent[k] *= 0.996;
-    this.tick++;
-    if (this.clockMode === 'wall' && typeof Date !== 'undefined') {
-      const now = new Date();
-      this.hour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
-    } else {
-      this.hour = (8 + (this.tick * 24) / this.dayLen) % 24;
-    }
-    const M = this.metab, br = this.brain;
-    this.rpe *= 0.3;
-
+    for (let k = 0; k < SITES; k++) this.recent[k] *= 0.996; this.tick++; this.hour = (8 + (this.tick * 24) / this.dayLen) % 24; const M = this.metab, br = this.brain; this.rpe *= 0.3;
     const evs = M.tick({ hour: this.hour, ens: clamp(br.regionRate('ENS') / 30), motorCost: this.body.energy, spikes: br.spikes * 240, stress: clamp(this.nociception + 0.5 * this.wm.surprise) });
-    for (const e of evs) {
-      const c = this.body.c[0];
-      this.world.waste.push({ x: this.body.x[c], y: this.body.y[c], z: this.body.z[c], type: e.type, age: 0, amount: e.amount });
-      this.stats[e.type]++;
-      this.ev('waste', e.type === 'urine' ? 'urinated (bladder emptied)' : 'defecated (colon emptied)');
-    }
-
-    // Cephalic-phase insulin from seeing/smelling nearby fruiting plant or dropped snack
-    {
-      const hd = this.body.head();
-      let see = 0;
-      for (let k = 0; k < this.world.plants.length; k++) {
-        const P = this.world.plants[k];
-        if (P.fruit > 0.3 && Math.hypot(P.x - hd[0], P.z - hd[2]) < 3.2 && (this.lesion.vision || this.retina.vis[k] > 0)) see = 1;
-      }
-      for (const s of this.world.snacks) if (Math.hypot(s.x - hd[0], s.z - hd[2]) < 3.2) see = 1;
-      this.cephalic += 0.2 * (see - this.cephalic);
-      M.cephalic = this.lesion.cephalic ? 0 : this.cephalic;
-    }
-
-    const prev = this.sleep.stage;
-    const stage = this.sleep.tick(this.hour, clamp(this.speedEMA), br.nm.NE, clamp(1 - this.light), clamp(br.spikes / 60));
-    if (stage !== prev) {
-      this.ev('sleep', `stage ${['WAKE', 'N1', 'N2', 'N3', 'REM'][prev]} -> ${['WAKE', 'N1', 'N2', 'N3', 'REM'][stage]}`);
-      if (stage) { this.goal = null; this.race = null; }
-    }
-    if (stage === 2 || stage === 3) this.replay();
-    if (stage === 4 && !this.lesion.dream) this.dream();
-
-    // Hypothalamic osmoreceptor / snack re-deliberation trigger -> enters the unified 21-channel striatal race!
-    if (stage === 0 && !this.babble?.on) {
-      const hd = this.body.head();
-      const hasCloseSnack = this.world.snacks.some((s) => Math.hypot(s.x - hd[0], s.z - hd[2]) < 14);
-      if (hasCloseSnack && this.goal && this.goal.type !== 'snack' && !this.race && this.draw01() < 0.25) {
-        this.goal = null;
-        this.startRace();
-      } else if (!this.lesion.thirst && M.thirst > 0.34 && this.goal && this.goal.type !== 'water' && !this.race && this.draw01() < 0.06 * M.thirst) {
-        this.ev('thirst', `osmotic thirst (${M.thirst.toFixed(2)}) triggers striatal re-deliberation`);
-        this.goal = null;
-        this.startRace();
-      }
-      if (!this.goal && !this.race) this.startRace();
-    }
-
-    if (this.goal && this.goal.type === 'water' && !this.drinking) {
-      const hd = this.body.head();
-      if (Math.hypot(this.goal.x - hd[0], this.goal.z - hd[2]) < 1.0) {
-        this.hdcWater.learn(this.goal.x, this.goal.z, -0.35);
-        this.ev('miss', 'no water where remembered');
-        this.goal = null;
-      }
-    }
-    if (this.goal && this.goal.type === 'explore') {
-      const hd = this.body.head();
-      if (Math.hypot(this.goal.x - hd[0], this.goal.z - hd[2]) < 1.6) this.goal = null;
-    }
-
-    // Continuous FHRRphasor visit density update (no 24x24 discrete grid!)
-    if (this.tick % 4 === 0 && !this.lesion.nav) {
-      this.hdcVisit.add(this.nav.px, this.nav.pz, 0.25);
-      this.hdcVisit.decay(0.9997);
-    }
-
-    // Morphological & use-dependent limb growth
-    const target = 1 + clamp(M.tissue * 0.4, 0, 0.35);
-    this.body.scale += 0.01 * (target - this.body.scale);
-    if (!this.lesion.growth) {
-      const B = this.body;
-      for (let i = 0; i < NS; i++) B.girth[i] += 0.004 * (0.85 + 0.35 * M.leptin - B.girth[i]);
-      B.limbs.forEach((L, k) => {
-        const use = clamp(this.limbUse[k] / Math.max(1, this.limbUseN) / 2.2);
-        this.limbUseEMA[k] += 0.02 * (use - this.limbUseEMA[k]);
-        const grow = 0.00025 * this.limbUseEMA[k] * (0.4 + clamp(M.muscle / 150)) - 0.0006 * (B.limbLen[k] - 1);
-        B.limbLen[k] = clamp(B.limbLen[k] + grow, 0.85, 1.45);
-      });
-      this.limbUse.fill(0);
-      this.limbUseN = 0;
-    }
+    for (const e of evs) { const c = this.body.c[0]; this.world.waste.push({ x: this.body.x[c], y: this.body.y[c], z: this.body.z[c], type: e.type, age: 0, amount: e.amount }); this.stats[e.type]++; this.ev('waste', e.type === 'urine' ? 'urinated (bladder emptied)' : 'defecated (colon emptied)'); }
+    // cephalic-phase insulin: seeing/smelling food (fruiting plant or snack within 3 units of the head) releases insulin before any
+    // glucose arrives, an anticipatory (allostatic) response that blunts the post-meal glucose spike
+    { const hd = this.body.head(); let see = 0; for (const P of this.world.plants) if (P.fruit > 0.3 && Math.hypot(P.x - hd[0], P.z - hd[2]) < 3) see = 1; for (const s of this.world.snacks) if (Math.hypot(s.x - hd[0], s.z - hd[2]) < 3) see = 1; this.cephalic += 0.2 * (see - this.cephalic); M.cephalic = this.lesion.cephalic ? 0 : this.cephalic; }
+    const prev = this.sleep.stage; const stage = this.sleep.tick(this.hour, clamp(this.speedEMA), br.nm.NE, clamp(1 - this.light), clamp(br.spikes / 60));
+    if (stage !== prev) { this.ev('sleep', `stage ${['WAKE', 'N1', 'N2', 'N3', 'REM'][prev]} -> ${['WAKE', 'N1', 'N2', 'N3', 'REM'][stage]}`); if (stage) { this.goal = null; this.race = null; } }
+    if (stage === 2 || stage === 3) this.replay(); if (stage === 4 && !this.lesion.dream) this.dream();
+    // decide: hungry -> striatal race over sites; dropped food in view -> innate orienting; otherwise curiosity: least-visited place
+    /* pass 14: strong thirst can interrupt a food or exploration trip (otherwise thirst only competes when the creature is idle, which is rare) */
+    if (stage === 0 && !this.lesion.thirst && M.thirst > 0.45 && (this.race || (this.goal && this.goal.type !== 'water' && this.goal.type !== 'snack')) && this.r() < 0.005 * M.thirst) { this.goal = null; this.race = null; this.ev('thirst', `thirst (${M.thirst.toFixed(2)}) interrupts the current goal`); }
+    if (stage === 0 && !this.goal && !this.race) { const hd = this.body.head(); const sn = this.world.snacks.filter((s) => Math.hypot(s.x - hd[0], s.z - hd[2]) < 14);
+      if (sn.length) { const s = sn[0]; this.goal = { type: 'snack', id: s.id, since: this.t }; this.ev('orient', 'oriented to dropped food'); }
+      else if (!this.lesion.thirst && M.thirst > 0.3 && this.r() < this.thirstShare(M) /* motivational competition: probability of serving thirst = its share of total drive, weighted by what the current e-means concept has learned pays off */) { /* thirst: go where the HDC water map recalls water; with no memory yet, explore */ let bx = 0, bz = 0, bv = -1e9; for (let q = 0; q < 64; q++) { const ex = (this.r() - 0.5) * 40, ez = (this.r() - 0.5) * 40; const v = this.hdcWater.recall(ex, ez) - 0.02 * Math.hypot(ex - hd[0], ez - hd[2]); if (v > bv) { bv = v; bx = ex; bz = ez; } }
+        let seen = null, sd = 20; for (const P of this.world.pools) { const d = Math.hypot(P.x - hd[0], P.z - hd[2]); if (d < sd) { sd = d; seen = P; } } /* hygroreception: a pool within 20 units is sensed directly (humidity) */
+        const pw = this.lesion.protos ? null : this.protos.bestWater(); this.protos.decide('water');
+        if (pw && bv <= 0.15 && !(seen && sd < 12) && pw.s > 0.25) { this.goal = { type: 'water', x: pw.x, z: pw.z, since: this.t, place: pw.j }; this.ev('thirst', `thirsty (${M.thirst.toFixed(2)}): heading to e-means place ${pw.j} where water was found (score ${pw.s.toFixed(2)})`); } else if (seen && bv <= 0.15) { this.goal = { type: 'water', x: seen.x, z: seen.z, since: this.t }; this.ev('thirst', `thirsty (${M.thirst.toFixed(2)}): sensed water ${sd.toFixed(0)} units away`); } else if (bv > 0.15) { this.goal = { type: 'water', x: bx, z: bz, since: this.t }; this.ev('thirst', `thirsty (${M.thirst.toFixed(2)}): heading to remembered water`); } else { const a = this.r() * 6.283; this.goal = { type: 'explore', x: clamp(hd[0] + 10 * Math.cos(a), -18, 18), z: clamp(hd[2] + 10 * Math.sin(a), -18, 18), since: this.t }; this.ev('thirst', 'thirsty, no water remembered: searching'); } }
+      else if (M.hunger() > 0.18 || this.r() < 0.5) { this.protos.decide('eat'); this.startRace(); } else if (!this.lesion.hdc) { /* curiosity from the HDC visit map: sample candidate places, go where the map recalls the fewest visits */ let bx = 0, bz = 0, bv = 1e9; for (let q = 0; q < 48; q++) { const ex = (this.r() - 0.5) * 36, ez = (this.r() - 0.5) * 36; const dd = Math.hypot(ex - hd[0], ez - hd[2]); if (dd < 4) continue; const v = this.hdcVisit.recall(ex, ez) + 0.03 * dd + 0.3 * this.r(); if (v < bv) { bv = v; bx = ex; bz = ez; } }
+        this.goal = { type: 'explore', x: bx, z: bz, since: this.t }; this.ev('explore', `curiosity: heading to the place the HDC map recalls least (visit recall ${bv.toFixed(2)})`); }
+      else { let best = 0, bv = 1e9; for (let i = 0; i < this.novelty.length; i++) { const ex = ((i % 24) / 24 - 0.5) * 36, ez = (Math.floor(i / 24) / 24 - 0.5) * 36; const dd = Math.hypot(ex - hd[0], ez - hd[2]); const v = this.novelty[i] + this.r() * 0.5 + (dd < 4 ? 99 : 0.04 * dd); if (v < bv) { bv = v; best = i; } } this.goal = { type: 'explore', x: ((best % 24) / 24 - 0.5) * 36, z: (Math.floor(best / 24) / 24 - 0.5) * 36, since: this.t }; this.ev('explore', 'curiosity: heading to least-visited area'); } }
+    if (this.goal && this.goal.type === 'water' && !this.drinking) { const hd = this.body.head(); if (Math.hypot(this.goal.x - hd[0], this.goal.z - hd[2]) < 1.0) { this.hdcWater.learn(this.goal.x, this.goal.z, -0.35); this.ev('miss', 'no water where remembered'); this.protos.outcome('water', false); if (this.goal.place !== undefined) this.protos.water[this.goal.place] *= 0.5; this.goal = null; } }
+    if (this.goal && this.goal.type === 'explore') { const hd = this.body.head(); if (Math.hypot(this.goal.x - hd[0], this.goal.z - hd[2]) < 1.5) this.goal = null; }
+    const com = this.body.com(); const gi = clamp(Math.floor((com[0] / 36 + 0.5) * 24), 0, 23) + 24 * clamp(Math.floor((com[2] / 36 + 0.5) * 24), 0, 23); this.novelty[gi] += 1; if (this.tick % 4 === 0) { this.hdcVisit.add(com[0], com[2], 0.25); this.hdcVisit.decay(0.9997); }
+    // morphological growth: anabolic tissue gain slowly scales the body (bounded)
+    const target = 1 + clamp(M.tissue * 0.4, 0, 0.35); this.body.scale += 0.01 * (target - this.body.scale);
+    // per-part growth: girth follows fat stores (leptin); each limb grows with its own recent use (use-dependent hypertrophy,
+    // paid for from the protein/tissue pool) and slowly atrophies when idle. Rest lengths of that limb's constraints scale with it.
+    if (!this.lesion.growth) { const B = this.body; for (let i = 0; i < NS; i++) B.girth[i] += 0.004 * (0.85 + 0.35 * M.leptin - B.girth[i]);
+      B.limbs.forEach((L, k) => { const use = clamp(this.limbUse[k] / Math.max(1, this.limbUseN) / 2.2); this.limbUseEMA[k] += 0.02 * (use - this.limbUseEMA[k]); const grow = 0.00025 * this.limbUseEMA[k] * (0.4 + clamp(M.muscle / 150)) - 0.0006 * (B.limbLen[k] - 1); B.limbLen[k] = clamp(B.limbLen[k] + grow, 0.85, 1.45); }); this.limbUse.fill(0); this.limbUseN = 0; }
     this.flawTick();
   }
-
-  flawTick() {
-    const F = this.flaws, br = this.brain, t = this.tick;
-    const expS = br.explicitS ?? br.S;
+  flawTick() { const F = this.flaws, br = this.brain, t = this.tick;
     if (F.scramble.on && t % Math.max(1, Math.round(F.scramble.period)) === 0) this.rewire();
-    if (F.leaky.on) {
-      const L = F.leaky.rate;
-      for (let k = 0; k < SITES; k++) this.wSite[k] += L * (0.25 - this.wSite[k]);
-      for (let s = 0; s < expS; s++) if (br.plastic[s]) br.w[s] += L * 0.05 * (br.w0[s] - br.w[s]);
-      for (let i = 0; i < this.Wc.length; i++) this.Wc[i] += L * 0.05 * (this.Wc0[i] - this.Wc[i]);
-      for (let i = 0; i < this.Wmot.length; i++) this.Wmot[i] += L * 0.05 * (this.Wmot0[i] - this.Wmot[i]);
-    }
-    if (F.misfire.on && t % Math.max(1, Math.round(F.misfire.period)) === 0) {
-      const k = Math.floor(this.gr() * SITES);
-      this.wSite[k] = clamp(this.wSite[k] + F.misfire.sd * gauss(this.gr));
-      for (let j = 0; j < F.misfire.jolts; j++) {
-        br.jolt[Math.floor(this.gr() * br.N)] += 4;
-        if (expS > 0) {
-          const s = Math.floor(this.gr() * expS);
-          br.w[s] += F.misfire.sd * gauss(this.gr) * (Math.abs(br.w[s]) + 0.1);
-        }
-      }
-      this.stats.misfires++;
-      this.ev('misfire', `misfire: ${F.misfire.jolts} neurons jolted, synapses + site ${k} value perturbed`);
-    }
-  }
-
-  replay() {
-    const E = this.episodes;
-    if (!E.length) return;
-    for (let j = 0; j < 4; j++) {
-      const e = E[Math.floor(this.r() * E.length)];
-      this.wm.learn(e.zPrev || e.z, e.y, 0.02, null, false, e.vis || null, e.vis || null);
-      for (const i of e.ctx) this.brain.jolt[R0.CTX + i] += 1.5;
-      for (let i = 0; i < 4; i++) this.brain.jolt[R0.HIP + Math.floor(this.r() * RN.HIP)] += 1.2;
-      this.stats.replays++;
-    }
-  }
-
-  dream() {
-    for (let k = 0; k < SITES; k++) {
-      if (this.visits[k] === 0) {
-        const P = this.world.plants[k];
-        const vh = clamp(this.featC[P.c] + this.featS[P.s]);
-        this.bA[k] += 0.75 * (1 + 6 * vh - this.bA[k]);
-        this.bB[k] += 0.75 * (1 + 6 * (1 - vh) - this.bB[k]);
-      }
-    }
-    const E = this.episodes;
-    if (E.length < 10 || this.wm.lesion) return;
-    let e = E[Math.floor(this.r() * E.length)];
-    if (!this.lesion.hopfield && this.hop.X.length > 8) {
-      const cue = Float64Array.from(this.zPrev, (v, i) => (this.r() < 0.5 ? 0 : v - this.zMean[i]) + 0.1 * gauss(this.r));
-      const R = this.hop.retrieve(cue);
-      const m = this.hop.meta[R.top];
-      if (m && m.ep) { e = m.ep; this.memStats.dreamSim = R.sim; }
-    }
-    const ssm = this.ssm.clone();
-    const log = [];
-    const act40 = this.dreamAct40, plan32 = this.dreamPlan32, macroAct8 = this.dreamMacroAct8;
-    const y5 = this.dreamY5, y20 = this.dreamY20, macro8 = this.dreamMacro8;
-    for (let m = 0; m < 8; m++) {
-      ssm.re.set(e.ssm[0]);
-      ssm.im.set(e.ssm[1]);
-      const rollCtx = this.wm.newRolloutCtx();
-      const z = Float64Array.from(e.z), y = new Float64Array(NY), u = new Float64Array(NY + 8);
-      for (let q = 0; q < 8; q++) macroAct8[q] = q === m ? 0.9 : 0.15;
-      for (let s = 0; s < 5; s++) {
-        for (let q = 0; q < 8; q++) act40[s * 8 + q] = macroAct8[q];
-      }
-      for (let c = 0; c < 4; c++) {
-        for (let q = 0; q < 8; q++) plan32[c * 8 + q] = macroAct8[q];
-      }
-      this.wm.predict5(e.z, act40, y5);
-      this.wm.predict20(e.z, plan32, y20, null, e.vis || null);
-      this.wm.predict60(e.z, macroAct8, macro8);
-      let prog = 0;
-      for (let s = 0; s < 8; s++) {
-        for (let q = 0; q < 8; q++) z[64 + q] = macroAct8[q];
-        this.wm.predict(z, y, rollCtx, true, e.vis || null);
-        prog += y[12];
-        u.set(y);
-        for (let q = 0; q < 8; q++) u[NY + q] = z[64 + q];
-        ssm.step(u, false);
-        ssm.features(z);
-      }
-      // 4-Timescale Hierarchical Rollout Valuation: +0.1s reactive, +0.5s short, +2.0s tactical, +60.0s 1-minute macro-horizon
-      const macroScore = macro8[0] + 0.25 * macro8[3];
-      const val = 0.50 * (prog / 8) + 0.20 * y5[12] + 0.16 * y20[12] + 0.14 * macroScore;
-      this.Vimg[m] += 0.2 * (val - this.Vimg[m]);
-      log.push(val);
-    }
-    this.dreamLog = log;
-    this.stats.dreams++;
-    for (let i = 0; i < 6; i++) this.brain.jolt[R0.CTX + Math.floor(this.r() * Math.min(64, RN.CTX))] += 2;
-  }
-
-  poke(i, dir) {
-    const B = this.body;
-    B.poke(i, dir[0] * 0.25, dir[1] * 0.25, dir[2] * 0.25);
-    this.nociception = 1;
-    this.world.depositPheromone(B.x[i], B.z[i], 1, 1.35);
-    this.sleep.forceWake = 20;
-    this.ev('poke', 'poked: nociceptors + Schreckstoff alarm plume -> LC burst, cortisol');
-  }
+    if (F.leaky.on) { const L = F.leaky.rate; for (let k = 0; k < SITES; k++) this.wSite[k] += L * (0.25 - this.wSite[k]); for (let s = 0; s < br.S; s++) if (br.plastic[s]) br.w[s] += L * 0.05 * (br.w0[s] - br.w[s]); for (let i = 0; i < this.Wc.length; i++) this.Wc[i] += L * 0.05 * (this.Wc0[i] - this.Wc[i]); for (let i = 0; i < this.Wmot.length; i++) this.Wmot[i] += L * 0.05 * (this.Wmot0[i] - this.Wmot[i]); }
+    if (F.misfire.on && t % Math.max(1, Math.round(F.misfire.period)) === 0) { const k = Math.floor(this.gr() * SITES); this.wSite[k] = clamp(this.wSite[k] + F.misfire.sd * gauss(this.gr)); for (let j = 0; j < F.misfire.jolts; j++) { br.jolt[Math.floor(this.gr() * br.N)] += 4; const s = Math.floor(this.gr() * br.S); br.w[s] += F.misfire.sd * gauss(this.gr) * (Math.abs(br.w[s]) + 0.1); } this.stats.misfires++; this.ev('misfire', `misfire: ${F.misfire.jolts} neurons jolted, synapses + site ${k} value perturbed`); } }
+  /** NREM: replay stored waking episodes - re-train the world model on them and re-activate their cortical assemblies so STDP consolidates them */
+  replay() { const E = this.episodes; if (!E.length) return; for (let j = 0; j < 4; j++) { const e = E[Math.floor(this.r() * E.length)]; this.wm.learn(e.z, e.y, 0.02); for (const i of e.ctx) this.brain.jolt[R0.CTX + i] += 1.5; for (let i = 0; i < 4; i++) this.brain.jolt[R0.HIP + Math.floor(this.r() * 32)] += 1.2; this.stats.replays++; } }
+  /** REM: dreaming. (1) reference dreamBelief: unexperienced sites get a low-confidence belief from colour/shape features;
+   *  (2) offline rollouts: start from a remembered state, imagine 8 steps of each MOT synergy through the learned world model
+   *  (feeding predictions back into a copy of the SSM), and store the imagined forward progress as that synergy's value prior. */
+  dream() { for (let k = 0; k < SITES; k++) if (this.visits[k] === 0) { const P = this.world.plants[k]; const vh = clamp(this.featC[P.c] + this.featS[P.s]); this.bA[k] += 0.75 * (1 + 6 * vh - this.bA[k]); this.bB[k] += 0.75 * (1 + 6 * (1 - vh) - this.bB[k]); }
+    const E = this.episodes; if (E.length < 10 || this.wm.lesion) return; let e = E[Math.floor(this.r() * E.length)]; if (!this.lesion.hopfield && this.hop.X.length > 8) { /* pattern completion: a noisy, half-masked cue of the current state retrieves a whole stored episode to dream from */ const cue = Float64Array.from(this.zPrev, (v, i) => (this.r() < 0.5 ? 0 : v - this.zMean[i]) + 0.1 * gauss(this.r)); const R = this.hop.retrieve(cue); const m = this.hop.meta[R.top]; if (m && m.ep) { e = m.ep; this.memStats.dreamSim = R.sim; } }
+    const ssm = this.ssm.clone(); const log = [];
+    for (let m = 0; m < 8; m++) { ssm.re.set(e.ssm[0]); ssm.im.set(e.ssm[1]); const z = Float64Array.from(e.z), y = new Float64Array(NY), u = new Float64Array(NY + 8); let prog = 0;
+      for (let s = 0; s < 8; s++) { for (let q = 0; q < 8; q++) z[64 + q] = q === m ? 0.9 : 0.15; this.wm.predict(z, y); prog += y[12]; u.set(y); for (let q = 0; q < 8; q++) u[NY + q] = z[64 + q]; ssm.step(u); ssm.features(z); }
+      this.Vimg[m] += 0.2 * (prog / 8 - this.Vimg[m]); log.push(prog / 8); }
+    this.dreamLog = log; this.stats.dreams++; for (let i = 0; i < 6; i++) this.brain.jolt[R0.CTX + Math.floor(this.r() * 64)] += 2; }
+  // ------------------------------------------------------------------ user interaction
+  poke(i, dir) { const B = this.body; B.poke(i, dir[0] * 0.25, dir[1] * 0.25, dir[2] * 0.25); this.nociception = 1; this.sleep.forceWake = 20; this.ev('poke', 'poked: nociceptors -> LC burst, cortisol'); }
 }
+function setTimeout0(f) { f(); }

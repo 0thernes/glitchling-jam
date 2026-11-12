@@ -1,0 +1,16 @@
+// Reference clusterers for comparing e-means on the same data: Lloyd (full batch), MacQueen online k-means
+// (one point at a time, step 1/count), and Sculley mini-batch k-means (per-centre step 1/count, batch B).
+// All start from a random choice of k data points, like e-means' Algorithm 1.
+const rng = (s) => () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+export function nearest(C, k, d, X, off) { let best = 0, bd = Infinity; for (let j = 0; j < k; j++) { let s = 0; for (let i = 0; i < d; i++) { const u = X[off + i] - C[j * d + i]; s += u * u; if (s >= bd) break; } if (s < bd) { bd = s; best = j; } } return [best, bd]; }
+export function mse(C, k, d, X, n) { let L = 0; for (let p = 0; p < n; p++) L += nearest(C, k, d, X, p * d)[1]; return L / n; }
+export function randInit(X, n, k, d, seed) { const r = rng(seed), idx = Array.from({ length: n }, (_, i) => i), C = new Float64Array(k * d); for (let j = 0; j < k; j++) { const q = j + Math.floor(r() * (n - j)); [idx[j], idx[q]] = [idx[q], idx[j]]; C.set(X.subarray(idx[j] * d, idx[j] * d + d), j * d); } return C; }
+export function lloyd(X, n, k, d, epochs, seed = 1, onEpoch) { const C = randInit(X, n, k, d, seed); for (let e = 0; e < epochs; e++) { const cnt = new Float64Array(k), sum = new Float64Array(k * d);
+    for (let p = 0; p < n; p++) { const [j] = nearest(C, k, d, X, p * d); cnt[j]++; for (let i = 0; i < d; i++) sum[j * d + i] += X[p * d + i]; } for (let j = 0; j < k; j++) if (cnt[j]) for (let i = 0; i < d; i++) C[j * d + i] = sum[j * d + i] / cnt[j]; onEpoch?.(C, e); } return C; }
+export class MacQueen { constructor(k, d) { this.k = k; this.d = d; this.C = new Float64Array(k * d); this.cnt = new Float64Array(k); this.n0 = 0; }
+  push(x) { const { k, d } = this; if (this.n0 < k) { this.C.set(x.slice ? x.slice(0, d) : x, this.n0 * d); this.cnt[this.n0] = 1; this.n0++; return; } const [j] = nearest(this.C, k, d, x, 0); this.cnt[j]++; const a = 1 / this.cnt[j]; for (let i = 0; i < d; i++) this.C[j * d + i] += a * (x[i] - this.C[j * d + i]); } }
+export function sculley(X, n, k, d, epochs, B, seed = 1) { const r = rng(seed + 7), C = randInit(X, n, k, d, seed), cnt = new Float64Array(k); const steps = Math.floor((epochs * n) / B);
+  for (let s = 0; s < steps; s++) { const pts = [], as = []; for (let b = 0; b < B; b++) { const p = Math.floor(r() * n); pts.push(p); as.push(nearest(C, k, d, X, p * d)[0]); }
+    for (let b = 0; b < B; b++) { const j = as[b]; cnt[j]++; const a = 1 / cnt[j]; for (let i = 0; i < d; i++) C[j * d + i] += a * (X[pts[b] * d + i] - C[j * d + i]); } } return C; }
+export function gmm(n, k, d, seed = 1, spread = 1, sd = 0.15) { const r = rng(seed), g = () => Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r()); const mu = Float64Array.from({ length: k * d }, () => spread * g()); const w = Array.from({ length: k }, () => 0.2 + r()); const W = w.reduce((a, b) => a + b);
+  const X = new Float64Array(n * d); for (let p = 0; p < n; p++) { let u = r() * W, j = 0; while (u > w[j] && j < k - 1) { u -= w[j]; j++; } for (let i = 0; i < d; i++) X[p * d + i] = mu[j * d + i] + sd * g(); } return X; }
