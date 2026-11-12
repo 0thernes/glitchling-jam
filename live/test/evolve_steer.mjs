@@ -4,8 +4,12 @@
 // design), sigma 0.3. Fitness: test/genome_eval.mjs on training seeds; parallel evaluation in worker threads.
 // Usage: node test/evolve_genome.mjs GENERATIONS LAMBDA WORKERS TRAINSEEDS OUTFILE
 import { Worker, isMainThread, parentPort } from 'worker_threads'; import { writeFileSync, appendFileSync } from 'fs';
-import { STEER_GENES as GENES, HAND_STEER } from '../js/sim/genome.js'; import { readFileSync } from 'fs'; const NG = GENES.length; const toObj = (v) => Object.fromEntries(GENES.map(([n], i) => [n, v[i]]));
-const BASE = JSON.parse(readFileSync(process.env.BASE || '/workspace/glv2/evo1.json')).best.genome; globalThis.TWBASE = JSON.parse(process.env.TWB || '{}');
+import { STEER_GENES as GENES, HAND_STEER } from '../js/sim/genome.js';
+import { MOTOR, STEER } from '../js/sim/starter_genome.js';
+import { readFileSync } from 'fs';
+const NG = GENES.length; const toObj = (v) => Object.fromEntries(GENES.map(([n], i) => [n, v[i]]));
+const BASE = !process.env.BASE || process.env.BASE === 'starter' ? MOTOR : JSON.parse(readFileSync(process.env.BASE)).mean || JSON.parse(readFileSync(process.env.BASE)).best.genome;
+globalThis.TWBASE = JSON.parse(process.env.TWB || '{}');
 const dec = (x) => ({ ...BASE, ...decS(x) }); const decS = (x) => toObj(x.map((u, i) => GENES[i][1] + Math.min(1, Math.max(0, u)) * (GENES[i][2] - GENES[i][1])));
 if (!isMainThread) { globalThis.BRAIN_SCALE = process.env.EVAL_BRAIN || undefined; const { navEval } = await import('./nav_eval.mjs'); parentPort.on('message', ({ id, x, seeds }) => { const r = navEval(dec(x), seeds); parentPort.postMessage({ id, r }); }); }
 else {
@@ -16,7 +20,11 @@ else {
   // CMA-ES state
   const n = NG, lam = LAM, mu = Math.floor(lam / 2); let wts = Array.from({ length: mu }, (_, i) => Math.log(mu + 0.5) - Math.log(i + 1)); const ws = wts.reduce((a, b) => a + b); wts = wts.map((w) => w / ws); const mueff = 1 / wts.reduce((a, w) => a + w * w, 0);
   const cc = (4 + mueff / n) / (n + 4 + 2 * mueff / n), cs = (mueff + 2) / (n + mueff + 5), c1 = 2 / ((n + 1.3) ** 2 + mueff), cmu = Math.min(1 - c1, 2 * (mueff - 2 + 1 / mueff) / ((n + 2) ** 2 + mueff)), damps = 1 + 2 * Math.max(0, Math.sqrt((mueff - 1) / (n + 1)) - 1) + cs, chiN = Math.sqrt(n) * (1 - 1 / (4 * n) + 1 / (21 * n * n));
-  let m = process.env.INIT === 'hand' ? GENES.map(([nm, lo, hi]) => (HAND_STEER[nm] - lo) / (hi - lo)) : new Array(n).fill(0.5), sigma = +(process.env.SIGMA0 || 0.3); const pc = new Array(n).fill(0), ps = new Array(n).fill(0); let C = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))); let B = C.map((r) => [...r]), D = new Array(n).fill(1);
+  let m = process.env.INIT === 'starter'
+    ? GENES.map(([nm, lo, hi]) => Math.min(0.97, Math.max(0.03, ((STEER[nm] ?? HAND_STEER[nm] ?? (lo + hi) / 2) - lo) / (hi - lo))))
+    : process.env.INIT === 'hand'
+    ? GENES.map(([nm, lo, hi]) => ((HAND_STEER[nm] ?? (lo + hi) / 2) - lo) / (hi - lo))
+    : new Array(n).fill(0.5), sigma = +(process.env.SIGMA0 || 0.2); const pc = new Array(n).fill(0), ps = new Array(n).fill(0); let C = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))); let B = C.map((r) => [...r]), D = new Array(n).fill(1);
   let seedR = 12345; const rnd = () => { seedR = (Math.imul(seedR, 1664525) + 1013904223) >>> 0; return seedR / 4294967296; }; const gauss = () => Math.sqrt(-2 * Math.log(rnd() + 1e-12)) * Math.cos(2 * Math.PI * rnd());
   function eig() { // Jacobi eigen-decomposition of C -> B (columns eigenvectors), D (sqrt eigenvalues)
     const A = C.map((r) => [...r]); const V = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)));

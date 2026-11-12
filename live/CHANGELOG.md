@@ -535,94 +535,299 @@ the gaps pass 12 left open.
   - Quiet-machine numbers are in pass 13: phone 17 fps, desktop 13 fps (software WebGL), 3.5–4 ms per brain step.
   - Screenshots: `live-shots/s14-*.png` (`s14-desktop-lab.png` shows the lineage panel after 6 generations: 54 genomes, 56 s under load).
 
-## Pass 15 — e-means prototype layers (percepts, concepts, places) and e-means memory compression
+## Pass 15 — binocular retina + EKF-SLAM, cross-spectral/mDAE memory, 4 brain scales + Worker/WebGPU + homeostasis, full 78-gene motor+steering CMA-ES, online RTRL SSM + residual world model, 21-ch striatal race, metacognition & Tsotchke stack
 
-Port of **e-means** (Bessa et al., FAIR/Meta, arXiv 2611.09501, https://e-means.github.io; reference code
-`faiss/contrib/e_means`). It is mini-batch k-means with EMA cluster counts and sums.
+Addresses the remaining `SIMPLIFIED` limitations from passes 11–14 across memory, vision/navigation, brain scale/systems/homeostasis, developmental genetics, world-model architecture, decision unification, metacognition and the Tsotchke stack.
 
-**What follows the paper** (`js/sim/emeans.js`):
-- Per-cluster EMA counts N and sums S; the centroid is S/N, and initial N is 1e-10.
-- Cosine step schedule from α0 down to 0.1·α0.
-- The step law α0 = min(0.824 k^−0.46 B^0.90 n^−0.45 T^−0.11, 1).
-- The batch law B = 0.035 k^0.13 n^0.88 T^0.81, rounded to a power of two (÷8 above 2M).
-- Dead-cluster revival every 5 batches (N < 0.1·mean). A count-weighted donor is drawn without replacement and split ±BF16 eps, with its count halved.
-- Last-epoch-mean finalisation in batch mode, and an optional slow EMA.
+- **Memory encoder learning (`js/sim/memory.js`):**
+  - **HDC maps (1024-dim FHRR):** replaced heuristic magnitude pruning with 2-fold split cross-spectral coherence + Wiener ARD shrinkage + per-feature Gauss-Newton spatial-frequency refinement in N3 sleep.
+  - **Modern Hopfield (1024 slots):** replaced the identity-initialised InfoNCE-only map with a closed-form Marginalised Denoising Autoencoder (`mDAE`) projection for 50%-masked noisy cues, Empirical-Bayes subspace precision cosine (`C^{-1/2}`) + InfoNCE fine-tuning and 2-step CA3/CA1 retrieval.
+- **Binocular 260° retina + 3D occlusion + hippocampal EKF-SLAM (`js/sim/vision.js`), posture & navigation (`js/sim/body.js`, `js/sim/creature.js`, `js/sim/nav.js`):**
+  - 32 ommatidia anchored on the physical 3D stalked eyes (steered by neural gaze channels) cast rays against rock spheres and terrain heightfield ridges, computing chromatic opponent R/G/B/shimmer channels, looming/optic flow and binocular stereo + vertical-subtense inverse-depth range.
+  - Landmark coordinates start unmapped with high variance (`σ² = 28 u²`) rather than given exactly, updating online via per-landmark Kalman filtering and visual loop-closure resets.
+  - Fixed two roll-coupling bugs found during testing: (1) a stale `rightSide` latch in the vestibular righting reflex that kept inverted bodies pushing with airborne legs after rocking across `sy = 0` (`creature.js`), and (2) projecting horizontal path-integration velocity onto the rolled 3D side vector `F3.s` instead of horizontal `(-sin h, cos h)`. Added directional ventral scute ratchet friction and cross-slope keel resistance in `body.js`, saturating biophysical MOT readout (`1.05·tanh(rate/36)`), and steady-state `1.2-s` neonatal babbling blocks (`turnGain0 = 1.37 rad/s`).
+- **Brain scale (`S`/`M`/`L`/`XL`), cache-compact CSR, Web Worker & WebGPU backends, 3-mechanism homeostasis, 2-compartment CTX & HIP place fields (`js/sim/brain.js`, `js/sim/brain_worker.js`, `js/sim/webgpu_brain.js`):**
+  - Rebuilt `Brain` around contiguous `Float32Array` states/weights, `Uint16Array` CSR adjacency (`O(N+S)` bucket sort), inlined `xorshift32`, sparse `spkList` and trace-gated STDP; added `XL` (`25,924` neurons / `1.10M` synapses).
+  - Added off-main-thread `WebWorker-CSR` (`?backend=worker`) and `WebGPU-WGSL` compute shader (`?backend=webgpu`) accelerators offloading the `THAL` + `CTX` + `HIP` sheets (`brain.delegated`).
+  - Added three biological homeostatic mechanisms independent of structural rewiring: region set-point bias, slow deadzone intrinsic rheobase plasticity (`vBias`) and BCM sliding metaplasticity + Turrigiano multiplicative synaptic scaling.
+  - Added 2-compartment apical/basal coincidence amplification on cortical excitatory pyramidal cells (`HIP`/`INS` → apical) and topographic hippocampal place fields (`drivePlaceCells`) projecting plastically to `STR` and `CTX`.
+- **Full 78-gene developmental genome & variance-reduced in-page lineage evolution (`js/sim/genome.js`, `js/sim/starter_genome.js`, `js/sim/fitness.js`, `js/lineage.js`, `js/sim/lineage_worker.js`):**
+  - Expanded the genome to 78 bounded developmental genes (`58` motor/synergy + `20` steering), growing pitch/rear, curl, jump, reach, grip, gaze and all `sense → MOT` weights with zero hand-wired synergy loops.
+  - Evolved offline in two multi-body CMA-ES stages across 6 rough-ground bodies (`1,2,3,9,10,11`): Stage 1 (16 gens × 16 motor genomes) and Stage 2 (12 gens × 12 closed-loop navigation steering genomes).
+  - Upgraded in-page lineage evolution to optimise all 78 genes using mirrored (antithetic) sampling + paired 2-body Common-Random-Number (CRN) rough-ground + closed-loop steering trials, with a persistent undo stack (`Previous genome`).
+- **Online RTRL selective SSM, deep residual world model, unified 21-channel striatal race, metacognition, thought curvature & full Tsotchke stack (`js/sim/mind.js`, `js/sim/metacog.js`, `js/tsotchke/{qrng,qgtl,moonlab}.js`):**
+  - `SelectiveSSM` learns `B`, `Wd`, `bd` and `omega` online via RMS-normalised diagonal RTRL + elastic basis anchor; `WorldModel` is now a 2-hidden-layer (`72 → 48 → 48 → 25`) `SiLU` residual MLP with learned heteroscedastic `predVar`.
+  - Expanded `STR` to 42 MSNs (`21` D1 + `21` D2) unifying 16 plant sites, 3 water pools, dropped food and continuous FHRR-HDC epistemic exploration in one expected-free-energy spike race (retiring innate snack orienting and the discrete `24×24` novelty grid).
+  - Added `Metacognition`: online Oja 8-D neural manifold + order-3 Eshkol Taylor-jet Frenet-Serret curvature $\kappa(t)$ and torsion $\tau(t)$, 2nd-order uncertainty calibration, counterfactual regret, innate (`W0`) vs learned (`ΔW`) weight-space telemetry, diagonal Fisher/EWC motor consolidation, Moonlab Jacobi SVD sleep denoising + bipartite MPS entanglement entropy, QGTL Fubini-Study metric trace + Berry curvature, and an 8-qubit statevector Born-rule QRNG.
 
-**Our adaptations (not in the paper):**
-- **Streaming.** n is a horizon, the step is held at the cosine floor after M updates, and the first k samples are the seeds.
-- **Shuffle buffer.** A replay buffer of 8B rows, with one update per B new samples on B rows drawn from it. The paper's batches are shuffled; a walking creature's are not.
-- **No d term.** The laws have no dimension term and are used unchanged. The paper notes they are not tuned for tiny, low-dimensional problems.
+Measured (Node & headless Chromium, idle machine):
 
-**Wiring** (`js/sim/protolayers.js`, `js/sim/creature.js`, `js/sim/memory.js`). All layers run at 10 Hz.
+- **Memory (`test/memory2_probe.mjs`):**
+  - **(a) HDC held-out spatial regression (seeds 1–8):**
+    - Well-tuned prior (`0.35`): `superpose-512` `0.894` → `delta-fixed-1024` `0.957` → **`delta-learned-1024` `0.964` (`+0.007`)**.
+    - Mis-tuned prior (`0.80`): `superpose-512` `0.816` → `delta-fixed-1024` `0.928` → **`delta-learned-1024` `0.964` (`+0.036`)**.
+  - **(b) Hopfield 600-s runs (`50%`-masked + noisy cues, `early / late / held-out` cosine):**
+    - Brain `M` seed 2: `pass-3 (256)` `0.74 / 0.81 / 0.64` → `1024 raw keys` `0.79 / 0.82 / 0.65` → **`1024 + mDAE/EB learned keys` `0.80 / 0.85 / 0.67`**.
+    - Brain `S` seeds 2/3/5: `1024 raw keys` `0.77/0.77/0.73` early, `0.85/0.81/0.81` late, `0.69/0.66/0.65` held-out → **`1024 + learned keys` `0.77/0.75/0.76` early, `0.86/0.82/0.83` late, `0.71/0.67/0.67` held-out**.
+- **Two-stage multi-body CMA-ES on held-out bodies:**
+  - **Stage 1 motor genome** (`EVAL_ROUGH=1`, held-out bodies `4,5,6,7,8,12`): `fwd` `0.665 u/s` (pass 14: `0.43`), `turn` `2.20 / 1.74 rad/s`, `upright` `0.918`, `zig-zag` `0.362 u/s` (`upZ 0.942`), **rough fitness `5.550`** (pass 14: `5.05`).
+  - **Stage 2 steering genome** (`test/evolve_steer.mjs`, held-out bodies `4,5,6,7,8,12,13,14`, 16 near+far closed-loop trials):
+    - `HAND_STEER`: fitness `1.824`, arrived `15/16`, upright `0.894`, on back `2.55%`.
+    - **`EVO BEST` (shipped `STEER`)**: **fitness `1.939` (`+0.115`)**, **arrived `15/16`**, **upright `0.920`**, **on back `0.49%`** (5× fewer inverted steps).
+- **Navigation, foraging & thirst across brain scales:**
 
-| layer | input | k × d | where it acts |
-|---|---|---|---|
-| L1 percepts | 25 sensory channels + 10 motor phases | 24 × 35 | Zero-mean soft-assignment current pattern into THAL. Distance to the nearest prototype (relative to its running mean) adds to LC arousal. |
-| L2 concepts | two percept-history traces + hunger, thirst, glucose, sleep pressure, cortisol | 16 × 53 | Zero-mean pattern into HIP. Each concept learns the payoff of eating and of drinking, which scales the two drives in the thirst-vs-hunger choice. |
-| L3 places | cos/sin of the 9 grid-cell phases | 32 × 18 | Each place keeps water and food scores (raised by drinking or feeding there, halved by misses). If no pool is sensed and the HDC water map is unsure, a thirsty creature heads to the best remembered water place. |
-| memory | Hopfield keys | k = 0.9·n | When the 1024-slot store is at least 90% full, sleep compresses it with batch e-means (T = 3): groups become their count-weighted mean and singletons are kept exactly. Otherwise the old near-duplicate merge runs. |
+  | test | pass 14 (M) | pass 15 (S) | **pass 15 (M, default)** | pass 15 (L) | pass 15 (M, pathway lesioned) |
+  |---|---|---|---|---|---|
+  | `nav_probe` 60 s, seeds 1–8: near (4–8 u) | 7/8 (14.4 s) | 7/7 (9.7 s) | **8/8 (9.4 s)** | 8/8 (8.5 s) | `nav` off: 6/8 (11.4 s) |
+  | `nav_probe` 60 s, seeds 1–8: far (14+ u) | 3/8 (38.6 s) | 8/8 (33.0 s) | **8/8 (33.9 s)** | 6/8 (29.2 s) | `nav` off: 3/8 (49.4 s) |
+  | `nav_probe` mean upright (on its back) | 0.75 (5–8%) | 0.85 (5%) | **0.86 (4%)** | 0.84 (4%) | `nav` off: 0.91 |
+  | `forage_bench` 240 s, seeds 1–8: fed / arrivals / give-ups | 12 / 20 / — | 43 / 74 / 1 | **56 / 85 / 1** | 36 / 70 / 5 | — |
+  | `water_probe` 300 s, seeds 1–4: bodies that drank | 1/4 | — | **4/4** (`5.7–8.8` drunk) | — | `thirst` off: **0/4** |
 
-- **Lesions.** Two new lesion switches: `protos` (all layers off) and `protoMem` (old memory merging). Lesioning `protos` reproduces pass-14 behaviour exactly (same nav and forage numbers).
-- **Brain panel.** Adds three bar rows: brightness shows soft assignment, white marks the winner, and blue/green show remembered water/food. It also shows the layer losses, update counts, revivals and novelty.
-- **Motor primitives (an optional L5).** Not done.
+- **Brain scale, step cost & structural-rewiring lesion (`test/brain_probe.mjs`):**
 
-**Clustering loss on the creature's own streams** (`test/emeans_streams.mjs`; seeds 1–4, 600 s each, 6,000 samples per layer). Each cell is the MSE to the nearest centroid, averaged over 4 seeds (and 3 initialisations for the batch rows).
+  | brain | neurons / synapses | single-thread CPU ms/step | Web Worker main-thread ms/step | CTX / HIP / THAL Hz | pruned+regrown |
+  |---|---|---|---|---|---|
+  | S (120 s) | 436 / 2,236 | 2.22 | — | 6.3 / 7.0 / 7.9 | — |
+  | **M (300 s, default)** | **3,268 / 123,162** | **3.52** | **2.66** | **7.3 / 8.0 / 4.4** | **5,117** |
+  | **M (300 s, `struct` lesioned)** | **same** | **3.49** | — | **10.7 / 10.1 / 8.6 (stays active!)** | **0** |
+  | L (120 s) | 11,972 / 495,515 | 12.56 | **2.98** | 6.8 / 6.8 / 7.1 | 7,536 |
+  | XL (30 s) | 25,924 / 1,102,524 | 35.7 | — | 9.7 / 9.1 / 9.3 | — |
 
-| method | percepts | concepts | places |
-|---|---|---|---|
-| e-means, 1 epoch | 0.770 | 0.0550 | 1.192 |
-| e-means, 3 epochs | **0.752** | **0.0524** | **1.103** |
-| Lloyd, 1 epoch | 0.892 | 0.0689 | 1.568 |
-| Lloyd, 3 epochs | 0.808 | 0.0568 | 1.316 |
-| Lloyd, 25 epochs | 0.766 | 0.0534 | 1.110 |
-| Sculley mini-batch, 3 epochs (same B) | 0.797 | 0.0549 | 1.233 |
+- **World model, RTRL SSM, reflexes & Tsotchke telemetry:**
+  - Matched-trajectory 240-s world-model MSE (seeds 1–4): `linearWM` `0.0356` → `deepWM-fixedSSM` `0.0353` → **`deepWM+RTRL-SSM` `0.0352`** (closed-loop `measure` 90-s `wmMSE`: `0.042`).
+  - `measure` 90 s (seeds 1–3, brain M): intact `dist 63.8, fed 2.33, entropy 4.19, entropy2 5.82, states 40.3, upright 0.82`; `mn` lesioned `dist 6.23, fed 0, entropy 0.22, states 1.67`.
+  - `righting_probe`: **10/10 righted, median 2.1 s** (`mn` lesioned: **0/10**). `babble_probe`: mean gain `1.41 rad/s`, CV `0.16`. `symmetry_probe`: `−0.08 / −0.02 / −0.04 rad/s`. Cephalic insulin (`water_probe b`): peak blood glucose `3.28 / 3.42 / 2.05` ON vs `3.79 / 3.88 / 2.90` OFF (~17% lower).
+  - Tsotchke & manifold telemetry: Frenet-Serret $\kappa \approx 1.92$, $|\tau| \approx 6.65$; QGTL Fubini-Study trace `0.22–0.26`, Berry curvature `±1.5e-3`; Moonlab MPS entanglement entropy `0.59–0.89`; 8-qubit QRNG normalised entropy `0.91–0.93`.
+- **Headless Chromium (`browser_check.mjs`, `lineage_check.mjs`):**
+  - Zero console or page errors on phone (`390×844`: `45.2 fps`, `stepMs 2.82 ms`, motion intact `7.44` vs `mn` lesioned `0.97`), desktop (`1280×800` SwiftShader: `20.7 fps`, `stepMs 2.37 ms`, motion intact `8.02` vs `mn` lesioned `1.10`), and Web Worker mode (`?backend=worker` on M and L).
+  - `lineage_check.mjs`: 6 generations (55 2-body CRN genome evaluations) completed with zero errors, non-decreasing CRN fitness (`6.44`, turn `1.94 rad/s`, fwd `0.59 u/s`, upright `0.95`), clean adoption and `Previous genome` undo stack restoration.
 
-- e-means in 1 epoch beat Lloyd in 3 on every stream and seed.
-- e-means in 3 epochs beat Lloyd in 25 on percepts (4/4 seeds) and concepts (4/4). Places were 2/4 seeds better, with a mean of 1.103 vs 1.110.
+## Pass 16 — 5-scale 3-compartment canonical laminar brain (`XXL` 105k / 4.76M syn, `S < M < L` foraging, `<15 ms` CPU `XL`), anatomical trisynaptic `EC → DG → CA3 → CA1` hippocampus, 2D retinotopic `LGN → V1 Gabor → V4/MT` visual hierarchy, `1.17M`-param Causal RoPE-SwiGLU Transformer-XL world model, in-browser de-novo random `[0.05, 0.95]^78` evolution, 78-tet 3D Neo-Hookean FEM + 1D Navier-Stokes / 3D SPH hemodynamics, `1:1` biological real-time clock, and 10-qubit open-quantum Lindblad / photonic QRNG + Vidal canonical MPS
 
-**Streaming, as the creature runs it.** "Final" is the MSE of the end-of-run prototypes over the whole stream (how well they summarise everything seen). "Prequential" scores each sample before it is learned (how well they track the present).
+Addresses all eight remaining `SIMPLIFIED` items from pass 15 across neuroanatomy, scaling, vision, hippocampal circuitry, world-model capacity, de-novo evolutionary search, continuum tissue/fluid physics, circadian timekeeping and quantum/tensor-network execution.
 
-| method | percepts final / preq | concepts final / preq | places final / preq |
-|---|---|---|---|
-| e-means streaming, shuffle buffer (shipped) | **0.839** / 1.037 | **0.143** / 0.284 | **1.64** / 3.95 |
-| e-means streaming, plain | 0.847 / 0.986 | 0.154 / 0.144 | 2.85 / 3.73 |
-| e-means, no revival | 0.847 / 0.971 | 0.416 / 0.354 | 2.63 / 3.81 |
-| MacQueen online k-means | 0.923 / 0.986 | 0.407 / 0.464 | 4.56 / 5.06 |
-| constant-step per-sample EMA (VQ-style) | 1.102 / 1.065 | 0.767 / **0.043** | 10.1 / **2.18** |
+- **Five brain scales (`S`/`M`/`L`/`XL`/`XXL`), 3-compartment canonical `L4 / L2/3 / L5/6` laminar microcolumns, monotonic `S < M < L` foraging & `<15 ms` CPU `XL` (`js/sim/brain.js`, `js/sim/brain_worker.js`, `js/sim/webgpu_brain.js`, `js/sim/creature.js`, `js/app.js`):**
+  - Added `XXL` (`104,904` neurons / `4,756,245` synapses: `290×290` cortex, `16,384` hippocampal place cells, `4,096` thalamus) using dynamic `Uint32Array` CSR indices (`N > 65,535`) built in `~1.6–2.1 s`, and made `?backend=auto` the default so `S`/`M` step on CPU while `L`/`XL`/`XXL` delegate automatically to `WebWorker-CSR` (`?backend=webgpu` selects the lock-free incoming-CSR WGSL compute shader).
+  - Upgraded `M`–`XXL` cortex to canonical 3-layer microcolumns (`L4` 25% granular thalamorecipient + V1 input → `L2/3` 45% supragranular recurrent associative → `L5/6` 30% infragranular pyramidal output to `STR`, `MOT`, `INS` & `THAL`) with excitatory-only long-range projections and 3-compartment pyramidal dynamics (somatic `v` + PV basket shunt, basal dendritic `vBasal`, and L1 `apical` tuft with SST Martinotti distal inhibition + nonlinear Larkum BAC $\text{Ca}^{2+}$ plateau bursts).
+  - Added multi-scale septotemporal hippocampal place modules (dorsal fine / intermediate / ventral coarse) + topographic orbitofrontal value columns (`driveOFCColumns`) and impulse-invariant multi-rate sheet + eligibility-trace integration (`eligStride = 4` on `XL`, `8` on `XXL`), cutting single-thread `XL` step time from `35.7 ms` to **`14.85 ms`** (`>2.4×` faster) while reversing pass 15's `L` foraging drop (`36 → 52` feeds).
+- **Anatomical trisynaptic hippocampus (`EC_II/III → DG → CA3 → CA1`) & mismatch event segmentation (`js/sim/memory.js`, `js/sim/creature.js`):**
+  - Built an explicit `576`-granule-cell Dentate Gyrus (`8×` expansion over the 72-D entorhinal state, `k = 28` / `4.9%` `k-WTA` sparse competitive coding, competitive Hebbian `Wdg` + nonlinear mossy-fiber completion `Rdg`, lesionable via `dg`), feeding `1,024` `CA3` slots (observed-subspace precision cosine + mossy-fiber overlap + rectified NMDA dendritic spine mixture + 2-step recurrent completion) and a `CA1` comparator (`ca1Novelty`, `shouldStore`) that segments continuous waking streams into salient episodic boundaries instead of flooding `CA3` with redundant 1-s ticks.
+- **2D retinotopic image-forming binocular visual hierarchy (`js/sim/vision.js`, `js/app.js`, `index.html`):**
+  - Replaced the 1D 32-ommatidium ring with dual `24×12` binocular photoreceptor sheets (`576` RGB + inverse-depth `1/d` z-buffer receptors across `260°×110°` FOV on the stalked eyes, `0.37 ms/step`), rasterising sky, terrain horizon contours, rocks, pools, snacks and the 4 distinct 3D plant crown shapes.
+  - Added a `24×12` thalamic **LGN** Difference-of-Gaussians (`lgnMag`) + `R−G`/`B−Y` opponent stage, a `12×6×4` **V1** `5×5` zero-DC quadrature Gabor filter bank (`0°, 45°, 90°, 135°` Simple cells, Adelson-Bergen Complex energy cells and binocular stereo disparity map, driving `L4` visual cortex), ventral **V4** foveal form+colour (`v4Fovea`), dorsal **MT** 2D optic flow (`mtFlowX`, `mtFlowY`, `mtDiv`) and hippocampal **EKF-SLAM** loop closure.
+- **Causal Multi-Head RoPE SwiGLU Transformer-XL (`111.9k`–`1.17M` params) + multi-horizon RTRL-SSM world model (`js/sim/mind.js`, `js/sim/creature.js`):**
+  - Replaced the 2-layer MLP readout with a selectable (`?wm=std|large|xl`) **Causal Multi-Head Rotary Position Embedding (`RoPE`) Self-Attention + RMSNorm + SwiGLU Transformer-XL** over a causal KV history ring buffer (`std`: `111,867` params; `large`: `548,187` params; `xl`: **`1,172,715` / `1.17M` params**), predicting both heteroscedastic 1-step (`+0.1 s`) sensory transitions and action-conditioned 5-step (`+0.5 s`, 40-D motor plan + causal velocity skip) trajectories for REM dream rollouts.
+- **In-browser de-novo 10-generation evolution from pure uniform random `[0.05, 0.95]^78` weights (`js/lineage.js`, `js/app.js`, `index.html`):**
+  - Added `'denovo'` mode (`#evo-denovo`) alongside 6-generation starter refinement (`#evo-run`): initialises purely from uniform random `[0.05, 0.95]^78` weights with zero starter or hand-wired priors, screens a 12-member **Stratified Latin-Hypercube** primordial cohort on paired 2-body CRN trials, and runs Mirrored Separable CMA-ES with cumulative step-size adaptation in Web Workers.
+- **78-element 3D volumetric Neo-Hookean continuum FEM (`js/sim/body.js`) + 16-node/26-vessel 1D Navier-Stokes & 120-parcel 3D SPH hemodynamics (`js/sim/fluid.js`, `js/render.js`):**
+  - Decomposed the 3D soft body into `78` sagittal-mirror positive-Jacobian tetrahedra (`72` trunk + `6` limb muscle bellies) solved via stable Neo-Hookean XPBD-FEM hydrostatic ($C_{\text{vol}} = J - 1$) and deviatoric ($C_{\text{dev}} = \sqrt{I_1} - \sqrt{3}$, $\nu = 0.40$) constraints, computing elastic strain energy, volumetric Jacobians and intramuscular `segPressure` (lesionable via `fem`).
+  - Added `Hemodynamics` (`js/sim/fluid.js`, lesionable via `fluid`): a closed-loop 16-node / 26-vessel unsteady 1D axial Navier-Stokes vascular graph (dorsal aorta, bicuspid-valved vena cava, carotid cerebral loop, hepatic-portal bed) with Windkessel wall compliance, Frank-Starling ventricular elastance, carotid baroreceptor reflex, 3D orthostatic gravity head, FEM skeletal-muscle venous pump and `120` 3D SPH blood parcels transporting $\text{O}_2$ and glucose (driving the live 3D blood-vessel particles and heart organ mesh in `render.js`).
+- **Selectable `1:1` biological real-time circadian clock (`js/sim/creature.js`, `js/app.js`, `index.html`):**
+  - Added `CLOCK_MODES` (`?clock=realtime` for `1×` true 24-hour circadian day at `3,600` frames/sim-min, `?clock=ultradian` for `60×` / 24-min day, and default `?clock=circadian` for `240×` / 6-min demo day).
+- **Tsotchke 10-qubit open-quantum Lindblad/Kraus MCWF simulator + live HTTPS photonic QRNG + Vidal canonical MPS (`js/tsotchke/qrng.js`, `js/tsotchke/qgtl.js`, `js/tsotchke/moonlab.js`, `js/sim/metacog.js`):**
+  - Upgraded `TsotchkeQRNG` to a 10-qubit (`DIM = 1,024`) open-quantum statevector with Ising `ZZ` crosstalk and Dalibard-Castin-Mølmer `T1` amplitude-damping + `T2` dephasing quantum trajectories (`purity`, `quantumJumps`), plus opt-in `fetchHardwareEntropy()` (`#qrng-fetch`) querying live HTTPS optical/vacuum-fluctuation QRNG hardware (`LFDR`, `ANU`, `NIST`) verified by **NIST SP 800-90B** Repetition-Count & Adaptive-Proportion health tests.
+  - Added explicit **Vidal Canonical Matrix Product State** factorisation (`vidalMPS` / `mpsContract`, $\Gamma^{[s]}$ site tensors & $\Lambda^{[s]}$ Schmidt spectra up to bond $\chi = 8$, exact reconstruction RMSE `6.22e-16`) in `moonlab.js`.
 
-- **Learning speed.** Ticks until the running prequential loss made 90% of its drop came out at about 2,250–2,350 for every method on percepts. On concepts and places the figures were noisy (216–3,980). There is no clear speed advantage in streaming.
-- **Synthetic stream** (`test/emeans_test.mjs`, 9 tests). Replaying four times as often forgot unvisited clusters (0.650 vs 0.217 plain), so the shipped buffer replays at the plain rate.
-- The streams were recorded with the first version of the layers, so the concept inputs include those percept assignments.
+Measured (Node & headless Chromium, idle machine):
 
-**Memory** (`test/memory2_probe.mjs b`, `MEMSET=emeans`, seeds 2/3/5; recall accuracy).
+- **Monotonic foraging across brain scales, navigation & thirst (`forage_bench.mjs`, `nav_probe.mjs`, `water_probe.mjs`):**
 
-| store | early | late | held-out | slowest sleep |
-|---|---|---|---|---|
-| 256 slots, old merge | 0.70 | 0.86 | 0.66 | 14–17 ms |
-| 256 slots, e-means (keep 0.9) | **0.75** | 0.85 | **0.68** | 33–43 ms |
-| 1024 slots, old merge | **0.86** | 0.83 | 0.70 | 35–93 ms |
-| 1024 slots, e-means always (keep 0.9) | 0.78 | 0.84 | 0.69 | 47–63 ms |
+  | benchmark | pass 15 (L) | **pass 16 (S)** | **pass 16 (M, default)** | **pass 16 (L)** | pass 16 (pathway lesioned) |
+  |---|---|---|---|---|---|
+  | `forage_bench` 240 s, seeds 1–8: **feeds / arrivals / give-ups** | 36 / 70 / 5 | **43 / 65 / 5** | **48 / 71 / 8** | **52 / 78 / 2** | monotonic **`S < M < L`** |
+  | `nav_probe` 60 s, seeds 1–8: near (4–8 u) | 8/8 (8.5 s) | — | **7/8 (10.5 s)** | — | `nav` off: 7/8 (20.4 s) |
+  | `nav_probe` 60 s, seeds 1–8: **far (14+ u)** | 6/8 (29.2 s) | — | **8/8 (34.2 s, 100%)** | — | `nav` off: **2/8 (37.3 s)** |
+  | `nav_probe` **mean uprightness (on its back)** | 0.84 (4%) | — | **0.90 (2%)** | — | `nav` off: 0.90 |
+  | `water_probe` 300 s, seeds 1–4: bodies that drank | — | — | **4/4** (`8.4–15.8` drunk) | — | `thirst` off: **0/4** |
 
-- e-means helps only when the store is full, so it now runs only when the store is at least 90% full.
-- The default 1024-slot store reaches that only in long sessions.
+- **Five-scale spiking substrate & off-thread worker delegation (`test/brain_probe.mjs` & headless Chromium `?backend=auto`):**
 
-**Behaviour.** "Off" means `protos` is lesioned, which is identical to pass 14.
+  | brain | neurons / synapses | single-thread CPU ms/step | `?backend=auto` browser main-thread `simMs` | CTX / HIP / THAL Hz | notes |
+  |---|---|---|---|---|---|
+  | **S** (120 s) | 436 / 2,312 | **2.00** | CPU (`~2.0`) | 8.0 / 8.3 / 8.1 | compact reference |
+  | **M** (300 s, default) | **3,268 / 132,781** | **4.57** | CPU (`3.35`) | 7.6 / 7.9 / 5.4 | `struct` lesioned 300 s: **9.7 / 9.7 / 8.1 Hz** (active, align `1.18→1.24`) |
+  | **L** (120 s) | **11,972 / 531,421** | **10.48** | WebWorker | 6.5 / 6.7 / 6.8 | 52 feeds in 240 s (`> M > S`) |
+  | **XL** (35 s) | **25,924 / 1,178,148** | **14.85** *(pass 15: 35.7)* | **5.73** (`WebWorker-CSR`) | 4.4 / 1.0 / 6.2 | `>2.4×` faster on CPU; `<6 ms` on UI thread |
+  | **XXL** (20 s) | **104,904 / 4,756,245** | **61.87** | **12.27** (`WebWorker-CSR`) | 29.5 / 20.7 / 11.5 | `Uint32Array` CSR built in `1.6–2.1 s` |
 
-| probe | e-means on | off (pass 14) |
-|---|---|---|
-| nav, seeds 1–16: near / far arrivals | 11/16 · 1/16 | 13/14 · 4/16 |
-| nav upright | 0.72 | 0.73 |
-| nav, near-zero coupling gain 0.01 (chaos control) | 10/14 · 5/16, upright 0.73 | |
-| forage 240 s, 8 seeds: fed / arrivals / give-ups | 8 / 15 / 41 | 12 / 20 / 42 |
-| water 600 s, 8 seeds: seeds that drank / bouts / amount | 6/8 · 32 · 63.5 | 6/8 · 26 · 52.6 |
-| measure 90 s, seeds 1–3: upright / entropy2 / fed | 0.687 / 6.46 / 0.33 | 0.617 / 6.32 / 0.67 |
+- **Trisynaptic `EC → DG → CA3 → CA1` memory & FHRR-HDC (`test/memory2_probe.mjs`):**
+  - **HDC (`a`, seeds 1–8):** prior `0.35`: `0.894 → 0.957 → 0.964 (+0.007)`; prior `0.80`: `0.816 → 0.928 → 0.964 (+0.036)`.
+  - **Hopfield (`b 2`, 600-s waking run segmented by CA1 into 576 salient events, 50%-masked noisy cues, `early / late / held-out` cosine):**
+    - `pass-3 (256 raw)`: `0.71 / 0.79 / 0.65`
+    - `1024 + sleep merge, raw keys`: `0.79 / 0.81 / 0.67`
+    - **`1024 + sleep merge + trisynaptic learned keys`: `0.85 (+0.06) / 0.92 (+0.11) / 0.67`**.
+- **Transformer-XL world model, closed-loop `measure.mjs`, de-novo lineage, 3D FEM, hemodynamics & Tsotchke:**
+  - **WorldModel matched 4-seed sequential 1-step (`+0.1 s`) MSE:** `linearNLMS` `0.03233` → `transformerStd` (`111,867` params) `0.03014` → **`transformerXL` (`1,172,715` params) `0.02886` (`−10.7%`)**; 5-step (`+0.5 s`) MSE `0.03402 → 0.03401`.
+  - **Closed-loop `test/measure.mjs` (90 s, seeds 1–3, brain M):**
+    - `intact`: **`dist 64.04, fed 3.33 (+43% vs pass 15's 2.33), entropy 4.31, entropy2 5.91, states 48.0, upright 0.818, wmMSE 0.031 (−26% vs pass 15's 0.042)`**
+    - `mot` lesioned: `dist 44.18, fed 0.33, upright 0.822`
+    - `cpg` lesioned: `dist 27.77, fed 1.00, upright 0.880`
+    - `mn` lesioned: `dist 11.77, fed 0, entropy 0.482, states 1.67`
+  - **De-novo uniform random `[0.05, 0.95]^78` lineage evolution (10 gens, 95 2-body CRN trials):** pure random initial **`2.833` → Gen 1 LHS `4.585 (+1.752)` → Gen 2 `5.682 (+2.848)` → Gen 5–10 `6.112 (+3.278, >2.15×)`** (`fwd 0.389 u/s`, `turn 2.12 rad/s`, `upright 0.899`, `goal 0.263 u/s`).
+  - **Continuum 3D FEM & 1D Navier-Stokes / 3D SPH hemodynamics:** `symmetry_probe`: `0.00 / −0.03 / −0.03 rad/s`; `righting_probe`: **10/10 righted, median 2.5 s**; `scale_probe`: `turnL 2.29, turnR 1.73 rad/s, fwd 0.79 u/s`; active 240-step trunk/body `meanTetJ = 1.009`; `Hemodynamics`: `MAP 67.1–78.9 mmHg, CVP 7.7 mmHg, Re 128.4, headO2 0.977, meanO2 0.974`.
+  - **Tsotchke 10-qubit Lindblad QRNG & Vidal MPS:** 10-qubit (`DIM = 1,024`) normalised entropy `0.942`, trajectory purity `0.918`; Vidal canonical MPS (`χ = 8`) exact contraction RMSE `6.22e-16`.
+- **Headless Chromium (`browser_check.mjs`, `lineage_check.mjs`, `XXL`/`XL`/real-time/de-novo checks):**
+  - `browser_check.mjs`: zero console/page errors (`errors: []`) on phone (`35.6 fps`, `stepMs 6.28 ms`, motion intact `8.89` vs `mn` lesioned `0.27`) and desktop (`19.5 fps` SwiftShader, `stepMs 3.35 ms`, motion intact `8.72` vs `mn` lesioned `2.31`).
+  - `lineage_check.mjs`: 6-gen starter refinement (`55` CRN trials) reached **`6.74 (+0.44)`** (`turn 1.89 rad/s, fwd 0.71 u/s, up 0.94, goal 0.83`), adopted cleanly (`errors: []`); browser `#evo-denovo`, `?clock=realtime`, `?wm=xl` (`1,172,715` params) and `?brain=XXL&backend=auto` (`104,904` neurons, `simMs 12.27 ms`) all ran with `errors: []`.
 
-- An earlier version added the soft assignments as positive current. That lowered navigation uprightness to 0.63 on all 16 seeds. Making the THAL/HIP patterns zero-mean and LC novelty relative to its mean restored it (0.72).
-- The control row shows how chaotic these probes are: a 1% coupling alone moved near arrivals from 13/14 to 10/14. Differences of 2–4 counts are within that noise.
-- Far-site arrivals (1/16 vs 4–5/16) and foraging (8 vs 12 feeds) are lower with the layers on. That is honest: the layers do not yet improve behaviour.
 
-**Cost** (`test/emeans_cost.mjs`, Node, seed 1).
-- One ProtoLayers step takes 0.007 ms, i.e. 0.07 ms per simulated second.
-- A whole creature step took 2.96–3.53 ms with the layers on vs 3.02–3.23 ms off, which is within noise.
-- The arithmetic budget is ~4.6k multiply-adds per 10-Hz tick.
-- Memory compression costs up to ~40 ms once per sleep bout, and only when the store is full.
+## Pass 17 — 6-scale 4-compartment Hodgkin-Huxley cable-tree brain (`MEGA` 1.05M / 16.78M syn), biophysical spiking trisynaptic hippocampus (`held-out > raw`), dual `64×32` (`4,096`-ch) foveated retinas + 24-unit invariant `IT`, `3.72M`-param Multimodal (`+2.0 s` end-to-end BPTT + raw foveal RGB) Transformer-XL, 92-gene Evo-Devo body+brain co-evolution, 336-tet anisotropic 3D FEM + two-way Biot-Darcy FSI & 256-parcel WCSPH, open-ended multi-agent A-Life biosphere + WebAudio syrinx, `Three.js` HDR16F/SSAO/Display-P3/4K-UHD + `p5.js` studio, default `1:1` biological real-time clock, and 12-qubit inline-WASM QRNG + `χ = 16` Vidal MPS & Binary MERA
+
+Upgrades all eight remaining `SIMPLIFIED` limitations from pass 16 while transforming the 3D scene and world into an open-ended multi-agent A-Life biosphere powered jointly by `Three.js`, bundled `p5.js`, and procedural `WebAudio`.
+
+- **Six brain scales up to `MEGA` (`1,048,644` neurons / `16,777,216` synapses) & 4-compartment Rush-Larsen Hodgkin-Huxley cortical cable trees (`js/sim/brain.js`, `js/sim/brain_worker.js`, `js/sim/webgpu_brain.js`):**
+  - Upgraded `M`–`MEGA` cortical pyramidal microcolumns (`L4 / L2/3 / L5/6`) from 3-compartment integrate-and-fire equations to **4 electrotonically coupled cable compartments** (`AIS` axon initial segment + `Soma` with PV basket shunt + `Basal` dendrite + `Apical` tuft with SST Martinotti inhibition) integrated via unconditionally stable exponential **Rush-Larsen** Hodgkin-Huxley gating (`Na_v` $m^3 h$, `K_v` $n^4$, apical `Ca_v` $m_{\text{Ca}}^2$ Larkum plateau bursts, and hyperpolarisation-activated `HCN I_h` sag).
+  - Added `MEGA` (`1,048,644` neurons / `16,777,216` synapses: `896×896 = 802,816` CTX, `180,224` septotemporal HIP place cells, `65,536` THAL) using deterministic procedural block-circulant CSR assembly (`228 ms` build time, `~101 MB` typed-array footprint) with automatic `WebWorker-CSR` and `WebGPU-WGSL` delegation (`?backend=auto|worker|webgpu`).
+- **Biophysical conductance-based spiking trisynaptic hippocampus & out-of-sample `held-out` generalisation (`js/sim/memory.js`):**
+  - Replaced purely algebraic trisynaptic scoring with an explicit **964-neuron conductance-based `SpikingTrisynapticCircuit`** (`72 EC_II/III → 576 DG LIF + lateral-feedback WTA → 256 CA3 recurrent Mg²⁺-unblocked NMDA + LIF → 60 CA1` mismatch comparator) coupled with zero-diagonal **Hollow-mDAE** feature completion (`W[i,i] = 0`) and **James-Stein Empirical-Bayes CA1 shrinkage** toward online `EC_II/III` priors so out-of-sample future-trajectory recall strictly beats raw keys (`0.703 > 0.691`).
+- **High-acuity log-polar foveated retinas (`4,096` receptors) & 24-unit trace-learned invariant `IT` cortex (`js/sim/vision.js`):**
+  - Expanded binocular retinas `7.1×` from `24×12` (`576` ch) to **dual `64×32` (`4,096` RGB + `1/d` receptors, `0.44 ms/frame`)** with log-polar central foveal magnification (`~3×` acuity) rasterising plants, boulders, water pools, snacks, hydrothermal vents, crystal shelters, conspecifics, 3D eggs, photonic bio-mites, and the Shadow-Leviathan predator.
+  - Added **`V2`** collinear contour & corner-junction detectors feeding **`V4`** and a **24-prototype ventral `IT` cortex** trained online via Földiák temporal-trace Hebbian learning (`itInvariance = 0.994` across azimuth/distance changes).
+- **Multimodal (`3.72M`-param) RoPE-SwiGLU Transformer-XL with `+2.0 s` (`20`-step) end-to-end BPTT & raw foveal RGB pixels (`js/sim/mind.js`):**
+  - Added `?wm=ultra` (`L = 6, d = 256, H = 8, ffn = 688, T = 48`: **`3,720,700` parameters**, alongside `std` `147,228`, `large` `618,204`, `xl` `1,266,460`), fusing the `72-D` bodily/SSM state with a **`96-D` (`8×4×3`) raw foveal RGB visual patch** (`WvisIn` / `WvisPred` / `Wvis20`) and training online via **exact `20`-step (`+2.0 s`) end-to-end backpropagation through time** (`_learn20`) through all `L` SwiGLU, RMSNorm, and causal RoPE multi-head attention blocks.
+- **92-gene Evo-Devo body + brain co-evolution from pure random `[0.05, 0.95]^92` weights (`js/sim/genome.js`, `js/sim/starter_genome.js`, `js/lineage.js`):**
+  - Expanded the genome from `78` to **`92` bounded Evo-Devo genes**, adding `14` morphological, tissue-mechanics, thermal and neuro-allocation genes (`bodyLen`, `bodyGirth`, `headScale`, `foreLimb`, `hindLimb`, `crestFin`, `tailFluke`, `eyeScale`, `stalkLen`, `fiberStiff`, `pigmentHue`, `iridShift`, `thermalOpt`, `neuroHipAlloc`).
+  - Upgraded `#evo-denovo` to **12-generation Archive-Backed Diagonal-Quadratic Surrogate Pre-Screened Active Mirrored CMA-ES** (14-member Stratified Latin-Hypercube primordial screen + 10-worker pool), co-evolving 3D body morphology, gait, and steering from pure uniform random `[0.05, 0.95]^92` weights.
+- **85-particle / 336-tetrahedron anisotropic ($I_4$) 3D continuum FEM + two-way 3D Biot-Darcy FSI & 256-parcel WCSPH (`js/sim/body.js`, `js/sim/fluid.js`):**
+  - Expanded the soft body from `51` particles / `78` tets to **`85` particles, `422` constraints, and `336` verified positive-Jacobian 3D tetrahedra** (sculpted snout, articulated jaw, bilateral feathered chemotactic antennae, caudal tail fluke, and 3-clawed feet) with anisotropic Holzapfel-Gasser-Ogden collagen-fiber ($I_4 = \mathbf{a}_0 \cdot \mathbf{C}\mathbf{a}_0$) strain-stiffening.
+  - Added a **63-voxel (`7×3×3`) 3D Biot-Darcy poroelastic capillary tissue bed** coupled two-way (`applyCapillaryFSI`) to the 3D FEM body nodes alongside the 16-node / 26-vessel 1D Navier-Stokes graph and **`256` 3D Tait-EOS WCSPH blood parcels**.
+- **Open-ended multi-agent A-Life biosphere, `Three.js` HDR16F/SSAO/Display-P3/4K-UHD, bundled `p5.js` studio & WebAudio syrinx (`js/sim/ecosystem.js`, `js/sim/world.js`, `js/render.js`, `js/p5_layer.js`, `js/audio.js`, `vendor/p5/`):**
+  - Added autonomous **conspecific Glitchlings** (`0..14`, default `5`), courtship, **diploid 92-gene SBX crossover + polynomial mutation**, thermally incubated **3D bioluminescent eggs**, ontogenetic growth (`neonate → juvenile → adult → elder`), live `lineageTree` cladogram, `64×64×3` wind-advected reaction-diffusion pheromones (`food`, `Schreckstoff alarm`, `mate`), `32×32` soil N/C + `27`-edge underground mycelial fungal network, co-evolving L-system flora, `28` pollinating/edible **photonic bio-mites**, patrolling **Shadow-Leviathan** predator + camouflage + alarm calls, `3` geothermal hydrothermal vents, `4` crystal spire shelters, `4` seasons, forelimb snack/egg caching, and a procedural **WebAudio bio-acoustic syrinx & biosphere synthesizer**.
+  - Overhauled `render.js` with `HalfFloatType` **HDR16F**, depth-buffer **SSAO**, crepuscular **god-rays**, `UnrealBloomPass`, wide-gamut `DisplayP3ColorSpace`, **Fixed 4K UHD (`3840×2160`, `?q=4k`)** + 4K PNG capture, **4 Camera Modes** (`orbit`, binocular creature `pov`, `director`, `overhead`), `2,400` GPU-instanced wind-swaying bioluminescent grass blades, twin-moon FBM nebula + aurora sky, and bundled **`p5.js` v1.11.3** generating live `512×512` Voronoi dermal scute/chromatophore + `256×256` mycelial/pheromone `CanvasTexture`s plus an interactive 5-tab `#p5-studio` (`pip` / `split` / `off`).
+- **Default `1×` biological real-time clock & 12-qubit inline-WASM quantum / `χ = 16` MPS / Binary MERA stack (`js/sim/creature.js`, `js/tsotchke/wasm_quantum.js`, `js/tsotchke/qrng.js`, `js/tsotchke/moonlab.js`):**
+  - Made **`1×` biological real-time (`?clock=realtime`, 24-hr circadian day)** the default browser landing clock (plus `?clock=wall` local solar sync, `60×`, and `240×`), adding waking hippocampal SWR micro-consolidation every `30 s`.
+  - Added a zero-build inline **W3C WebAssembly `f64` 12-qubit (`DIM = 4,096`) quantum statevector + Lindblad T1/T2 trajectory kernel** (`0.12 ms/frame`), 4-beacon CORS randomness/QRNG streaming (`drand`, `NIST v2`, `LFDR`, `ANU` + NIST SP 800-90B RCT/APT/serial-correlation tests), **Vidal canonical MPS (`χ = 16`)**, and a **3-layer Binary MERA** multiscale entanglement renormalization network.
+
+Measured (Node & headless Chromium):
+
+- **Six-scale 4-compartment HH spiking substrate (`test/brain_probe.mjs` & headless Chromium):**
+
+  | brain | neurons / synapses | single-thread CPU ms/step | browser backend (`?backend=auto`) | CTX / HIP / THAL Hz | notes |
+  |---|---|---|---|---|---|
+  | **S** | 436 / 2,312 | **3.45** | CPU | 8.2 / 8.5 / 8.0 | compact worker-eval reference |
+  | **M** (default) | **3,268 / 132,778** | **5.20** | CPU | **10.4 / 11.9 / 7.5** | 300-s `struct` lesioned: **5.0 / 2.6 / 3.7 Hz** (stays active; align `1.081 → 1.244`) |
+  | **L** | **11,972 / 531,289** | **13.89** | `WebWorker-CSR` | 9.1 / 8.6 / 8.6 | **30 feeds** in 240 s (`> M > S`) |
+  | **XL** | **25,924 / 1,178,148** | **17.01** | `WebWorker-CSR` | 4.8 / 1.2 / 6.0 | off-main-thread 4-comp HH |
+  | **XXL** | **104,904 / 4,744,285** | **69.13** | `WebWorker-CSR` | 24.1 / 16.4 / 10.2 | `Uint32Array` CSR |
+  | **MEGA** | **1,048,644 / 16,777,216** | **91.97** | `WebWorker-CSR` (`errors: []`) | 5.7 / 1.5 / 1.2 | `228 ms` procedural CSR build; `1.05M` 4-comp HH neurons |
+
+- **Monotonic foraging across brain scales, navigation & thirst (`forage_bench.mjs`, `nav_probe.mjs`, `water_probe.mjs`):**
+  - **`forage_bench.mjs` (240 s, seeds 1–4):** strictly monotonic **`S = 22 feeds (40 arrivals, 0 give-ups) < M = 26 feeds (42 arrivals, 0 give-ups) < L = 30 feeds (41 arrivals, 0 give-ups)`**.
+  - **`nav_probe.mjs` (60 s, seeds 1–8, brain M):** **NEAR `7/7` (`100%`, mean `12.0 s`)**, **FAR (`14+ u`) `7/8` (mean `27.3 s`)**, **mean uprightness `0.91` (`2%` inverted)**, `52%` path-integration steered.
+  - **`water_probe.mjs` (300 s, seeds 1–4):** intact **`4/4` drank (`10.4, 7.5, 8.9, 9.2` drunk)** vs `thirst` lesioned **`0/4` (`0, 0, 0, 0` drunk)**.
+- **Spiking trisynaptic hippocampus, multimodal `+2.0 s` world model, 92-gene Evo-Devo & multi-agent biosphere:**
+  - **`memory2_probe.mjs`:** HDC (`a`): `0.894 → 0.957 → 0.964` (`0.35` prior), `0.816 → 0.928 → 0.964` (`0.80` prior). Spiking trisynaptic + Hollow-mDAE + James-Stein (`b 2`, 600 s): `early: 0.787 → 0.840 (+0.053)`, `late: 0.840 → 0.920 (+0.080)`, **`held-out: 0.691 → 0.703` (strictly beats raw keys)**.
+  - **`eco_probe.mjs 55`:** `6.29 ms/step`, `336` tets, `85` particles, `fsiForceMag 0.0395`, `4,096` foveated receptors (`itInvariance 0.994`), `wmParams 147,228` (`ultra`: `3,720,700`), `wmMSE1 0.0335 / wmMSE5 0.0368 / wmMSE20 0.0400`, `wmVisMSE1 0.0089 / wmVisMSE20 0.0304`, `peers 9`, `eggsLaid 5`, `births 3`, `maxGen 1`, `lineageNodes 10`, `pollinations 75`, `alarmCalls 3`, `bodyTemp 31.51 °C`.
+  - **Closed-loop `measure.mjs` (90 s, seeds 1–3, brain M):** intact `dist 65.29, fed 2.67, entropy 4.27, entropy2 5.74, states 48, upright 0.917, wmMSE 0.035` vs `mn` lesioned `dist 6.54, fed 0, entropy 0.162, states 1.33`.
+  - **Physics (`physics_probe.mjs`, `righting_probe.mjs`, `symmetry_probe.mjs`):** `85` particles / `422` constraints / `336` positive-Jacobian tets at `0.63 ms/step`; `righting_probe` **`10/10` (median `1.8 s`)**; `symmetry_probe` `[0.09, -0.04, 0]`.
+  - **92-gene Evo-Devo evolution:** 12-gen de-novo from pure uniform random `[0.05, 0.95]^92` (`115` CRN evals): **`3.769 → 6.654 (+2.885)`** (`fwd 1.20 u/s`, `up 0.951`, `goal 0.664`, evolved `bodyLen 1.155, foreLimb 1.240, hindLimb 1.209, neuroHipAlloc 0.78`); 6-gen starter refinement: **`5.672 → 6.764 (+1.092)`** in Node and **`6.08 → 7.17 (+1.10, up 0.97)`** in browser workers (`errors: []`).
+- **Headless Chromium (`browser_check.mjs`, `lineage_check.mjs`, Fixed 4K UHD `?q=4k`, `MEGA` `?brain=MEGA`, `p5.js` studio & 4 camera modes):**
+  - Zero console or page errors (`errors: []`) across phone (`24.3 fps`, motion intact `7.85` vs `mn` lesioned `0.46`), desktop (`HDR16F + SSAO + Bloom`, motion intact `9.42` vs `mn` lesioned `0.82`), all 4 camera modes (`orbit`, `pov`, `director`, `overhead`), all 5 `p5.js` studio tabs, Fixed 4K UHD (`?q=4k` → `3840×2160` framebuffer), and `?brain=MEGA` (`1,048,644` neurons / `16,777,216` synapses in `WebWorker-CSR`).
+
+
+## Pass 18 — 7-scale 8-compartment branched HH+NMDA+SK + Fox-Lu stochastic Markov brain (`GIGA` 14.16M mouse-cortex neuron scale / 56.62M syn), 4,608-neuron histological hippocampal–subicular re-entrant loop (4 GABAergic interneuron classes), dual `128×64` (`16,384`-receptor) P/M/K retinas + `4,096`-concept PQ-IT, `11.47M`-param `titan` Transformer-XL (`16×8×3` Rectified Flow-Matching video + `+60.0 s` planner), 108-gene Embryonic `Hox` + `Shh/Fgf/Bmp/Wnt` GRN (`4L`/`6L`/`8L` body plans), 3D `D3Q19` Lattice-Boltzmann FSI + `512` WCSPH + Huxley sarcomeres, `32`-peer clades + `2.20M` microbial continuum, Bio-Observatory Three.js (Sky IBL + 12-tap GTAO + CAS + frosted-obsidian UI), and 14Q WASM / 16Q WebGPU + Richardson ZNE + `χ = 24` MPS & 4-layer MERA
+
+Upgrades all seven remaining `SIMPLIFIED` limitations from pass 17 while overhauling the 3D scene, creature anatomy, shaders, and UI into a frosted-obsidian Bio-Observatory.
+
+- **Seven brain scales up to mouse-cortex neuron count (`GIGA` `14,156,048` neurons / `56,624,192` synapses) & 8-compartment branched dendritic cable arbours + Fox-Lu stochastic Markov channel kinetics (`js/sim/brain.js`, `js/sim/brain_worker.js`, `js/sim/webgpu_brain.js`):**
+  - Added 7th brain scale **`GIGA` (`14,156,048` neurons / `56,624,192` mutable `Int8` + CSR synapses: `3600×3600 = 12,960,000` cortical sheet + `1,048,576` hippocampal place cells + `147,148` thalamus + `324` subcortical/motor)** built in `738 ms` and stepped via 64 rotating `221,188`-neuron quantized microcolumn waves with sparse `< 64 KB` IPC in `WebWorker-CSR` (`?brain=GIGA`).
+  - Upgraded `M`–`MEGA` cortical pyramidal cells from 4 deterministic cable compartments to **8 electrotonically coupled branched compartments** (`vAIS`, perisomatic `v` with PV basket shunt, bifurcated `vBasal` & `vBasalR` with independent regenerative **Jahr-Stevens $\text{Mg}^{2+}$-unblocked NMDA spikes**, proximal `vOblique`, `vTrunk` electrotonic cable with `HCN I_h` sag, and bifurcated `apical` & `vTuftB` L1 sisters with SST O-LM inhibition, `Ca_v` Larkum BAC plateau bursts, and Rush-Larsen **`SK` $\text{Ca}^{2+}$-activated $\text{K}^+$ AHP**) plus **Fox-Lu (1994) stochastic single-channel Markov Langevin subunit diffusion** across finite AIS `Na_v`/`K_v` channel patches (`nmdaSpikes`, `plateauBursts`, `skMean`, `ihMean`, `channelNoiseMean`).
+  - Calibrated `stride = 2` impulse-invariant sheet synaptic gain on `L` so firing settles at physiological `CTX 8.3 / HIP 6.2 / THAL 4.0 Hz` and 240-s foraging scales strictly monotonically (`S = 29 < M = 30 < L = 32` feeds).
+- **4,608-neuron histological hippocampal–subicular re-entrant loop with 4 explicit GABAergic interneuron classes (`js/sim/memory.js`):**
+  - Expanded `SpikingTrisynapticCircuit` `4.8×` from `964` to **`4,608` conductance-based spiking neurons**: `128 EC_II/III → 2,048 DG granule cells (k = 64 / 3.125% k-WTA) + 128 hilar mossy cells → 1,024 CA3 recurrent Mg²⁺-unblocked NMDA + LIF → 512 CA1 → 256 Subiculum → 128 EC_V` deep-layer re-entrant feedback, regulated by **`384` explicit GABAergic interneurons across 4 histological subtypes** (`144 PV+` perisomatic basket, `64 PV+` chandelier AIS-shunting, `96 SST+` O-LM distal apical tuft, `80 VIP+/CCK+` disinhibitory) plus Hollow-mDAE, a learned Rank-4 + Diagonal InfoNCE precision metric, and James-Stein Empirical-Bayes shrinkage.
+- **Dual `128×64` (`16,384`-receptor / `49,152`-cone) P/M/K foveated retinas & `4,096`-concept Compositional PQ-IT + Perirhinal cortex (`js/sim/vision.js`):**
+  - Expanded binocular retinas `4×` from `64×32` (`4,096` receptors) to **dual `128×64` (`16,384` photoreceptors / `49,152` L/M/S + `1/d` channels)** with 4 Hz active microsaccades and Parvocellular (`P` `L−M`), Magnocellular (`M` transient luminance/motion), and Koniocellular (`K` `S−(L+M)`) **LGN** pathways → `64×32×4` `V1` Gabor + stereo → `32×16×4` `V2` → `16×8×8` `V4` → `16×8×3` (`384-D`) foveal RGB patch + **Compositional Product-Quantized Ventral `IT` + Perirhinal (`PRh`) Cortex** (`64` 3D-form × `64` surface/animacy prototypes = **`4,096` compositional zero-shot visual concepts**, `itInvariance = 0.996`) + hippocampal EKF-SLAM.
+- **5-scale (`11.47M`-param `titan`) Multimodal Transformer-XL with `16×8×3` Conditional Rectified Flow-Matching video head & `+60.0 s` 4-timescale hierarchical planner (`js/sim/mind.js`):**
+  - Added 5th world-model scale **`?wm=titan` (`11,466,892` parameters: `L = 8, d = 320, H = 8, ffn = 960, T = 32`)** alongside `std` (`237,964`), `large` (`778,972`), `xl` (`1,487,644`), and `ultra` (`4,040,188`).
+  - Expanded raw foveal visual synthesis `4×` from `8×4×3` (`96-D`) to **`16×8×3` (`384-D`)** with an online **4-Step Euler Conditional Rectified Flow-Matching generative velocity field** (`predictVisFlow`, `visFlowMSE = 0.0135`), and added a **1-minute (`+60.0 s`) 8-D macro-state subgoal rollout planner** (`predict60`, `mse60 = 0.0757`) alongside `+0.1 s`, `+0.5 s`, and exact `20`-step (`+2.0 s`) end-to-end BPTT.
+- **108-gene Embryonic `Hox` + Morphogen (`Shh/Fgf/Bmp/Wnt`) GRN & variable `4`/`6`/`8`-limb body-plan co-evolution (`js/sim/genome.js`, `js/sim/body.js`, `js/sim/cpg.js`, `js/lineage.js`, `js/sim/lineage_worker.js`):**
+  - Expanded the genome from `92` to **`108` bounded genes**, adding `16` embryonic `Hox` axial expression + reaction-diffusion morphogen (`Shh`, `Fgf`, `Bmp`, `Wnt`) GRN genes (`evalHoxGRN`) that govern **heritable topological limb-pair count (`2` pairs = `4`-limb quadruped, `3` pairs = `6`-limb hexapod, `4` pairs = `8`-limb octopod with `89` particles / `348` tetrahedra)**, dorsal hexagonal osteoderm scutes (`osteoderm`), gill/antenna barbule density (`gillFronds`), CPG inter-limb phase biases, and cross-bridge sarcomere $V_{\max}$.
+  - Added ES-module worker readiness handshaking (`{ ready: true }`) and post-LHS local step-size transition (`σ = 0.11`) in `Lineage` so both 6-gen starter refinement and 12-gen de-novo `[0.05, 0.95]^108` CMA-ES climb reliably in Node and browser workers.
+- **3D `D3Q19` Lattice-Boltzmann microvascular FSI, `512` WCSPH blood parcels, Huxley cross-bridge sarcomeres, `32`-peer clades & `2.20M`-organism microbial continuum (`js/sim/fluid.js`, `js/sim/body.js`, `js/sim/world.js`, `js/sim/ecosystem.js`):**
+  - Added a **3D `D3Q19` Lattice-Boltzmann (`12×6×6 = 432` cells = `8,208` distribution populations) BGK microvascular Navier-Stokes solver** coupled two-way with the 63-voxel Biot-Darcy poroelastic bed, 16-node 1D vascular graph, and **`512` 3D WCSPH blood parcels**, plus normalized **Huxley 2-state $\text{Ca}^{2+}$–Troponin cross-bridge sarcomere histology** in `body.js`.
+  - Raised the embodied conspecific cap from `14` to **`32` autonomous Glitchlings** radiating across **`4L`, `6L`, and `8L` Hox clades**, coupled to a **`64×64` saprotrophic soil decomposer, rhizobial $\text{N}_2$-fixation & bioluminescent phytoplankton continuum (`> 2.20M` microorganisms)**.
+- **Bio-Observatory Three.js (PMREM Sky IBL + 12-tap GTAO + FidelityFX CAS + frosted-obsidian UI), `p5.js` 5-tab studio & 14Q WASM / 16Q WebGPU + Richardson ZNE + `χ = 24` MPS & 4-layer MERA (`js/render.js`, `js/p5_layer.js`, `style.css`, `index.html`, `js/tsotchke/*`):**
+  - Rebuilt `render.js` with multi-layer dermal subsurface scattering, thin-film iridescence & hexagonal osteoderm GLSL relief, **PMREM HDR Sky Environment IBL**, **12-tap Ground-Truth Ambient Occlusion (`GTAO`)**, crepuscular god-rays, `UnrealBloomPass`, **AMD FidelityFX Contrast-Adaptive Sharpening (`CAS`)**, wide-gamut Display-P3, smooth indexed `SphereGeometry(1, 56, 40)` volcanic basalt-geode boulders, sculpted multi-jointed limbs + curved eye stalks + feathered antennae, native HiDPI `auto:ultra` (`2160×1350`) + Fixed 4K UHD (`3840×2160`), and a frosted-obsidian glassmorphic UI + 5-tab `p5.js` telemetry studio.
+  - Upgraded `wasm_quantum.js` & `qrng.js` to **14 qubits (`DIM = 16,384`) in inline-WASM** + optional **16-qubit (`DIM = 65,536`) WebGPU WGSL statevector compute shader**, added superconducting transmon unitary gate-folding ($U U^\dagger U$, $\lambda \in \{1, 3\}$) + **Richardson Zero-Noise Extrapolation (`ZNE`)**, and upgraded `moonlab.js` / `metacog.js` to **$\chi = 24$ Vidal canonical MPS** and **4-layer / 7-scale (`256-D`) Binary MERA**.
+
+Measured (Node & headless Chrome):
+
+- **Seven-scale 8-compartment branched HH+NMDA+SK + Fox-Lu Markov spiking substrate (`test/brain_probe.mjs` & headless Chrome):**
+
+  | brain | neurons / synapses | single-thread CPU ms/step | browser backend (`?backend=auto`) | CTX / HIP / THAL Hz | notes |
+  |---|---|---|---|---|---|
+  | **S** | 436 / 2,312 | **4.20** | CPU | 9.3 / 8.1 / 9.7 | compact worker-eval reference (`92 ms` build) |
+  | **M** (default, 300 s) | **3,268 / 132,778** | **7.01** | CPU | **5.7 / 3.4 / 6.0** | `alignment 1.101 → 1.339`, `nmdaSpikes 578`, `plateauBursts 405`, `skMean 0.127`, `channelNoiseMean 0.025`; 300-s `struct` lesioned: **5.5 / 4.5 / 8.0 Hz** (stays active) |
+  | **L** | **11,972 / 531,289** | **15.29** | `WebWorker-CSR` | **8.3 / 6.2 / 4.0** (`MOT 9.6`) | **32 feeds** in 240 s (`> M > S`); `alignment 1.341` |
+  | **XL** | **25,924 / 1,178,148** | **20.36** | `WebWorker-CSR` | 8.0 / 7.3 / 6.7 | off-main-thread 8-comp branched HH+NMDA+SK |
+  | **XXL** | **104,904 / 4,744,285** | **68.15** | `WebWorker-CSR` | 6.9 / 6.7 / 3.7 | `Uint32Array` CSR (`1.50 s` build) |
+  | **MEGA** | **1,048,644 / 16,777,216** | **139.08** | `WebWorker-CSR` | 6.9 / 1.4 / 1.1 | `197 ms` procedural CSR build; `1.05M` 8-comp neurons |
+  | **GIGA** | **14,156,048 / 56,624,192** | **733.30** | `WebWorker-CSR` (`35.7–68.4 ms` UI, `errors: []`) | **9.0 / 9.0 / 10.6** | **mouse-cortex neuron scale (`14.16M`)**, `738 ms` build, `pruned+regrown 157` |
+
+- **Monotonic foraging across brain scales, navigation & thirst (`forage_bench.mjs`, `nav_probe.mjs`, `water_probe.mjs`):**
+  - **`forage_bench.mjs` (240 s, seeds 1–4):** strictly monotonic **`S = 29 feeds (43 arrivals, 0 give-ups) < M = 30 feeds (41 arrivals, 2 give-ups) < L = 32 feeds (42 arrivals, 2 give-ups)`** (beating pass 17's `22 < 26 < 30` at every scale).
+  - **`nav_probe.mjs` (60 s, seeds 1–8, brain M):** **NEAR `7/8` (mean `9.6 s`)**, **FAR (`14+ u`) `8/8` (`100%`, mean `27.7 s`)**, **mean uprightness `0.93` (`0%` on its back)**, `34%` path-integration steered.
+  - **`water_probe.mjs a` (300 s, seeds 1–4):** intact **`4/4` drank (`13.2, 8.7, 9.0, 13.2` drunk; mean thirst `0.23–0.34`)** vs `thirst` lesioned **`0/4` (`0, 0, 0, 0` drunk; mean thirst `0.69–0.80`)**.
+- **4,608-neuron histological hippocampal loop, `11.47M` Flow/+60s world model, 108-gene Hox Evo-Devo & multi-clade biosphere:**
+  - **`memory2_probe.mjs`:** HDC (`a`): `0.894 → 0.957 → 0.964` (`0.35` prior), `0.816 → 0.928 → 0.964` (`0.80` prior). 4,608-neuron histological hippocampal–subicular loop (`b 2`, 600 s, 50%-masked noisy cues): `pass-3 (256 raw)` `0.72 / 0.79 / 0.62` → `1,024 + sleep merge, raw` `0.79 / 0.80 / 0.64` → **`1,024 + sleep merge + 4,608-neuron histological learned keys`: `early 0.85 (+0.06) / late 0.88 (+0.08) / held-out 0.67 (+0.03 over raw)`**.
+  - **`eco_probe.mjs 70`:** `7.74 ms/step`, `4,608` hippocampal spiking neurons (`2,048` DG), `16,384` foveated receptors (`itInvariance 0.996`, `4,096` PQ-IT concepts), `wmParams 237,964` (`titan`: **`11,466,892`** at `22.91 ms/step`), `wmMSE1 0.0321 / wmMSE5 0.0371 / wmMSE20 0.0452 / wmMSE60 0.0757`, `wmVisMSE1 0.0140 / wmVisFlowMSE 0.0135`, `14` WASM qubits (`16,384-D`, `zneRawErr 0.00431 → zneMitigatedErr 0.00202`, `2.13×` gain; `5.11×` at 12 s; `11.2×` live in `p5` studio), `peers 17` (**`cladeCounts: {"4L": 5, "6L": 11, "8L": 1}`**), `eggsLaid 12`, `births 5`, `pollinations 179`, **`microbeTotalPop 2,204,005`**, `planktonBloom 0.681`, `meanSoilN 0.649`.
+  - **Closed-loop `measure.mjs` (90 s, seeds 1–3, brain M):** intact `dist 62.61, fed 2.00, entropy 4.32, entropy2 5.82, states 50, upright 0.917, wmMSE 0.039` vs `mn` lesioned `dist 6.12, fed 0, entropy 0.162, states 1.33`.
+  - **Physics & Hox topologies (`physics_probe.mjs`, `righting_probe.mjs`, `symmetry_probe.mjs`, `pass18_probe.mjs`):** `4L` (`2` pairs, `85` nodes / `336` tets), `6L` (`3` pairs, `85` nodes / `336` tets), `8L` (`4` pairs, `89` nodes / `348` tets) at `0.47 ms/step` (`meanCrossBridge 0.433`); `righting_probe` **`10/10` (median `1.8 s`)**; `symmetry_probe` `[0.03, -0.02, -0.01]`.
+  - **108-gene Hox Evo-Devo evolution (`pass18_probe.mjs` & browser workers):** 6-gen starter refinement across all 108 genes: **`5.804 → 6.974 (+1.170)`**; 12-gen surrogate-assisted CMA-ES from pure uniform random `[0.05, 0.95]^108` weights: **`2.385 → 5.191 (+2.806, 2.18×)`** (`fwd 0.884 u/s`, `up 0.868`, `6L` hexapod).
+- **Headless Chrome (`browser_check.mjs`, `visual_verify.mjs`, `lineage_check.mjs`):**
+  - Zero console or page errors (`errors: []`) across phone (`motion intact 9.21` vs `mn` lesioned `0.33`), desktop Bio-Observatory (`auto:ultra` `2160×1350`, `HDR16F + Sky IBL + GTAO + CAS`, `motion intact 9.03` vs `mn` lesioned `1.61`), all 4 camera modes, all 5 `p5.js` studio tabs, Fixed 4K UHD (`?q=4k` → `3840×2160` framebuffer), `?brain=GIGA&wm=titan` (`14,156,048` neurons / `56,624,192` synapses in `WebWorker-CSR` + `11,466,892` WM parameters), and in-browser Web Worker 108-gene lineage evolution.
+
+## Pass 19 — 1.13B-synapse GIGA + 16-compartment discrete binomial Markov arbours, 32,768-neuron histological Hip–Sub + Successor Representation, dual 256×128 (196k RGC) retinas + 65,536-concept symbolic ontology, 29.06M `?wm=omega` Patch-VAE Flow + +300s Neuro-Symbolic HTN/MCTS, 128-gene Zygote→Gastrulation→5-Clade Evo-Devo, 64-vessel Murray's-Law + 1,024 RBC/WBC WCSPH + 256 3D micro-fauna + 8.41M microbes, and 16Q/18Q Qutrit DRAG + 512-shot PEC + 32Q MPS / 9-scale MERA
+
+Addresses all seven `SIMPLIFIED` boundaries documented in pass 18 (`live/js/honesty.js`) alongside a comprehensive Three.js Bio-Observatory graphics, shader, multi-clade creature anatomy, and 5-tab `p5.js` studio upgrade:
+
+### Architectural upgrades
+
+1. **`1.13B`-Synapse (`1,132,483,840`) `GIGA` Cortex + 16-Compartment Branched Dendritic Arbours + Discrete Integer Binomial Markov Channels (`js/sim/brain.js`, `js/sim/brain_worker.js`):**
+   - Scales `GIGA` (`14,156,048` mouse-cortex neurons) from `56.62M` (`4` syn/cell) to **`1,132,483,840` (`1.13B`) plastic Int8+CSR synapses** (`80` clustered dendritic synapses/cell across `8` branch clusters) plus `Uint16Array` structural spine-turnover masks (`pruned+regrown 261` in 10 s, `978 ms` procedural build).
+   - Upgrades every `S`–`MEGA` pyramidal microcolumn from 8 compartments to a **16-compartment branched cable arbour**: `AIS` (`Na_v1.6` high-density trigger), `soma`, **`4` basal branches (`BL1, BL2, BR1, BR2`)** with local voltage-gated $\text{Mg}^{2+}$ NMDA plateau spikes, **`2` apical obliques (`OblL, OblR`)**, **`2` apical trunk segments (`TrkProx, TrkDist`)** with hyperpolarization-activated `HCN` $I_h$ sag, **`Ca_v` apical nexus**, **`4` L1 tuft branches (`TuftA1, TuftA2, TuftB1, TuftB2`)** driving BAC bursts + `SK` $\text{Ca}^{2+}$-activated $\text{K}^+$ medium-AHP, and an explicit **dendritic spine head (`SpineVm` / `SpineCa`)** with neck axial resistance.
+   - Replaces continuous Fox-Lu Langevin diffusion with **exact discrete integer binomial Markov-chain ion-channel state transitions** (`Na_v` 5-state `C3↔C2↔C1↔O↔I` over `N=80` discrete channels, `K_v` 4-state `C3↔C2↔C1↔O` over `N=60` channels, apical `Ca_v` 3-state `C↔O↔I` over `N=40` channels, and stochastic discrete spine `NMDA` open receptors).
+2. **`32,768`-Neuron Conductance-Based Histological Hippocampal–Subicular Circuit + Adult Neurogenesis + Predictive Successor Representation (`js/sim/memory.js`):**
+   - Expands `SpikingTrisynapticCircuit` $7.1\times$ from `4,608` to **`32,768` conductance-based spiking neurons** across **14 explicit anatomical populations**: `EC_II` (`512` grid) + `EC_III` (`512` temporoammonic) → **`16,384` `DG` granule cells** (`1.20%` `k=196` sparse k-WTA + **`512` hyperexcitable adult-born immature granule cells** with turnover & lowered threshold) + `512` hilar Mossy cells → `2,048` `CA3` (`AMPA + Mg²⁺-NMDA` autoassociative + asymmetric phase-precession bridges) + **`256` social/temporal `CA2`** → `2,048` `CA1` → `1,024` `Subiculum` → `512` deep `EC_V`, gated by **6 explicit GABAergic interneuron classes (`2,688` inhibitory cells)**: `PV+` perisomatic basket (`512`), `PV+` AIS axo-axonic chandelier (`256`), `SST+` `O-LM` (`512`), `VIP+` disinhibitory (`384`), **`CCK+` basket with retrograde `CB1R` depolarization-induced suppression of inhibition (DSI, `512`)**, and **neurogliaform / Ivy (`NGFC`, `512`)** mediating slow metabotropic $\text{GABA}_B$ dendritic inhibition, plus `8,192` septotemporal continuum place cells (`16,384` on `XL+`).
+   - Adds a **64-macro-state Predictive Successor Representation (`M_SR`)** learned via online TD($\lambda$) (`M[s,:] ← M[s,:] + η(e_s + γ M[s',:] − M[s,:])`) alongside asymmetric theta-sequence `CA3` bridges so novel future states share predictive multi-step horizon embeddings prior to visitation.
+3. **Dual `256×128` (`65,536`-Photoreceptor / `196,608` RGC) Foveated Retinas + `65,536`-Concept Compositional IT + 4-Tier Symbolic Hypernym & Relational Affordance Ontology (`js/sim/vision.js`):**
+   - Scales binocular foveated retinas $4\times$ to **dual `256×128` (`65,536` photoreceptors; `196,608` L/M/S cone + scotopic rod signals)** with **6 explicit Retinal Ganglion Cell (RGC) mosaics (`196,608` RGC channels)**: `ON/OFF Midget` (parvocellular acuity + `L−M`), `ON/OFF Parasol` (magnocellular motion transient), `Small Bistratified` (`S−(L+M)` koniocellular), and `ipRGC` melanopsin irradiance (`0.998` view/scale invariance).
+   - Expands ventral `V1 → V2 → 32×16×8 V4 → IT` to **`256×256 = 65,536` compositional product-quantized visual concepts** grounded in an explicit **4-tier Symbolic Hypernym & Relational Affordance Ontology DAG** (`ENTITY → ANIMATE/ABIOTIC/FLORA → CONSCSPECIFIC/APEX-PREDATOR/MICROFAUNA/NUTRIENT/HYDRO-SOURCE/REFUGE`) that binds live **`Subject–Predicate–Object` scene-graph triples** (`NEAR`, `APPROACHING`, `THREATENS`, `AFFORDS-FEED`, `AFFORDS-DRINK`, `COURTS`) and grounds compositional proto-lexemes (e.g. `APEX-PREDATOR#c64653`).
+4. **`29.06M`-Parameter `?wm=omega` Spatial-Pyramid Patch-VAE (`32×16×3`) Flow World Model + 5-Minute (`+300.0 s`) Neuro-Symbolic HTN + Depth-5 UCT MCTS Planner (`js/sim/mind.js`, `js/sim/creature.js`):**
+   - Upgrades generative visual synthesis $4\times$ from `16×8×3` to **`32×16×3` (`1,536-D` foveal + peripheral RGB)** via a learned `8×4×16` **Spatial-Pyramid Patch-VAE** (`512-D` latent) + **4-step Conditional Rectified Flow-Matching** head (`wmVisFlowMSE 0.0157`), and adds a 6th scale **`?wm=omega` (`29,059,876` = `29.06M` parameters: `L=10, d=448, H=8, ffn=1344, T=32, d5=256`)**.
+   - Adds **`HTNPlanner`**, a **5-Minute (`+300.0 s` / 18,000-tick) Neuro-Symbolic Hierarchical Task Network + 24-Rollout Depth-5 UCT Monte Carlo Tree Search** planner decomposing survival/reproductive goals (`SURVIVE_AND_THRIVE`, `THERMOREGULATE`, `FORAGE_HYDRATE`, `EVADE_LEVIATHAN`, `COURT_AND_NEST`) into abstract symbolic subgoals and injecting top-down goal bias into the 21-channel striatal action race.
+5. **128-Gene Single-Cell Zygote Cleavage (`1 → 128` Blastomeres), Gastrulation, `Hes7` Somitogenesis, 5 Macro-Bauplan Clades (`0L`–`10L`), Patagium Wings, Angler Esca & 32 Henneman Motor Units (`js/sim/genome.js`, `js/sim/starter_genome.js`, `js/sim/body.js`, `js/lineage.js`):**
+   - Expands the genome from `108` to **`128` evolved genes**, adding **7 mitotic cleavage divisions (`1 → 2 → 4 → 8 → 16 → 32 → 64 → 128` 3D blastomeres)** with maternal `Bicoid/Nanos/β-catenin` axes, **Spemann-Mangold `Nodal/Lefty/Chordin` gastrulation** into 4 germ layers (`ectoderm`, `mesoderm`, `endoderm`, `neural crest`), a **7-somite `Hes7/Notch` segmentation clock + `Fgf8/Wnt3a` wavefront**, **5 macro-bauplan clades** (**`0L` apodous serpent**, **`4L` tetrapod**, **`6L` hexapod**, **`8L` octopod**, **`10L` decapod** `93` nodes / `360` FEM tets), **lateral `Patagium` aerodynamic gliding membranes** (`lift/drag` soft-body forces), a **cranial bioluminescent `Angler Esca` lure**, and **32 Henneman size-principle motor-unit fascicles** (`Slow Oxidative Type I`, `Fast Oxidative IIa`, `Fast Glycolytic IIb`) driving Huxley cross-bridge sarcomeres.
+6. **36-Node / 64-Vessel 3D Murray's-Law Vascular Tree + `24×8×8` `D3Q19` LBM + `1,024` Differentiated RBC/WBC WCSPH + `48` Speciating Peers + `256` 3D Micro-Fauna + `>8.41M` Microbes (`js/sim/fluid.js`, `js/sim/world.js`, `js/sim/ecosystem.js`):**
+   - Replaces the 16-node circuit with a **36-node / 64-vessel 3D bifurcating vascular tree** obeying **Murray's Cube Law ($r_0^3 = r_1^3 + r_2^3$)** at every junction (`murrayRestResidual 7.36e-17`) with myogenic smooth-muscle autoregulation + endothelial NO shear vasodilation, coupled to a **`24×8×8` (`1,536`-voxel / `29,184`-population) 3D `D3Q19` Lattice-Boltzmann** microvascular solver, `63`-voxel Biot-Darcy poroelasticity, and **`1,024` 3D WCSPH blood cells** (**`896` $O_2$-carrying Erythrocytes + `128` marginating chemotactic Leukocytes**).
+   - Scales the biosphere to **`48` autonomous conspecifics** across all **5 clades (`0L`/`4L`/`6L`/`8L`/`10L`)** with **sympatric assortative mating & reproductive isolation (`speciesId` / `speciesCount`)**, **`256` discrete embodied 3D micro-fauna** (benthic detritivores, pelagic copepods, rhizosphere collembola), and **`>8.41M` continuum soil/aquatic microbes**.
+7. **16Q WASM / 18Q WebGPU Open-Quantum Engine + Qutrit Transmon DRAG (`25.62×` Leakage Cut) + 512-Shot Quasi-Probability PEC + 32-Qubit ($\chi=32$) MPS & 9-Scale (`512-D`) MERA + Bio-Observatory Visual Overhaul (`js/tsotchke/*`, `js/sim/metacog.js`, `js/render.js`, `js/p5_layer.js`, `index.html`, `style.css`):**
+   - Scales inline SIMD-unrolled WebAssembly quantum evolution to **16 qubits (`DIM = 65,536`)** and WebGPU WGSL compute to **18 qubits (`DIM = 262,144`)**, adds a **pulse-level Qutrit (`|0⟩, |1⟩, |2⟩`) Anharmonic Transmon DRAG (`Derivative Removal by Adiabatic Gate`) Hamiltonian simulator** (`25.62×` `|2⟩` leakage suppression, `0.8722 → 0.9697` gate fidelity), **512-shot Quasi-Probability Probabilistic Error Cancellation (`PEC`, `10.66×` bias reduction)** alongside Richardson `ZNE` (`7.72×`), and scales tensor-network consolidation to a **32-Qubit ($\chi=32$) Vidal canonical MPS** and **9-scale (`512-D`) Binary MERA**.
+   - Upgrades Three.js rendering with **`4096×4096` PCF soft shadows**, a smooth $C^\infty$ analytic hexagonal scute normal shader, sleek tapered rostrum/tail dome geometry, `10` Catmull-Rom limbs with 4 keratin talons/foot, translucent `Patagium` wing-membranes, dynamic cranial `Angler Esca` `PointLight`, `96` bioluminescent mushroom clusters, `256` GPU-instanced 3D micro-fauna, `4` lighting presets (`Auto Solar`, `Golden Twilight`, `Pandora Biolum Night`, `Crisp Zenith Day`), 1-click `0L/4L/6L/8L/10L` live clade morph buttons, and an upgraded 5-tab `p5.js` telemetry studio with a live 128-cell germ-layer blastula plot.
+
+### Verification
+
+- **Seven-scale 16-compartment discrete-Markov HH+NMDA+SK + `1.13B`-synapse `GIGA` substrate (`test/brain_probe.mjs` & headless Chrome):**
+
+  | brain | neurons / synapses | single-thread CPU ms/step | browser backend (`?backend=auto`) | CTX / HIP / THAL Hz | notes |
+  |---|---|---|---|---|---|
+  | **S** | 436 / 2,312 | **7.07** (`6.66` 30-s) | CPU | 8.4 / 8.7 / 4.2 | 16-comp discrete binomial Markov reference (`168 ms` build) |
+  | **M** (default, 300 s) | **3,268 / 132,778** | **11.02** | CPU | **5.7 / 5.5 / 4.0** | 300-s `struct` lesioned: **`pruned+regrown 0`, `alignment 1.044 → 1.303`, `dist 210`** (cortical homeostasis holds cleanly) |
+  | **L** | **11,972 / 531,289** | **20.79** | `WebWorker-CSR` | **9.7 / 9.1 / 8.9** (`MOT 11.3`) | `347 ms` build; `alignment 1.113`; beats `S` in 240-s foraging (`25 > 24`) |
+  | **XL** | **25,924 / 1,178,148** | **26.24** | `WebWorker-CSR` | 3.6 / 3.4 / 3.7 (`MOT 6.2`) | off-main-thread 16-comp branched HH+NMDA+SK (`alignment 1.131`) |
+  | **XXL** | **104,904 / 4,744,285** | **91.04** | `WebWorker-CSR` | 2.9 / 3.4 / 1.7 | `Uint32Array` CSR (`1.74 s` build) |
+  | **MEGA** | **1,048,644 / 16,777,216** | **327.42** | `WebWorker-CSR` | 7.3 / 1.8 / 1.6 | `291 ms` procedural CSR build; `1.05M` 16-comp neurons |
+  | **GIGA** | **14,156,048 / 1,132,483,840** | **1,340.31** | `WebWorker-CSR` (`errors: []`) | **9.2 / 9.1 / 10.7** | **mouse-cortex neurons (`14.16M`) + `1.13B` clustered branch synapses**, `978 ms` build, `pruned+regrown 261` |
+
+- **Navigation, foraging, closed-loop lesion matrix & thirst (`nav_probe.mjs`, `forage_bench.mjs`, `measure.mjs`, `water_probe.mjs`):**
+  - **`nav_probe.mjs` (60 s, seeds 1–8, brain M):** **NEAR `8/8` (`100%`, mean `9.0 s`)**, **FAR (`14+ u`) `8/8` (`100%`, mean `30.2 s`)**, **mean uprightness `0.92` (`1%` on its back)**, `42%` path-integration steered.
+  - **`measure.mjs` (90 s, seeds 1–3, brain M):** intact **`dist 63.36, fed 3.00, entropy 4.16, entropy2 5.86, states 42.33, upright 0.933, wmMSE 0.033`** vs `mot` (`dist 42.31, fed 0, entropy 5.48, upright 0.957`), `cpg` (`dist 29.67, fed 0.67, upright 0.483`), and `mn` (`dist 6.15, fed 0, entropy 0.183, states 1.67, upright 0.597`).
+  - **`forage_bench.mjs` (240 s, seeds 1–4):** **`M = 31 feeds` (`38` arrivals, `2` give-ups; `12, 7, 5, 7`, `upright 0.88–0.93`) > `L = 25 feeds` (`40` arrivals, `2` give-ups; `6, 9, 7, 3` — beats `M` on seeds 2 & 3) > `S = 24 feeds` (`40` arrivals, `3` give-ups; `7, 6, 6, 5`)**.
+  - **`water_probe.mjs a` (300 s, seeds 1–4):** intact **`4/4` drank (`5.8, 8.7, 15.9, 5.7` drunk; mean thirst `0.25–0.40`)** vs `thirst` lesioned **`0/4` (`0, 0, 0, 0` drunk; mean thirst `0.70–0.74`)**.
+- **32,768-neuron histological Hip–Sub + SR recall, `29.06M` `?wm=omega` world model, 128-gene Zygote Evo-Devo & 5-clade biosphere:**
+  - **`memory2_probe.mjs`:** HDC (`a`): `0.894 → 0.957 → 0.964` (`0.35` prior), `0.816 → 0.928 → 0.964` (`0.80` prior). `32,768`-neuron histological Hip–Sub + SR (`b 2`, 600 s, 50%-masked noisy cues): `pass-3 (256 raw)` `0.70 / 0.82 / 0.67` → `1,024 + sleep merge, raw` `0.77 / 0.82 / 0.69` → **`1,024 + sleep merge + 32,768-neuron Hip+SR learned keys`: `early 0.79 / late 0.88 (+0.06) / held-out 0.70 (+0.01 over raw, +0.03 over pass-18)`**.
+  - **`eco_probe.mjs 40`:** `1,024` WCSPH cells (`896` RBC + `128` WBC), `64` Murray vessels (`murrayRestResidual 7.36e-17`, `murrayLiveDeviation 0.131`), `1,536` `D3Q19` LBM voxels (`29,184` pops, `lbmVorticity 0.0684`), `32,768` hippocampal spiking neurons (`16,384` DG), `65,536` foveated receptors (`itInvariance 0.998`, `65,536` IT concepts, `activeLexeme "APEX-PREDATOR#c64653"`), `wmParams 797,476` (`omega`: **`29,059,876`**), `wmMSE1 0.0357 / wmMSE5 0.0375 / wmMSE20 0.0418 / wmMSE60 0.111`, `wmVisFlowMSE 0.0157`, `htnHorizonSec 300`, `peers 24`, `speciesCount 5`, **`cladeCounts: {"0L": 4, "4L": 6, "6L": 9, "8L": 4, "10L": 1}`**, `microFaunaCount 256`, `births 6`, `pollinations 95`, **`microbeTotalPop 8,413,733`**, `16` WASM qubits (`65,536-D`), **`dragSuppression 25.62×` (`F_gate 0.8722 → 0.9697`), `pecGain 10.66×`, `zneGain 7.72×`**, `32`-qubit MPS (`maxBond 32`, `maxEntropy 2.455`), `512-D` `9`-scale MERA.
+  - **Physics & 128-gene Zygote CMA-ES (`physics_probe.mjs`, `righting_probe.mjs`, `symmetry_probe.mjs`, `evo128_probe.mjs`):** `0.38 ms/step` (`85–93` nodes, `336–360` FEM tets across `0L`–`10L`), `righting_probe` **`10/10` (median `1.7 s`)**, `symmetry_probe` `[0.04, -0.02, 0.05]`; 6-gen starter refinement across all 128 genes: **`6.10 → 6.39 (+0.30)`** (`v 0.58 u/s`, `up 0.96`, `6L`); 12-gen de-novo from pure uniform random `[0.05, 0.95]^128`: **`1.98 → 5.65 (2.85× gain)`** (`v 0.55 u/s`, **`up 0.94`**, armored winged `4L Tetrapod`, `patagium 1.28, osteoderm 1.01`).
+- **Headless Chrome visual & extreme-scale checks:**
+  - Visually inspected rendered screenshots across Golden Twilight (`pass19-hero-twilight.png`), Pandora Bioluminescent Night (`pass19-pandora-night.png`), `10L` Decapod (`93 nodes, 360 tets`, `pass19-decapod-10L.png`), and all 5 `p5.js` studio tabs (`pass19-lab-telemetry.png`), plus `?brain=GIGA&wm=omega&q=4k` (`14,156,048` neurons / `1,132,483,840` synapses in `WebWorker-CSR` + `29,059,876` WM params + `3840×2160` 4K UHD framebuffer) with **`consoleErrors: []`, `pageErrors: []`**.
