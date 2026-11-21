@@ -13,6 +13,56 @@ import { spectralConsolidate, vidalMPS, mpsContract, meraRenormalize, MPSQuantum
 
 export const K_CHART = 8;
 
+// Exact Gaussian central coverage critical values z_q = sqrt(2) * erfinv(q) for 10 Kuleshov calibration bins q in {0.05..0.95}
+const GAUSS_CRIT_10 = new Float64Array([
+  0.062707, 0.189118, 0.318639, 0.453762, 0.597760,
+  0.755415, 0.934589, 1.150349, 1.439531, 1.959964,
+]);
+
+function bin4(v, scale = 1.0) {
+  const u = clamp(0.5 * (Math.tanh(v / scale) + 1.0), 0, 0.9999);
+  return (u * 4) | 0;
+}
+
+/** Exact discrete Schreiber (2000) Transfer Entropy T_{X -> Y} (in bits) from 4x4x4 joint transition table C[yNext*16 + yCur*4 + xCur] */
+export function computeTransferEntropyBits(counts64) {
+  let total = 0;
+  for (let i = 0; i < 64; i++) total += counts64[i];
+  if (total <= 1e-9) return 0;
+  // Marginal counts N(y, x), N(y', y), N(y)
+  const nYX = new Float64Array(16), nYpY = new Float64Array(16), nY = new Float64Array(4);
+  for (let yp = 0; yp < 4; yp++) {
+    for (let y = 0; y < 4; y++) {
+      let sYpY = 0;
+      for (let x = 0; x < 4; x++) {
+        const c = counts64[yp * 16 + y * 4 + x];
+        nYX[y * 4 + x] += c;
+        sYpY += c;
+      }
+      nYpY[yp * 4 + y] = sYpY;
+      nY[y] += sYpY;
+    }
+  }
+  let te = 0;
+  const invLn2 = 1.0 / Math.LN2;
+  for (let yp = 0; yp < 4; yp++) {
+    for (let y = 0; y < 4; y++) {
+      const cy = nY[y];
+      const cypy = nYpY[yp * 4 + y];
+      if (cy <= 1e-12 || cypy <= 1e-12) continue;
+      for (let x = 0; x < 4; x++) {
+        const c = counts64[yp * 16 + y * 4 + x];
+        const cyx = nYX[y * 4 + x];
+        if (c <= 1e-12 || cyx <= 1e-12) continue;
+        // p(y',y,x) * log2( [c / cyx] / [cypy / cy] )
+        const ratio = (c * cy) / (cyx * cypy);
+        if (ratio > 0) te += (c / total) * Math.log(ratio) * invLn2;
+      }
+    }
+  }
+  return Math.max(0, te);
+}
+
 export class Metacognition {
   constructor(seed, nFeat = 96) {
     const r = mulberry(seed * 7919 + 29);
@@ -40,6 +90,41 @@ export class Metacognition {
     this.delibThr = 8; // adaptive striatal race spike threshold (6..13)
     this.achGain = 1; // metacognitive precision/learning multiplier
     this.exploreTemp = 1; // exploration noise multiplier
+
+    // Rigorous Kuleshov 10-Bin Regression ECE + Prequential Temperature-Scaled Gaussian NLL (`T12`)
+    this.logVarTemp = 0.0;
+    this.varTemp = 1.0;
+    this.calibHits10 = new Float64Array(10);
+    this.rawHits10 = new Float64Array(10);
+    this.calibTrials = 0;
+    this.ece10Bin = 0.0;
+    this.rawEce10Bin = 0.0;
+    this.gaussianNLL = 0.0;
+    this.rawGaussianNLL = 0.0;
+    this._nllSum = 0.0;
+    this._rawNllSum = 0.0;
+
+    // Online Benettin Largest Lyapunov Exponent + Beggs-Plenz Spike-Avalanche Branching Ratio (`T12`)
+    this._prevDeltaNorm = 0.0;
+    this._prevCtxAct = 0.0;
+    this.lyapunovMax = 0.0;
+    this.avalancheSigma = 1.0;
+
+    // Online Schreiber (2000) Directed Sensorimotor Transfer Entropy Histograms (Laplace prior 0.02)
+    this.teCountsActEnv = new Float64Array(64).fill(0.02);
+    this.teCountsEnvSens = new Float64Array(64).fill(0.02);
+    this.teCountsBrainAct = new Float64Array(64).fill(0.02);
+    this.teCountsNull = new Float64Array(64).fill(0.02);
+    this._smPrev = null;
+    this._actLagRing = new Int8Array(37);
+    this._actLagPtr = 0;
+    this._actLagFilled = 0;
+    this.teActToEnv = 0.0;
+    this.teEnvToSens = 0.0;
+    this.teBrainToAct = 0.0;
+    this.teNullSurrogate = 0.0;
+    this.sensorimotorLoopTE = 0.0;
+
     // Weight-space & Tsotchke QGTL / Moonlab telemetry
     this.ws = {
       motorLearnedFrac: 0,
@@ -58,9 +143,9 @@ export class Metacognition {
 
   /**
    * 10 Hz step: project neural feature vector -> Oja subspace update -> Order-3 Eshkol Taylor jet curvature & torsion
-   * -> metacognitive confidence, calibration & control outputs.
+   * -> Kuleshov 10-bin ECE & proper Gaussian NLL -> Lyapunov & Avalanche criticality -> Schreiber Transfer Entropy.
    */
-  step(feat, wmErr, wmPredVar, familiar, progressEMA, bestAltG, currentG, lesion = false) {
+  step(feat, wmErr, wmPredVar, familiar, progressEMA, bestAltG, currentG, lesion = false, smSample = null) {
     const n = Math.min(this.nFeat, feat.length);
     const x = new Float64Array(n);
     for (let i = 0; i < n; i++) {
@@ -86,6 +171,61 @@ export class Metacognition {
           this.P[off + i] += eta * yk * (x[i] - recon[i]);
         }
       }
+    }
+
+    // Online Benettin tangent growth rate -> Largest Lyapunov Exponent lambda_max (1/s at dt=0.1s)
+    if (this.hist.length >= 1) {
+      const prevY = this.hist[this.hist.length - 1];
+      let dNorm2 = 0;
+      for (let k = 0; k < K_CHART; k++) { const dy = y[k] - prevY[k]; dNorm2 += dy * dy; }
+      const dNorm = Math.sqrt(dNorm2);
+      if (this._prevDeltaNorm > 1e-5 && dNorm > 1e-5) {
+        const instLyap = clamp(10.0 * Math.log(dNorm / this._prevDeltaNorm), -8.0, 8.0);
+        this.lyapunovMax = 0.96 * this.lyapunovMax + 0.04 * instLyap;
+      }
+      this._prevDeltaNorm = dNorm;
+    }
+    // Beggs & Plenz (2003) cortical spike-avalanche branching ratio sigma = <A_t / A_{t-1}>
+    if (n >= 80) {
+      let ctxAct = 0;
+      for (let i = 64; i < 80; i++) ctxAct += Math.max(0, feat[i]);
+      if (this._prevCtxAct > 0.05) {
+        const ratio = clamp(ctxAct / this._prevCtxAct, 0.1, 3.5);
+        this.avalancheSigma = 0.96 * this.avalancheSigma + 0.04 * ratio;
+      }
+      this._prevCtxAct = ctxAct;
+    }
+
+    // Online Schreiber (2000) Directed Sensorimotor Transfer Entropy (bits) + Lag-37 Time-Shuffled Null Surrogate
+    if (smSample) {
+      const bEnv = bin4(smSample.env, 0.75);
+      const bSens = bin4(smSample.sens ?? y[0], 0.65);
+      const bAct = bin4(smSample.act, 0.45);
+      const lagAct = this._actLagFilled >= 37 ? this._actLagRing[this._actLagPtr] : bAct;
+      this._actLagRing[this._actLagPtr] = bAct;
+      this._actLagPtr = (this._actLagPtr + 1) % 37;
+      if (this._actLagFilled < 37) this._actLagFilled++;
+
+      if (this._smPrev) {
+        const p = this._smPrev;
+        // Mild exponential forgetting (0.996) keeps empirical conditional distributions stationary & responsive
+        for (let q = 0; q < 64; q++) {
+          this.teCountsActEnv[q] *= 0.996;
+          this.teCountsEnvSens[q] *= 0.996;
+          this.teCountsBrainAct[q] *= 0.996;
+          this.teCountsNull[q] *= 0.996;
+        }
+        this.teCountsActEnv[bEnv * 16 + p.bEnv * 4 + p.bAct] += 1.0;
+        this.teCountsEnvSens[bSens * 16 + p.bSens * 4 + p.bEnv] += 1.0;
+        this.teCountsBrainAct[bAct * 16 + p.bAct * 4 + p.bSens] += 1.0;
+        this.teCountsNull[bEnv * 16 + p.bEnv * 4 + p.lagAct] += 1.0;
+        this.teActToEnv = computeTransferEntropyBits(this.teCountsActEnv);
+        this.teEnvToSens = computeTransferEntropyBits(this.teCountsEnvSens);
+        this.teBrainToAct = computeTransferEntropyBits(this.teCountsBrainAct);
+        this.teNullSurrogate = computeTransferEntropyBits(this.teCountsNull);
+        this.sensorimotorLoopTE = this.teActToEnv + this.teEnvToSens + this.teBrainToAct;
+      }
+      this._smPrev = { bEnv, bSens, bAct, lagAct };
     }
 
     this.hist.push(y);
@@ -130,8 +270,44 @@ export class Metacognition {
       }
     }
 
-    // Second-order calibration: does the world model know when it doesn't know?
-    const relCalib = Math.abs(wmErr - wmPredVar) / (wmPredVar + wmErr + 0.02);
+    // Prequential Proper Gaussian Negative Log-Likelihood & Kuleshov 10-Bin Regression ECE (evaluated BEFORE updating varTemp!)
+    const e2 = Math.max(0, wmErr);
+    const vRaw = Math.max(1e-5, wmPredVar);
+    const vCal = Math.max(1e-6, this.varTemp * vRaw);
+    if (e2 > 0 || this.calibTrials > 0) {
+      const nllCal = 0.5 * Math.log(vCal) + e2 / (2 * vCal);
+      const nllRaw = 0.5 * Math.log(vRaw) + e2 / (2 * vRaw);
+      this.calibTrials++;
+      this._nllSum += nllCal;
+      this._rawNllSum += nllRaw;
+      this.gaussianNLL = this._nllSum / this.calibTrials;
+      this.rawGaussianNLL = this._rawNllSum / this.calibTrials;
+
+      const absE = Math.sqrt(e2);
+      const sdCal = Math.sqrt(vCal), sdRaw = Math.sqrt(vRaw);
+      let eceSum = 0, rawEceSum = 0;
+      for (let b = 0; b < 10; b++) {
+        const q = (b + 0.5) * 0.1;
+        const zCrit = GAUSS_CRIT_10[b];
+        if (absE <= zCrit * sdCal) this.calibHits10[b]++;
+        if (absE <= zCrit * sdRaw) this.rawHits10[b]++;
+        eceSum += Math.abs(this.calibHits10[b] / this.calibTrials - q);
+        rawEceSum += Math.abs(this.rawHits10[b] / this.calibTrials - q);
+      }
+      this.ece10Bin = eceSum * 0.1;
+      this.rawEce10Bin = rawEceSum * 0.1;
+
+      if (!lesion) {
+        // Exact NLL gradient wrt log(tau): dL/d(log tau) = 0.5 * (1 - e^2 / (tau * vRaw))
+        const grad = clamp(0.5 * (1.0 - e2 / vCal), -2.5, 2.5);
+        this.logVarTemp = clamp(this.logVarTemp - 0.08 * grad, -4.5, 4.5);
+        this.varTemp = Math.exp(this.logVarTemp);
+      }
+    }
+
+    // Second-order chi-square calibration residual |e^2/vCal - 1| / (e^2/vCal + 1) around neutral cortical gain point
+    const chiRatio = wmErr / Math.max(1e-8, vCal);
+    const relCalib = clamp(0.45 + 0.35 * (Math.abs(chiRatio - 1.0) / (chiRatio + 1.0) - 0.18), 0.05, 0.98);
     this.calibErr = 0.94 * this.calibErr + 0.06 * relCalib;
     const zKappa = (this.kappa - this.kMean) / (this.kSD + 0.1);
 

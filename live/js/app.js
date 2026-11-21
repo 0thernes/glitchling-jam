@@ -872,14 +872,15 @@ function drawPanel() {
   stats($('mindstats'), [
     ['sleep stage / clock', `${STAGES[cr.sleep.stage]} · ${cr.timeCompression}× (${CLOCK_MODES[cr.clockMode]?.label || cr.clockMode})`],
     ['brain scale / backend', `${BRAIN_SCALE} (${b.backend}): ${b.N.toLocaleString()} neu, ${b.S.toLocaleString()} syn, ${(window.glitch.stats.stepMs ?? 0).toFixed(1)} ms/step`],
-    ['16-comp Discrete Binomial Markov', `NMDA ${b.nmdaSpikes || 0} · BAC ${Math.round(b.plateauBursts || 0)} · SK ${(b.skMean || 0).toFixed(3)} · σ_ch ${(b.channelNoiseMean || 0).toFixed(3)}`],
+    ['16-comp Discrete Binomial Markov', `NMDA ${Math.round(b.nmdaSpikes || 0)} · BAC ${Math.round(b.plateauBursts || 0)} · SK ${(b.skMean || 0).toFixed(3)} · σ_ch ${(b.channelNoiseMean || 0).toFixed(3)}`],
     ['256×128 (196k RGC) & 65,536 Ontology IT', `${cr.retina.activeLexeme || 'ENTITY'} · inv ${(cr.retina.itInvariance || 0).toFixed(3)} · seen ${cr.retina.itUniqueConceptsSeen || 1}/65,536 · SLAM ${cr.retina.seenCount}/19`],
     ['32,768-neu Hip–Sub (14 pop + SR + 6 GABA)', `DG 16,384 (1.2% + 512 neurogen) · Subic 1,024 · GABA 2,688 · SWRs ${stCircuit?.swrEvents || 0}`],
     ['WM (32×16 Flow-VAE + +0.1s/+2s/+60s)', `${cr.wm.scaleName} (${(cr.wm.paramCount || 0).toLocaleString()}): ${cr.wm.mse.toFixed(4)} / ${(cr.wm.mse20 || 0).toFixed(4)} / ${(cr.wm.mse60 || 0).toFixed(4)} · flow ${(cr.wm.visFlowMSE || 0).toFixed(4)}`],
     ['+300s (5-min) HTN + Depth-5 UCT MCTS', htn ? `${htn.activeTask || 'FORAGE'} -> ${htn.activeStep || 'NAV'} (${htn.rollouts || 24} rollouts, V ${(htn.bestValue ?? 0).toFixed(2)})` : 'standby'],
     ['RTRL SSM |∇| / heteroscedastic σ²', `${(cr.ssm.gradNorm ?? 0).toExponential(1)} / ${(cr.wm.predVar ?? 0).toFixed(3)}`],
     ['thought curvature κ(t) / torsion τ(t)', `${(MC?.kappa ?? 0).toFixed(2)} / ${(MC?.torsion ?? 0).toFixed(2)} (||z′|| ${(MC?.speed ?? 0).toFixed(2)})`],
-    ['metacog confidence / regret / temp', `${(MC?.confidence ?? 0).toFixed(2)} / ${(MC?.regret ?? 0).toFixed(2)} / ${(MC?.exploreTemp ?? 1).toFixed(2)}×`],
+    ['metacog ECE₁₀ / Gaussian NLL / conf', `ECE ${(MC?.ece10Bin ?? 0).toFixed(3)} · NLL ${(MC?.gaussianNLL ?? 0).toFixed(2)} (τ=${(MC?.varTemp ?? 1).toFixed(2)}) · conf ${(MC?.confidence ?? 0).toFixed(2)}`],
+    ['criticality λ_max / σ_aval & Schreiber TE', `λ ${(MC?.lyapunovMax ?? 0).toFixed(2)}/s · σ ${(MC?.avalancheSigma ?? 1).toFixed(2)} · TE_loop ${(MC?.sensorimotorLoopTE ?? 0).toFixed(3)}b (null ${(MC?.teNullSurrogate ?? 0).toFixed(3)}b)`],
     ['weight space learned (motor / steer / ctx)', `${((ws.motorLearnedFrac ?? 0) * 100).toFixed(1)}% / ${((ws.steerLearnedFrac ?? 0) * 100).toFixed(1)}% / ${((ws.brainLearnedFrac ?? 0) * 100).toFixed(1)}%`],
     ['16Q WASM / 18Q GPU + DRAG + PEC + ZNE', `DRAG ${(cr.qrng.dragSuppression ?? 25.6).toFixed(1)}× · PEC ${(cr.qrng.pecGain ?? 10.7).toFixed(1)}× · ZNE ${(cr.qrng.zneGain ?? 7.7).toFixed(1)}× · ${qSrc}`],
     ['32-Qubit (χ=32) Vidal MPS & 512-D MERA', `32Q S ${(ws.mps32MaxEntropy ?? ws.mpsEntropy ?? 0).toFixed(2)} (χ=${ws.mps32MaxBond ?? 32}) · VC≤${(ws.vcTruncBound ?? 0).toExponential(1)} · M2 ${(ws.stabilizerMagicM2 ?? 0).toFixed(2)}`],
@@ -937,14 +938,14 @@ function drawPanel() {
     let maxSeat = 0;
     if (H?.seats) for (let i = 0; i < 7; i++) if (H.seats[i] > maxSeat) maxSeat = H.seats[i];
     stats($('domestats'), [
-      ['First-Law 11-pool FP64 Kahan closure', `err ${(L.closureErr ?? 0).toExponential(2)} (< 1e-12) · rad ${(D.stefanBoltzmannKW ?? 0).toFixed(2)} kW`],
+      ['1st/2nd-Law & Closed N/C Mass Ledger', `ΔE ${(L.closureErr ?? 0).toExponential(1)} · dΣ/dt ${(L.entropyProdRate ?? 0).toExponential(2)} kW/K · ΔM ${(W.massLedger?.massClosureErr ?? 0).toExponential(1)}`],
       ['Dome atmosphere & Daisyworld albedo', `O₂ ${(D.o2 ?? 20.95).toFixed(2)}% · CO₂ ${Math.round(D.co2 ?? 412)} ppm · alb ${(D.albedo ?? 0.42).toFixed(3)} · ΔT ${(D.greenhouseDeltaC >= 0 ? '+' : '') + (D.greenhouseDeltaC ?? 0).toFixed(2)}°C`],
-      ['Geomagnetic field & FMO vibronic-ENAQT', `${(D.fieldUT ?? 48.5).toFixed(1)} μT · storm ${(D.auroraStorm ?? 0).toFixed(2)} · ENAQT ${((D.meanEnaqt ?? 0.72) * 100).toFixed(1)}% vs Förster ${((W.plants?.[0]?.forsterEff ?? 0.56) * 100).toFixed(1)}%`],
-      ['NESTOR 23-rung precision & BSS motifs', `spindle R${r.spindleReflex ?? 5} · CfC R${r.gangliaCfC ?? 8} · CTX R${r.cortexCSR ?? 10} · VAE R${r.foveaFlowVAE ?? 15} · N=${(H?.activeMotifs ?? 24).toFixed(1)} (Exuvia ${H?.exuviaCount ?? 0})`],
+      ['7-site FMO GKSL Lindblad & 8×8 Cry4', `${(D.fieldUT ?? 48.5).toFixed(1)} μT · ENAQT ${((D.meanEnaqt ?? 0.81) * 100).toFixed(1)}% > Förster ${((D.meanForster ?? 0.76) * 100).toFixed(1)}% · Landauer ${Math.round(L.landauerBitsErased ?? 0)}b`],
+      ['NESTOR 23-rung stochastic quantizer', `spindle R${r.spindleReflex ?? 5} · CfC R${r.gangliaCfC ?? 14} · CTX R${r.cortexCSR ?? 10} · bits ${(H?.meanActiveBits ?? 12).toFixed(1)} · N=${(H?.activeMotifs ?? 24).toFixed(1)} (Exuvia ${H?.exuviaCount ?? 0})`],
       ['HEPTARCH anti-monarchy & ColdStrike', `max π ${(maxSeat).toFixed(3)} ≤ 0.46 · Cap ${(H?.capacitor ?? 0).toFixed(2)} · TTC ${(H?.ttc ?? 60).toFixed(0)}s · strikes ${H?.coldStrikesCompleted ?? 0}`],
-      ['5-Caste Colony + RS[15,11] acoustic ECC', E ? `α:${castes['Sovereign α'] || 0} β:${castes['Harvester β'] || 0} γ:${castes['Sentinel γ'] || 0} δ:${castes['Weaver δ'] || 0} ε:${castes['Disruptor ε'] || 0} · R=${(E.colonyOrderR ?? 0).toFixed(2)} · RS repaired ${E.stats.rsSymbolsRepaired ?? 0}` : '—'],
-      ['Xenomimics (Bell twins) & Xylos (2-GW)', E ? `CHSH S=${(E.xenomimics?.[0]?.chshS ?? 2.65).toFixed(2)} (bias ${(E.xenomimics?.[0]?.marginalBias ?? 0).toFixed(2)}) · Xylos ${E.xylos?.length || 0} · slime ${W.slimeTrails?.length || 0}` : '—'],
-      ['Titans (IPD treaties) & Shoggoths (meek)', E ? `alliances ${E.stats.titanAlliances ?? 0} · wars ${E.stats.titanWars ?? 0} · bargains ${E.stats.shoggothBargains ?? 0} · meek ${(E.shoggoths?.[0]?.meek ?? 0.8).toFixed(2)}` : '—'],
+      ['5-Caste Colony + RS[15,11] + Bedau A_cum', E ? `α:${castes['Sovereign α'] || 0} β:${castes['Harvester β'] || 0} γ:${castes['Sentinel γ'] || 0} · RS fixed ${E.stats.rsSymbolsRepaired ?? 0} · Bedau ${(E.bedauActivity ?? 0).toFixed(1)} vs ${(E.bedauNeutralActivity ?? 0).toFixed(1)}` : '—'],
+      ['4×4 ρ_AB CHSH Twins & K=-1 Xylos', E ? `CHSH win ${((E.chshStats?.winRate ?? 0.85) * 100).toFixed(1)}% (S=${(E.xenomimics?.[0]?.chshS ?? 2.7).toFixed(2)}, ΔNS ${(E.chshStats?.noSignalingMaxDiff ?? 0).toFixed(3)}) · Xylos d_H ${(E.xylos?.[0]?.hyperbolicDist ?? 0.7).toFixed(2)}` : '—'],
+      ['Memory-1 IPD Titans & Bayes Shoggoths', E ? `alliances ${E.stats.titanAlliances ?? 0} · wars ${E.stats.titanWars ?? 0} · coop/ambush ${E.stats.shoggothCooperativeGains ?? 0}/${E.stats.shoggothAmbushes ?? 0} · evade ${E.stats.shoggothEvasions ?? 0}` : '—'],
       ['Sanctuaries, Monoliths & Lithic Tools', `refuge saves ${E?.stats?.sanctuarySaves ?? 0} · nectar ${cr.stats.sanctuaryFeeds || 0} · monoliths ${cr.stats.monolithResonances || 0} · caches ${cr.stats.cachesOpened || 0} · stones ${cr.stats.stonesMoved || 0}`],
     ]);
   }

@@ -23,6 +23,161 @@ export const LEDGER_POOLS = [
   'kinetic', 'elastic', 'detritus', 'heatPhys', 'dissNum',
 ];
 
+// Published 7-Site Chlorobaculum tepidum FMO BChl-a Excitonic Hamiltonian (cm^-1, relative to BChl 3 = 12,210 cm^-1)
+// Reference: J. Adolphs & T. Renger, Biophysical Journal 91 (2006) 2778-2797; Plenio & Huelga, New J. Phys. 10 (2008) 113019.
+export const FMO_HAMILTONIAN_CM = [
+  [ 200.0, -87.7,   5.5,  -5.9,   6.7, -13.7,  -9.9],
+  [ -87.7, 320.0,  30.8,   8.2,   0.7,  11.8,   4.3],
+  [   5.5,  30.8,   0.0, -53.5,  -2.2,  -9.6,   6.0],
+  [  -5.9,   8.2, -53.5, 110.0, -70.7, -17.0, -63.3],
+  [   6.7,   0.7,  -2.2, -70.7, 270.0,  81.1,  -1.3],
+  [ -13.7,  11.8,  -9.6, -17.0,  81.1, 420.0,  39.7],
+  [  -9.9,   4.3,   6.0, -63.3,  -1.3,  39.7, 230.0],
+];
+const CM_TO_PS_INV = 0.1883651567; // 2 * pi * c (cm/ps)
+const FMO_PAIR_I = new Int8Array(21), FMO_PAIR_J = new Int8Array(21);
+(() => {
+  let p = 0;
+  for (let i = 0; i < 7; i++) for (let j = i + 1; j < 7; j++) { FMO_PAIR_I[p] = i; FMO_PAIR_J[p] = j; p++; }
+})();
+
+function solveLinearDense(A, b, n) {
+  for (let col = 0; col < n; col++) {
+    let piv = col, maxV = Math.abs(A[col * n + col]);
+    for (let r = col + 1; r < n; r++) {
+      const v = Math.abs(A[r * n + col]);
+      if (v > maxV) { maxV = v; piv = r; }
+    }
+    if (piv !== col) {
+      for (let c = col; c < n; c++) { const t = A[col * n + c]; A[col * n + c] = A[piv * n + c]; A[piv * n + c] = t; }
+      const tb = b[col]; b[col] = b[piv]; b[piv] = tb;
+    }
+    const diag = A[col * n + col] || 1e-18;
+    for (let r = col + 1; r < n; r++) {
+      const f = A[r * n + col] / diag;
+      if (f === 0) continue;
+      for (let c = col + 1; c < n; c++) A[r * n + c] -= f * A[col * n + c];
+      b[r] -= f * b[col];
+    }
+  }
+  const x = new Float64Array(n);
+  for (let r = n - 1; r >= 0; r--) {
+    let s = b[r];
+    for (let c = r + 1; c < n; c++) s -= A[r * n + c] * x[c];
+    x[r] = s / (A[r * n + r] || 1e-18);
+  }
+  return x;
+}
+
+/**
+ * Exact infinite-time quantum reaction-center sink efficiency of the 7-site Adolphs-Renger FMO GKSL Lindblad
+ * Master Equation (49 real Hermitian superoperator coordinates, zero time-step truncation error):
+ *   d(rho)/dt = -i [H_FMO, rho] + gammaDeph * sum_m (|m><m| rho |m><m| - 1/2 {|m><m|, rho})
+ *               - kLoss * rho - (kTrap/2) {|3><3|, rho},   rho(0) = |1><1|.
+ */
+export function solveFMOLindbladExact(gammaDephPs, opts = {}) {
+  const kLoss = opts.kLoss ?? 0.025; // ps^-1 radiative/non-radiative loss
+  const kTrap = opts.kTrap ?? 1.0;   // ps^-1 BChl-3 -> reaction-center sink rate
+  const gDeph = Math.max(0, gammaDephPs);
+  const L = new Float64Array(49 * 49);
+  const rR = new Float64Array(49), rI = new Float64Array(49);
+  const outR = new Float64Array(49), outI = new Float64Array(49);
+
+  for (let col = 0; col < 49; col++) {
+    rR.fill(0); rI.fill(0);
+    if (col < 7) {
+      rR[col * 7 + col] = 1;
+    } else {
+      const pIdx = (col - 7) >> 1, isIm = (col - 7) & 1;
+      const ii = FMO_PAIR_I[pIdx], jj = FMO_PAIR_J[pIdx];
+      if (!isIm) { rR[ii * 7 + jj] = 1; rR[jj * 7 + ii] = 1; }
+      else { rI[ii * 7 + jj] = 1; rI[jj * 7 + ii] = -1; }
+    }
+    for (let i = 0; i < 7; i++) {
+      for (let j = 0; j < 7; j++) {
+        let cR = 0, cI = 0;
+        for (let k = 0; k < 7; k++) {
+          const hik = FMO_HAMILTONIAN_CM[i][k] * CM_TO_PS_INV;
+          const hkj = FMO_HAMILTONIAN_CM[k][j] * CM_TO_PS_INV;
+          cR += hik * rI[k * 7 + j] - rI[i * 7 + k] * hkj;
+          cI -= hik * rR[k * 7 + j] - rR[i * 7 + k] * hkj;
+        }
+        const dec = kLoss + (i === 2 ? 0.5 * kTrap : 0) + (j === 2 ? 0.5 * kTrap : 0) + (i !== j ? gDeph : 0);
+        outR[i * 7 + j] = cR - dec * rR[i * 7 + j];
+        outI[i * 7 + j] = cI - dec * rI[i * 7 + j];
+      }
+    }
+    for (let i = 0; i < 7; i++) L[i * 49 + col] = outR[i * 7 + i];
+    let row = 7;
+    for (let p = 0; p < 21; p++) {
+      const ii = FMO_PAIR_I[p], jj = FMO_PAIR_J[p];
+      L[row * 49 + col] = outR[ii * 7 + jj]; row++;
+      L[row * 49 + col] = outI[ii * 7 + jj]; row++;
+    }
+  }
+  const rhs = new Float64Array(49);
+  rhs[0] = -1.0; // Initial chlorosome antenna excitation on BChl 1
+  const sol = solveLinearDense(L, rhs, 49);
+  let trR = 0;
+  for (let i = 0; i < 7; i++) trR += sol[i];
+  const sinkEff = kTrap * sol[2];
+  const lossEff = kLoss * trR;
+  return { sinkEff, lossEff, quantumYieldSum: sinkEff + lossEff };
+}
+
+/**
+ * Exact classical Förster incoherent dipole-dipole hopping rate solver derived from the identical 7x7 FMO_HAMILTONIAN_CM
+ * (coherences eliminated; reorganization line-broadening gammaReorgPs = 55 ps^-1 ~ 35 cm^-1 phonon bath).
+ */
+export function solveFMOForsterExact(gammaDephPs, opts = {}) {
+  const kLoss = opts.kLoss ?? 0.025;
+  const kTrap = opts.kTrap ?? 1.0;
+  const gF = Math.max(0.05, gammaDephPs) + (opts.gammaReorgPs ?? 110.0);
+  const M = new Float64Array(49);
+  for (let i = 0; i < 7; i++) {
+    let outSum = kLoss + (i === 2 ? kTrap : 0);
+    for (let j = 0; j < 7; j++) {
+      if (i === j) continue;
+      const J = FMO_HAMILTONIAN_CM[i][j] * CM_TO_PS_INV;
+      const dE = (FMO_HAMILTONIAN_CM[i][i] - FMO_HAMILTONIAN_CM[j][j]) * CM_TO_PS_INV;
+      const w = (2 * J * J * gF) / (gF * gF + dE * dE);
+      M[j * 7 + i] += w;
+      outSum += w;
+    }
+    M[i * 7 + i] = -outSum;
+  }
+  const rhs = new Float64Array(7);
+  rhs[0] = -1.0;
+  const sol = solveLinearDense(M, rhs, 7);
+  return kTrap * sol[2];
+}
+
+let _fmoTempTable = null;
+export function getFMOTempTable() {
+  if (_fmoTempTable) return _fmoTempTable;
+  const N = 33; // -10 C .. +54 C in 2 C steps
+  const enaqt = new Float64Array(N), forster = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    const tC = -10 + 2 * i;
+    // Dephasing rate gamma_phi(T) = 22.0 * exp((T - 24)/9.5) ps^-1 (spans 0.08 ps^-1 cryo Anderson freeze -> 22 ps^-1 24C peak -> 518 ps^-1 Zeno)
+    const gammaPs = tC < -6 ? 0.08 : 22.0 * Math.exp((tC - 24.0) / 9.5);
+    enaqt[i] = solveFMOLindbladExact(gammaPs).sinkEff;
+    forster[i] = solveFMOForsterExact(gammaPs);
+  }
+  _fmoTempTable = { enaqt, forster, minT: -10, stepT: 2, n: N };
+  return _fmoTempTable;
+}
+
+export function evalFMOTemperature(tLeafC) {
+  const tbl = getFMOTempTable();
+  const u = clamp((tLeafC - tbl.minT) / tbl.stepT, 0, tbl.n - 1.0001);
+  const idx = u | 0, frac = u - idx;
+  return {
+    enaqtEff: tbl.enaqt[idx] + (tbl.enaqt[idx + 1] - tbl.enaqt[idx]) * frac,
+    forsterEff: tbl.forster[idx] + (tbl.forster[idx + 1] - tbl.forster[idx]) * frac,
+  };
+}
+
 export class World {
   constructor(seed) {
     this.seed = seed;
@@ -94,9 +249,9 @@ export class World {
       });
     }
 
-    // 32x32 Soil Nitrogen (N) & Carbon (C) grids
-    this.soilN = new Float32Array(N_SOIL * N_SOIL);
-    this.soilC = new Float32Array(N_SOIL * N_SOIL);
+    // 32x32 Soil Nitrogen (N) & Carbon (C) grids (FP64 for exact closed-dome mass conservation < 1e-13)
+    this.soilN = new Float64Array(N_SOIL * N_SOIL);
+    this.soilC = new Float64Array(N_SOIL * N_SOIL);
     for (let iz = 0; iz < N_SOIL; iz++) {
       for (let ix = 0; ix < N_SOIL; ix++) {
         const wx = ((ix + 0.5) / N_SOIL - 0.5) * 2 * WORLD;
@@ -369,8 +524,9 @@ export class World {
     this.slimeTrails = []; // { x, z, strength } -> up to 48 nodes giving -20% locomotion drag
     this.exuvia = [];      // { x, y, z, mineral, hue, age } -> shed chitin shells recycled by detritivores
 
-    // 11-Pool FP64 Kahan-Compensated First-Law Dome Energy Ledger (`GATE-03`: normalized closure error < 1e-12)
+    // 11-Pool FP64 Kahan-Compensated First-Law & Second-Law Dome Energy/Entropy Ledger + Closed N/C Mass Ledger
     this.initEnergyLedger();
+    this.initMassLedger();
 
     this.fixY();
   }
@@ -460,7 +616,172 @@ export class World {
       radiatedOut: 0.0,
       radComp: 0.0,
       closureErr: 0.0,
+      // Second-Law Non-Equilibrium Clausius-Prigogine Irreversible Entropy Production (kJ/K) & Landauer Bit Audit
+      entropyProdRate: 0.0,         // instantaneous dSigma_tot/dt (kW/K >= 0)
+      totalEntropyProduced: 0.0,    // cumulative irreversible entropy Sigma_tot (kJ/K)
+      entropyComp: 0.0,
+      minEntropyProdRate: Infinity, // falsification witness: any < 0 violates Second Law!
+      landauerBitsErased: 0.0,      // cumulative irreversible bit erasures in NESTOR/HEPTARCH
+      landauerMinEntropyJK: 0.0,    // N_bits * k_B * ln(2) physical Landauer floor (J/K)
+      _stepSolarKJ: 0.0,
+      _stepGeoKJ: 0.0,
+      _stepDissKJ: 0.0,
+      _stepRadKJ: 0.0,
     };
+  }
+
+  /**
+   * Closed-System Biogeochemical Nitrogen & Carbon Mass Ledger (ZERO slack pools!).
+   * Reservoirs: 0 = Atmospheric/Crustal (gaseous N2 / CO2),
+   *             1 = Flora organic biomass,
+   *             2 = Fauna & Detritus organic matter,
+   *             3 = Sealed chamber scrubber / mineral sink (captures outgassed N2 when scrubAtmN2=true).
+   */
+  initMassLedger() {
+    const nRes = new Float64Array([600.0, 140.0, 180.0, 0.0]);
+    const cRes = new Float64Array([700.0, 180.0, 220.0, 0.0]);
+    let sNSum = 0, sNCmp = 0, sCSum = 0, sCCmp = 0;
+    for (let i = 0; i < this.soilN.length; i++) {
+      let y = this.soilN[i] - sNCmp, t = sNSum + y; sNCmp = (t - sNSum) - y; sNSum = t;
+      y = this.soilC[i] - sCCmp; t = sCSum + y; sCCmp = (t - sCSum) - y; sCSum = t;
+    }
+    this.massLedger = {
+      nRes,
+      nComp: new Float64Array(4),
+      cRes,
+      cComp: new Float64Array(4),
+      initialTotalN: sNSum + nRes[0] + nRes[1] + nRes[2] + nRes[3],
+      initialTotalC: sCSum + cRes[0] + cRes[1] + cRes[2] + cRes[3],
+      nClosureErr: 0.0,
+      cClosureErr: 0.0,
+      massClosureErr: 0.0,
+      rhizoNFixed: 0.0,
+      scrubAtmN2: false,
+    };
+  }
+
+  _kahanAddMass(arrKey, compKey, idx, delta) {
+    const M = this.massLedger;
+    const arr = M[arrKey], cmp = M[compKey];
+    const y = delta - cmp[idx];
+    const t = arr[idx] + y;
+    cmp[idx] = (t - arr[idx]) - y;
+    arr[idx] = t;
+  }
+
+  /** Set initial Dome atmospheric N2 reservoir (with sealed Ar/O2 scrubber trap when amount === 0) */
+  setAtmosphericN2(amount, scrub = amount <= 0) {
+    if (!this.massLedger) return;
+    const v = Math.max(0, amount);
+    const old = this.massLedger.nRes[0] - this.massLedger.nComp[0];
+    this.massLedger.nRes[0] = v;
+    this.massLedger.nComp[0] = 0;
+    this.massLedger.initialTotalN += (v - old);
+    this.massLedger.scrubAtmN2 = !!scrub;
+    this.auditMassClosure();
+  }
+
+  /** Conservative Nitrogen exchange between soil cell `idx` and reservoir `resIdx` (+delta into soil, -delta out of soil) */
+  fluxSoilN(idx, delta, resIdx = 0) {
+    const M = this.massLedger;
+    if (!M || delta === 0 || idx < 0 || idx >= this.soilN.length) return 0;
+    const sOld = this.soilN[idx];
+    if (delta > 0) {
+      const avail = Math.max(0, M.nRes[resIdx]);
+      const cap = Math.max(0, 2.0 - sOld);
+      const req = Math.min(delta, avail, cap);
+      if (req <= 0) return 0;
+      const sNew = sOld + req;
+      const applied = sNew - sOld;
+      this.soilN[idx] = sNew;
+      this._kahanAddMass('nRes', 'nComp', resIdx, -applied);
+      return applied;
+    } else {
+      const remMax = Math.max(0, sOld - 0.08);
+      const req = Math.min(-delta, remMax);
+      if (req <= 0) return 0;
+      const sNew = sOld - req;
+      const removed = sOld - sNew;
+      this.soilN[idx] = sNew;
+      const dstIdx = (resIdx === 0 && M.scrubAtmN2) ? 3 : resIdx;
+      this._kahanAddMass('nRes', 'nComp', dstIdx, removed);
+      return -removed;
+    }
+  }
+
+  /** Conservative Carbon exchange between soil cell `idx` and reservoir `resIdx` (+delta into soil, -delta out of soil) */
+  fluxSoilC(idx, delta, resIdx = 0) {
+    const M = this.massLedger;
+    if (!M || delta === 0 || idx < 0 || idx >= this.soilC.length) return 0;
+    const sOld = this.soilC[idx];
+    if (delta > 0) {
+      const avail = Math.max(0, M.cRes[resIdx]);
+      const cap = Math.max(0, 2.0 - sOld);
+      const req = Math.min(delta, avail, cap);
+      if (req <= 0) return 0;
+      const sNew = sOld + req;
+      const applied = sNew - sOld;
+      this.soilC[idx] = sNew;
+      this._kahanAddMass('cRes', 'cComp', resIdx, -applied);
+      return applied;
+    } else {
+      const remMax = Math.max(0, sOld - 0.08);
+      const req = Math.min(-delta, remMax);
+      if (req <= 0) return 0;
+      const sNew = sOld - req;
+      const removed = sOld - sNew;
+      this.soilC[idx] = sNew;
+      this._kahanAddMass('cRes', 'cComp', resIdx, removed);
+      return -removed;
+    }
+  }
+
+  /** Conservative lateral mycelial transport between soil cells `ia` and `ib` (d > 0 moves ia -> ib) */
+  transferSoilCell(gridKey, resKey, compKey, ia, ib, d) {
+    if (d === 0 || ia === ib) return 0;
+    const src = d > 0 ? ia : ib, dst = d > 0 ? ib : ia;
+    const mag = Math.abs(d);
+    const G = this[gridKey];
+    const remMax = Math.max(0, G[src] - 0.08);
+    const addMax = Math.max(0, 2.0 - G[dst]);
+    const flow = Math.min(mag, remMax, addMax);
+    if (flow <= 0) return 0;
+    const aOld = G[src], aNew = aOld - flow, actualOut = aOld - aNew;
+    G[src] = aNew;
+    const bOld = G[dst], bNew = bOld + actualOut, actualIn = bNew - bOld;
+    G[dst] = bNew;
+    const ulpRem = actualOut - actualIn;
+    if (ulpRem !== 0 && this.massLedger) this._kahanAddMass(resKey, compKey, 0, ulpRem);
+    return d > 0 ? actualIn : -actualIn;
+  }
+
+  /** Audit closed-system Nitrogen & Carbon mass conservation (< 1e-13 normalized error) */
+  auditMassClosure() {
+    const M = this.massLedger;
+    if (!M) return 0;
+    let sNSum = 0, sNCmp = 0, sCSum = 0, sCCmp = 0;
+    for (let i = 0; i < this.soilN.length; i++) {
+      let y = this.soilN[i] - sNCmp, t = sNSum + y; sNCmp = (t - sNSum) - y; sNSum = t;
+      y = this.soilC[i] - sCCmp; t = sCSum + y; sCCmp = (t - sCSum) - y; sCSum = t;
+    }
+    for (let r = 0; r < 4; r++) {
+      let y = (M.nRes[r] - M.nComp[r]) - sNCmp, t = sNSum + y; sNCmp = (t - sNSum) - y; sNSum = t;
+      y = (M.cRes[r] - M.cComp[r]) - sCCmp, t = sCSum + y; sCCmp = (t - sCSum) - y; sCSum = t;
+    }
+    M.nClosureErr = Math.abs(sNSum - M.initialTotalN) / (M.initialTotalN + 1e-9);
+    M.cClosureErr = Math.abs(sCSum - M.initialTotalC) / (M.initialTotalC + 1e-9);
+    M.massClosureErr = Math.max(M.nClosureErr, M.cClosureErr);
+    return M.massClosureErr;
+  }
+
+  /** Record irreversible Landauer bit erasures + dissipate compute ATP into thermal heat pool */
+  recordLandauerBits(bits, atpCostKJ = 0) {
+    if (!this.ledger) return;
+    if (bits > 0) {
+      this.ledger.landauerBitsErased += bits;
+      this.ledger.landauerMinEntropyJK = this.ledger.landauerBitsErased * 1.380649e-23 * Math.LN2;
+    }
+    if (atpCostKJ > 0) this.transferEnergy(4, 9, atpCostKJ);
   }
 
   _kahanAddPool(idx, delta) {
@@ -487,6 +808,8 @@ export class World {
     if (actual <= 0) return 0;
     this._kahanAddPool(fromIdx, -actual);
     this._kahanAddPool(toIdx, actual);
+    // Track free-energy -> thermal heat degradation (Pools 0..8 -> Pool 9) for exact Clausius entropy
+    if (toIdx === 9 && fromIdx !== 9) this.ledger._stepDissKJ += actual;
     return actual;
   }
 
@@ -494,8 +817,14 @@ export class World {
   injectExternalEnergy(poolIdx, amount, source = 'solar') {
     if (!this.ledger || amount <= 0) return;
     this._kahanAddPool(poolIdx, amount);
-    if (source === 'geothermal') this._kahanAddScalar('geothermalIn', 'geoComp', amount);
-    else this._kahanAddScalar('solarIn', 'solarComp', amount);
+    if (source === 'geothermal') {
+      this._kahanAddScalar('geothermalIn', 'geoComp', amount);
+      this.ledger._stepGeoKJ += amount;
+    } else {
+      this._kahanAddScalar('solarIn', 'solarComp', amount);
+      this.ledger._stepSolarKJ += amount;
+      if (poolIdx === 9) this.ledger._stepSolarHeatKJ = (this.ledger._stepSolarHeatKJ || 0) + amount;
+    }
   }
 
   /** Stefan-Boltzmann radiative heat rejection through the Geodesic Dome canopy */
@@ -505,6 +834,7 @@ export class World {
     if (actual <= 0) return 0;
     this._kahanAddPool(9, -actual);
     this._kahanAddScalar('radiatedOut', 'radComp', actual);
+    this.ledger._stepRadKJ += actual;
     return actual;
   }
 
@@ -722,16 +1052,16 @@ export class World {
     this.season = SEASONS[Math.floor(this.seasonPhase * 4) % 4];
     const seasonGrow = this.season === 'spring' ? 1.22 : this.season === 'summer' ? 1.1 : this.season === 'autumn' ? 0.92 : 0.68;
 
-    // 2) Waste detritus inoculation + hydrothermal vent mineral enrichment
+    // 2) Waste detritus inoculation + hydrothermal vent mineral enrichment (closed mass ledger!)
     const sN = this.soilN, sC = this.soilC;
     const MG = this.microbeGrid, PG = this.planktonGrid, MT = this.microbeTmp;
     for (let i = 0; i < this.waste.length; i++) {
       const w = this.waste[i];
       const idx = this.soilIndex(w.x, w.z);
       const mIdx = this.microbeIndex(w.x, w.z);
-      if (w.type === 'urine') sN[idx] = Math.min(2.0, sN[idx] + dt * 0.08 * (w.amount || 1));
+      if (w.type === 'urine') this.fluxSoilN(idx, dt * 0.08 * (w.amount || 1), 2);
       else {
-        sC[idx] = Math.min(2.0, sC[idx] + dt * 0.09 * (w.amount || 1));
+        this.fluxSoilC(idx, dt * 0.09 * (w.amount || 1), 2);
         MG[mIdx] = Math.min(1.6, MG[mIdx] + dt * 0.14 * (w.amount || 1));
       }
     }
@@ -740,8 +1070,8 @@ export class World {
       v.phase = (v.phase + dt * 2.4) % (Math.PI * 2);
       const idx = this.soilIndex(v.x, v.z);
       const mIdx = this.microbeIndex(v.x, v.z);
-      sN[idx] = Math.min(2.0, sN[idx] + dt * 0.025 * v.mineral);
-      sC[idx] = Math.min(2.0, sC[idx] + dt * 0.02 * v.mineral);
+      this.fluxSoilN(idx, dt * 0.025 * v.mineral, 0);
+      this.fluxSoilC(idx, dt * 0.02 * v.mineral, 0);
       MG[mIdx] = Math.min(1.6, MG[mIdx] + dt * 0.04 * v.mineral); // thermophilic chemolithotrophs!
     }
 
@@ -768,10 +1098,12 @@ export class World {
         const mNext = clamp(mCur + dt * 0.16 * q10 * mCur * (1 - mCur / Math.max(0.08, carryM)) + mDiff * lap, 0.04, 1.8);
         MT[idx] = mNext;
 
-        // Saprotrophic mineralization of soilC -> bioavailable soilN + rhizobial N2 fixation
+        // Saprotrophic mineralization of soilC -> CO2 + bioavailable soilN + rhizobial N2 fixation (causally gated by atmN2!)
         const mineralize = dt * 0.0022 * mNext * cAvail;
-        sC[sIdx] = Math.max(0.08, sC[sIdx] - mineralize * 0.65);
-        sN[sIdx] = Math.min(2.0, sN[sIdx] + mineralize + dt * 0.0014 * rhizo * mNext);
+        this.fluxSoilC(sIdx, -mineralize * 0.65, 0);
+        this.fluxSoilN(sIdx, mineralize, 2);
+        const fixedN = this.fluxSoilN(sIdx, dt * 0.0014 * rhizo * mNext, 0);
+        if (this.massLedger && fixedN > 0) this.massLedger.rhizoNFixed += fixedN;
 
         // Aquatic bioluminescent phytoplankton logistic bloom in water pools
         let pkNext = 0;
@@ -812,7 +1144,7 @@ export class World {
           if (dp > 1.9) { ax += (dx / dp) * 1.8; az += (dz / dp) * 1.8; }
           else if (dp < 0.35 && dp > 1e-3) { ax -= (dx / dp) * 0.9; az -= (dz / dp) * 0.9; }
           const sIdx = this.soilIndex(mf.x, mf.z);
-          sN[sIdx] = Math.min(2.0, sN[sIdx] + dt * 0.0025);
+          this.fluxSoilN(sIdx, dt * 0.0025, 2);
           mf.energy = clamp(mf.energy + dt * 0.02, 0.25, 1.15);
         } else {
           // Guild 0: benthic detritivore isopod climbs local soilC gradient & shreds organic matter -> N
@@ -823,8 +1155,8 @@ export class World {
           az += (sC[sIdxU] - sC[sIdx]) * 2.5;
           if (sC[sIdx] > 0.2) {
             const shred = dt * 0.004 * sC[sIdx];
-            sC[sIdx] -= shred;
-            sN[sIdx] = Math.min(2.0, sN[sIdx] + shred * 1.15);
+            const remC = -this.fluxSoilC(sIdx, -shred, 2);
+            this.fluxSoilN(sIdx, remC * 1.15, 2);
             mf.energy = clamp(mf.energy + dt * 0.03, 0.25, 1.2);
           }
         }
@@ -840,16 +1172,16 @@ export class World {
       this.microFaunaBiomass = mfBio;
     }
 
-    // 4) Underground Mycelial Fungal Network: redistribute soil N/C & systemic plant defense signals!
+    // 4) Underground Mycelial Fungal Network: conservatively redistribute soil N/C & systemic plant defense signals!
     for (let e = 0; e < this.mycelia.length; e++) {
       const m = this.mycelia[e];
       const pa = this.plants[m.a], pb = this.plants[m.b];
       const ia = this.soilIndex(pa.x, pa.z), ib = this.soilIndex(pb.x, pb.z);
       const dN = (sN[ia] - sN[ib]) * 0.14 * m.cond * dt;
       const dC = (sC[ia] - sC[ib]) * 0.12 * m.cond * dt;
-      sN[ia] -= dN; sN[ib] += dN;
-      sC[ia] -= dC; sC[ib] += dC;
-      m.flux = Math.abs(dN) + Math.abs(dC);
+      const fN = this.transferSoilCell('soilN', 'nRes', 'nComp', ia, ib, dN);
+      const fC = this.transferSoilCell('soilC', 'cRes', 'cComp', ia, ib, dC);
+      m.flux = Math.abs(fN) + Math.abs(fC);
       // Systemic mycorrhizal stress signaling: grazed plant warns connected neighbors!
       const dStress = (pa.stress - pb.stress) * 0.25 * dt;
       pa.stress = clamp(pa.stress - dStress, 0, 1);
@@ -859,8 +1191,8 @@ export class World {
 
     let nTot = 0;
     for (let i = 0; i < sN.length; i++) {
-      sN[i] = clamp(sN[i] + dt * 0.003 * (0.48 - sN[i]), 0.08, 2.0);
-      sC[i] = clamp(sC[i] + dt * 0.003 * (0.45 - sC[i]), 0.08, 2.0);
+      this.fluxSoilN(i, dt * 0.003 * (0.48 - sN[i]), 0);
+      this.fluxSoilC(i, dt * 0.003 * (0.45 - sC[i]), 0);
       nTot += sN[i];
     }
     this.meanSoilN = nTot / sN.length;
@@ -874,8 +1206,10 @@ export class World {
         const fert = 0.6 + 0.5 * (sN[si] + sC[si]);
         if (q.fruit < 1) {
           const boost = dt * 0.012 * fert * seasonGrow * (1 + 0.35 * q.pollinated);
-          q.fruit = Math.min(1, q.fruit + boost);
-          sN[si] = Math.max(0.08, sN[si] - boost * 0.06);
+          const nTaken = -this.fluxSoilN(si, -boost * 0.06, 1);
+          const nGate = boost > 1e-8 ? clamp(nTaken / (boost * 0.06), 0.15, 1.0) : 1.0;
+          q.fruit = Math.min(1, q.fruit + boost * nGate);
+          this.fluxSoilC(si, boost * nGate * 0.025, 0); // root exudate carbon fixation from atm CO2
         }
         q.pollinated = Math.max(0, q.pollinated - dt * 0.015);
         // When heavily grazed (fruit < 0.08), sprout next-generation seed variant with slight trait mutation
@@ -935,26 +1269,30 @@ export class World {
     const rd = this.rd;
     if (!D || !rd) return;
 
-    // 6a) FMO Vibronic-Exciton ENAQT Photosynthesis + Watson-Lovelock Daisyworld Albedo Co-Regulation
-    let albSum = 0, enaqtMean = 0, photoKJ = 0;
+    // 6a) Exact 7-Site Adolphs-Renger FMO GKSL Lindblad Photosynthesis + Watson-Lovelock Daisyworld Albedo Co-Regulation
+    let albSum = 0, enaqtMean = 0, forsterMean = 0, photoKJ = 0;
     for (let k = 0; k < SITES; k++) {
       const q = this.plants[k];
       const tLeaf = this.ambientTemp(q.x, q.z, 12.5) + 3.2 * (0.5 - (q.albedoTrait ?? 0.4));
-      // Thermal dephasing rate gamma_phi(T_leaf) -> authentic ENAQT bell curve (Anderson freeze < optimal ~24C < Zeno trap)
-      const gammaRatio = Math.exp((tLeaf - 24.0) / 11.5);
-      q.enaqtEff = clamp((0.96 * gammaRatio) / (0.36 + 0.62 * gammaRatio + 0.34 * gammaRatio * gammaRatio), 0.18, 0.95);
-      // Classical Förster incoherent hopping surrogate (monotonically slower, lacks vibronic delocalization peak)
-      q.forsterEff = clamp(0.74 * (gammaRatio / (0.85 + gammaRatio)), 0.15, 0.76);
+      const fmo = evalFMOTemperature(tLeaf);
+      q.enaqtEff = fmo.enaqtEff;
+      q.forsterEff = fmo.forsterEff;
+
+      const si = this.soilIndex(q.x, q.z);
+      this.fluxSoilN(si, -dt * 0.022 * q.enaqtEff, 1); // foliar Rubisco nitrogen turnover
+      const nFactor = clamp((this.soilN[si] - 0.08) / 0.38, 0.18, 1.15);
 
       // Daisyworld selection: cool microclimates favor dark heat-absorbing crowns (low albedo); hot favor pale reflective crowns
       const targetAlb = tLeaf < 22.0 ? 0.16 : tLeaf > 24.0 ? 0.78 : 0.42;
       q.albedoTrait = clamp((q.albedoTrait ?? 0.42) + dt * 0.015 * (targetAlb - (q.albedoTrait ?? 0.42)), 0.12, 0.85);
       albSum += q.albedoTrait;
       enaqtMean += q.enaqtEff;
-      photoKJ += dt * 0.035 * q.enaqtEff * seasonGrow * (0.4 + 0.6 * q.fruit);
+      forsterMean += q.forsterEff;
+      photoKJ += dt * 0.038 * q.enaqtEff * nFactor * seasonGrow * (0.4 + 0.6 * q.fruit);
     }
     D.albedo = albSum / SITES;
     D.meanEnaqt = enaqtMean / SITES;
+    D.meanForster = forsterMean / SITES;
     // Daisyworld planetary energy balance: absorbed solar (1 - albedo) vs radiative cooling buffers greenhouseDeltaC!
     const solarAbsorbed = 1.0 - D.albedo; // [0.15 .. 0.88]
     const co2Forcing = 0.85 * Math.log2(Math.max(200, D.co2) / 410.0);
@@ -1035,7 +1373,7 @@ export class World {
         dc.freshness = clamp(dc.freshness - dt * 0.003, 0.1, 1.0);
         this.transferEnergy(0, 8, spoil); // cache spoilage -> detritus!
         const sIdx = this.soilIndex(dc.x, dc.z);
-        this.soilC[sIdx] = Math.min(2.0, this.soilC[sIdx] + spoil * 0.25);
+        this.fluxSoilC(sIdx, spoil * 0.25, 2);
       } else if (rd() < dt * 0.04) {
         // Replenish cache from flora surplus conservatively
         const refill = this.transferEnergy(0, 1, 0.65);
@@ -1058,22 +1396,46 @@ export class World {
       const decay = Math.min(ex.mineral, dt * 0.012);
       ex.mineral -= decay;
       const sIdx = this.soilIndex(ex.x, ex.z);
-      this.soilN[sIdx] = Math.min(2.0, this.soilN[sIdx] + decay * 0.18);
-      this.soilC[sIdx] = Math.min(2.0, this.soilC[sIdx] + decay * 0.15);
+      this.fluxSoilN(sIdx, decay * 0.18, 2);
+      this.fluxSoilC(sIdx, decay * 0.15, 2);
       if (ex.mineral <= 0.03) this.exuvia.splice(i, 1);
     }
 
-    // 6f) First-Law Dome Energy Ledger Fluxes + Exact Stefan-Boltzmann Radiative Cap + Closure Audit
+    // 6f) First-Law Energy Ledger + Second-Law Clausius-Landsberg Entropy Production + Closed Mass Audit
     const geoKJ = dt * 0.095 * this.vents.length;
     this.injectExternalEnergy(0, photoKJ * (1 - 0.35 * D.albedo), 'solar');
-    this.injectExternalEnergy(9, geoKJ + photoKJ * 0.25, 'geothermal');
+    this.injectExternalEnergy(9, photoKJ * 0.35, 'solar'); // direct leaf/canopy solar thermalization
+    this.injectExternalEnergy(9, geoKJ, 'geothermal');
     this.transferEnergy(8, 9, dt * 0.04 * respRate); // microbial respiration: detritus -> heatPhys
-    // Stefan-Boltzmann radiative rejection sigma * A * T^4 linearized around 295 K
-    const tKelvinRatio = (273.15 + 21.5 + D.greenhouseDeltaC) / 295.0;
+    // Stefan-Boltzmann radiative rejection sigma * A * T^4 linearized around 295 K -> 255 K radiative sink
+    const tDomeK = 273.15 + 21.5 + D.greenhouseDeltaC;
+    const tKelvinRatio = tDomeK / 295.0;
     const radKJ = dt * 0.34 * Math.pow(tKelvinRatio, 4);
     const actualRad = this.radiateHeat(radKJ);
     D.stefanBoltzmannKW = actualRad / Math.max(1e-4, dt);
+
+    const L = this.ledger;
+    if (L) {
+      const invTDome = 1.0 / tDomeK;
+      const invDt = 1.0 / Math.max(1e-6, dt);
+      const qSolTot = L._stepSolarKJ * invDt;
+      const qSolHeat = (L._stepSolarHeatKJ || 0) * invDt;
+      const qGeo = L._stepGeoKJ * invDt;
+      const qDiss = L._stepDissKJ * invDt;
+      const qRad = L._stepRadKJ * invDt;
+      L._stepSolarKJ = 0; L._stepSolarHeatKJ = 0; L._stepGeoKJ = 0; L._stepDissKJ = 0; L._stepRadKJ = 0;
+      // Exact telescoping Landsberg-Clausius irreversible entropy production rate (kW/K):
+      const sigRate =
+        (qSolHeat * invTDome - qSolTot / 5778.0) +
+        qGeo * (invTDome - 1.0 / 650.0) +
+        qDiss * invTDome +
+        qRad * (1.0 / 255.0 - invTDome);
+      L.entropyProdRate = sigRate;
+      if (sigRate < L.minEntropyProdRate) L.minEntropyProdRate = sigRate;
+      this._kahanAddScalar('totalEntropyProduced', 'entropyComp', sigRate * dt);
+    }
     this.auditEnergyClosure();
+    this.auditMassClosure();
   }
 
   /** one environment step (dt seconds of sim time); tick = metabolic minute counter */

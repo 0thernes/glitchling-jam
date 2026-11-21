@@ -191,6 +191,289 @@ export function decodeAcousticCallRS(codeword15) {
 }
 
 // =============================================================================
+// 1B. Exact 8x8 Spin-Density Matrix Liouville-Haberkorn Solver for Cryptochrome-4
+//     (H_{e1} x H_{e2} x H_{I=1/2}, dim = 8 => 64 real Hermitian superoperator coords)
+//     & Bit-Accurate 23-Rung NESTOR Stochastic-Rounding Quantizer (R0 .. R22)
+// =============================================================================
+
+const CRY4_SPIN8 = (() => {
+  const S1x = new Float64Array(64), S1yI = new Float64Array(64), S1z = new Float64Array(64);
+  const S2x = new Float64Array(64), S2yI = new Float64Array(64), S2z = new Float64Array(64);
+  const Ix = new Float64Array(64), IyI = new Float64Array(64), Iz = new Float64Array(64);
+  for (let n = 0; n < 8; n++) {
+    const b1 = (n >> 2) & 1, b2 = (n >> 1) & 1, bI = n & 1;
+    S1z[n * 8 + n] = b1 ? -0.5 : 0.5;
+    S2z[n * 8 + n] = b2 ? -0.5 : 0.5;
+    Iz[n * 8 + n] = bI ? -0.5 : 0.5;
+    S1x[(n ^ 4) * 8 + n] = 0.5; S1yI[(n ^ 4) * 8 + n] = b1 ? -0.5 : 0.5;
+    S2x[(n ^ 2) * 8 + n] = 0.5; S2yI[(n ^ 2) * 8 + n] = b2 ? -0.5 : 0.5;
+    Ix[(n ^ 1) * 8 + n] = 0.5; IyI[(n ^ 1) * 8 + n] = bI ? -0.5 : 0.5;
+  }
+  // Exact two-electron singlet projector P_S = (1/4) I_8 - S_1 . S_2 (Tr(P_S) = 2)
+  const PS = new Float64Array(64);
+  for (let i = 0; i < 8; i++) PS[i * 8 + i] = 0.25;
+  for (let i = 0; i < 8; i++) {
+    for (let k = 0; k < 8; k++) {
+      for (let j = 0; j < 8; j++) {
+        PS[i * 8 + j] -= S1x[i * 8 + k] * S2x[k * 8 + j]
+          - S1yI[i * 8 + k] * S2yI[k * 8 + j]
+          + S1z[i * 8 + k] * S2z[k * 8 + j];
+      }
+    }
+  }
+  const pairI = new Int8Array(28), pairJ = new Int8Array(28);
+  let p = 0;
+  for (let i = 0; i < 8; i++) {
+    for (let j = i + 1; j < 8; j++) { pairI[p] = i; pairJ[p] = j; p++; }
+  }
+  return { S1x, S1yI, S1z, S2x, S2yI, S2z, Ix, IyI, Iz, PS, pairI, pairJ };
+})();
+
+function solveLinear64(A, b, n) {
+  for (let col = 0; col < n; col++) {
+    let piv = col, maxV = Math.abs(A[col * n + col]);
+    for (let r = col + 1; r < n; r++) {
+      const v = Math.abs(A[r * n + col]);
+      if (v > maxV) { maxV = v; piv = r; }
+    }
+    if (piv !== col) {
+      for (let c = col; c < n; c++) {
+        const tmp = A[col * n + c]; A[col * n + c] = A[piv * n + c]; A[piv * n + c] = tmp;
+      }
+      const tb = b[col]; b[col] = b[piv]; b[piv] = tb;
+    }
+    const diag = A[col * n + col] || 1e-18;
+    for (let r = col + 1; r < n; r++) {
+      const f = A[r * n + col] / diag;
+      if (f === 0) continue;
+      for (let c = col + 1; c < n; c++) A[r * n + c] -= f * A[col * n + c];
+      b[r] -= f * b[col];
+    }
+  }
+  const x = new Float64Array(n);
+  for (let r = n - 1; r >= 0; r--) {
+    let s = b[r];
+    for (let c = r + 1; c < n; c++) s -= A[r * n + c] * x[c];
+    x[r] = s / (A[r * n + r] || 1e-18);
+  }
+  return x;
+}
+
+/**
+ * Exact infinite-time quantum yield solution of the 8x8 Cryptochrome-4 Radical-Pair Liouville-Haberkorn
+ * Master Equation:
+ *   d(rho)/dt = -i [H(B), rho] - (kS/2){P_S, rho} - (kT/2){I - P_S, rho} + D_{deph + RF}[rho],
+ *   rho(0) = P_S / Tr(P_S) => L[R] = -rho(0), Phi_S = kS * Tr(P_S R), Phi_T = kT * Tr((I - P_S) R).
+ * Includes resonant Larmor RF disruption (Ritz et al., Nature 2004): transverse oscillating field B_RF at
+ * frequency `rfFreqRadUs` disrupts singlet-triplet coherence maximally when resonant with `omegaL = 0.176 * fieldUT`.
+ */
+export function solveCry4Haberkorn8x8(bx, by, bz, opts = {}) {
+  const fieldUT = opts.fieldUT ?? 48.5;
+  const omegaL = 0.176 * fieldUT; // electron Larmor frequency gamma_e * B0 (rad/us; ~8.536 at 48.5 uT = 1.36 MHz)
+  const kS = opts.kS ?? 1.0;      // singlet recombination rate (us^-1)
+  const kT = opts.kT ?? 1.25;     // triplet product formation rate (us^-1)
+  const Az = opts.Az ?? 14.0;     // axial hyperfine coupling on FAD.- radical (rad/us)
+  const Aperp = opts.Aperp ?? 1.8;
+  const gammaSpin = opts.gammaSpin ?? 0.0;
+  // Resonant Larmor RF magnetic field disruption (rotating-wave Lorentzian spin-flip rate at omega_RF == omega_L)
+  const rfAmpUT = opts.rfAmpUT ?? 0.0;
+  const rfFreq = opts.rfFreqRadUs ?? omegaL;
+  const omegaRabi = 0.176 * rfAmpUT * 28.0; // transverse oscillating-field spin-flip drive in radical-pair lifetime window
+  const kLine = 0.5 * (kS + kT) + 0.35;
+  const gammaRF = rfAmpUT > 0 ? (omegaRabi * omegaRabi * kLine) / (kLine * kLine + (rfFreq - omegaL) * (rfFreq - omegaL)) : 0;
+  const gammaPerp = gammaSpin + gammaRF; // GKSL transverse jump channels S_{ax}, S_{ay} (a = 1, 2)
+  const gammaZ = gammaSpin;              // GKSL longitudinal jump channels S_{az} (a = 1, 2)
+
+  const nB = Math.hypot(bx, by, bz) || 1;
+  const ox = omegaL * (bx / nB), oy = omegaL * (by / nB), oz = omegaL * (bz / nB);
+  const SP = CRY4_SPIN8;
+  const Hre = new Float64Array(64), Him = new Float64Array(64);
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      let hr = ox * (SP.S1x[i * 8 + j] + SP.S2x[i * 8 + j]) + oz * (SP.S1z[i * 8 + j] + SP.S2z[i * 8 + j]);
+      const hi = oy * (SP.S1yI[i * 8 + j] + SP.S2yI[i * 8 + j]);
+      for (let k = 0; k < 8; k++) {
+        hr += Aperp * (SP.S1x[i * 8 + k] * SP.Ix[k * 8 + j] - SP.S1yI[i * 8 + k] * SP.IyI[k * 8 + j])
+          + Az * (SP.S1z[i * 8 + k] * SP.Iz[k * 8 + j]);
+      }
+      Hre[i * 8 + j] = hr;
+      Him[i * 8 + j] = hi;
+    }
+  }
+
+  const L = new Float64Array(64 * 64);
+  const rR = new Float64Array(64), rI = new Float64Array(64);
+  const outR = new Float64Array(64), outI = new Float64Array(64);
+  const dk = 0.5 * (kS - kT);
+
+  for (let col = 0; col < 64; col++) {
+    rR.fill(0); rI.fill(0);
+    if (col < 8) {
+      rR[col * 8 + col] = 1;
+    } else {
+      const pIdx = (col - 8) >> 1, isIm = (col - 8) & 1;
+      const ii = SP.pairI[pIdx], jj = SP.pairJ[pIdx];
+      if (!isIm) { rR[ii * 8 + jj] = 1; rR[jj * 8 + ii] = 1; }
+      else { rI[ii * 8 + jj] = 1; rI[jj * 8 + ii] = -1; }
+    }
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 8; j++) {
+        let cR = -kT * rR[i * 8 + j], cI = -kT * rI[i * 8 + j];
+        for (let k = 0; k < 8; k++) {
+          const h1r = Hre[i * 8 + k], h1i = Him[i * 8 + k], x2r = rR[k * 8 + j], x2i = rI[k * 8 + j];
+          const x1r = rR[i * 8 + k], x1i = rI[i * 8 + k], h2r = Hre[k * 8 + j], h2i = Him[k * 8 + j];
+          const commR = (h1r * x2r - h1i * x2i) - (x1r * h2r - x1i * h2i);
+          const commI = (h1r * x2i + h1i * x2r) - (x1r * h2i + x1i * h2r);
+          cR += commI;
+          cI -= commR;
+          if (dk !== 0) {
+            cR -= dk * (SP.PS[i * 8 + k] * rR[k * 8 + j] + rR[i * 8 + k] * SP.PS[k * 8 + j]);
+            cI -= dk * (SP.PS[i * 8 + k] * rI[k * 8 + j] + rI[i * 8 + k] * SP.PS[k * 8 + j]);
+          }
+        }
+        // Exact CPTP GKSL Lindblad spin relaxation: sum_{a=1,2} [ gammaPerp*(S_ax rho S_ax + S_ay rho S_ay - rho/2) + gammaZ*(S_az rho S_az - rho/4) ]
+        if (gammaPerp > 0 || gammaZ > 0) {
+          const ij = i * 8 + j;
+          if (((i ^ j) & 4) === 0) {
+            const f1 = (i ^ 4) * 8 + (j ^ 4);
+            cR += 0.5 * gammaPerp * (rR[f1] - rR[ij]);
+            cI += 0.5 * gammaPerp * (rI[f1] - rI[ij]);
+          } else {
+            const dec1 = 0.5 * (gammaPerp + gammaZ);
+            cR -= dec1 * rR[ij];
+            cI -= dec1 * rI[ij];
+          }
+          if (((i ^ j) & 2) === 0) {
+            const f2 = (i ^ 2) * 8 + (j ^ 2);
+            cR += 0.5 * gammaPerp * (rR[f2] - rR[ij]);
+            cI += 0.5 * gammaPerp * (rI[f2] - rI[ij]);
+          } else {
+            const dec2 = 0.5 * (gammaPerp + gammaZ);
+            cR -= dec2 * rR[ij];
+            cI -= dec2 * rI[ij];
+          }
+        }
+        outR[i * 8 + j] = cR;
+        outI[i * 8 + j] = cI;
+      }
+    }
+    for (let i = 0; i < 8; i++) L[i * 64 + col] = outR[i * 8 + i];
+    let row = 8;
+    for (let p = 0; p < 28; p++) {
+      const ii = SP.pairI[p], jj = SP.pairJ[p];
+      L[row * 64 + col] = outR[ii * 8 + jj]; row++;
+      L[row * 64 + col] = outI[ii * 8 + jj]; row++;
+    }
+  }
+
+  const rhs = new Float64Array(64);
+  for (let i = 0; i < 8; i++) rhs[i] = -0.5 * SP.PS[i * 8 + i];
+  let row = 8;
+  for (let p = 0; p < 28; p++) {
+    rhs[row++] = -0.5 * SP.PS[SP.pairI[p] * 8 + SP.pairJ[p]];
+    rhs[row++] = 0;
+  }
+  const sol = solveLinear64(L, rhs, 64);
+  let trPSR = 0, trR = 0;
+  for (let i = 0; i < 8; i++) {
+    trR += sol[i];
+    trPSR += SP.PS[i * 8 + i] * sol[i];
+  }
+  row = 8;
+  for (let p = 0; p < 28; p++) {
+    trPSR += 2 * SP.PS[SP.pairI[p] * 8 + SP.pairJ[p]] * sol[row];
+    row += 2;
+  }
+  const phiS = kS * trPSR;
+  const phiT = kT * (trR - trPSR);
+  return { phiS, phiT, yieldSum: phiS + phiT, gammaRF, omegaL };
+}
+
+// Lie-symmetry axial cache: since [S1z+S2z+Iz, H_HF] = 0 and [S1z+S2z+Iz, P_S] = 0, Phi_S(B) is an exact smooth
+// function of u = cos^2(alpha) in [0, 1], tabulated directly from solveCry4Haberkorn8x8 with 17 nodes.
+const _cry4AxialCache = new Map();
+function getCry4AxialCurve(fieldUT, gammaSpin, rfAmpUT = 0, rfFreqRadUs = null) {
+  const bKey = `${Math.round(fieldUT * 2)}_${Math.round(gammaSpin * 16)}_${Math.round(rfAmpUT * 20)}_${rfFreqRadUs === null ? 'res' : Math.round(rfFreqRadUs * 4)}`;
+  let curve = _cry4AxialCache.get(bKey);
+  if (!curve) {
+    const N = 17;
+    curve = new Float64Array(N);
+    for (let m = 0; m < N; m++) {
+      const u = m / (N - 1); // u = cos^2(alpha)
+      const cosA = Math.sqrt(u), sinA = Math.sqrt(Math.max(0, 1 - u));
+      curve[m] = solveCry4Haberkorn8x8(sinA, 0, cosA, {
+        fieldUT,
+        gammaSpin,
+        rfAmpUT,
+        rfFreqRadUs: rfFreqRadUs ?? (0.176 * fieldUT),
+      }).phiS;
+    }
+    if (_cry4AxialCache.size > 64) _cry4AxialCache.clear();
+    _cry4AxialCache.set(bKey, curve);
+  }
+  return curve;
+}
+
+// NESTOR 23-Rung effective bit-widths (R0 = zero-gated .. R5 = b1.58 ternary .. R22 = IEEE FP64)
+export const NESTOR_RUNG_BITS = Float64Array.of(
+  0, 1, 1.25, 2, 3, 1.58496, 4, 4, 4, 6, 8, 8, 8, 12, 16, 16, 19, 16, 19, 24, 32, 48, 64
+);
+
+/**
+ * Bit-accurate NESTOR 23-Rung Quantizer (R0..R22) with provably unbiased Stochastic Rounding (E[Q_r(x)] == x).
+ */
+export function quantizeNestorRung(val, rung = 22, rng = Math.random, scale = 1.0) {
+  const r = clamp(Math.round(rung), 0, 22);
+  if (r === 0 || !Number.isFinite(val)) return 0.0;
+  if (r >= 22) return val;
+  if (r === 20) return Math.fround(val);
+  const sc = Math.max(1e-6, scale);
+
+  // R1..R2: 1-bit binary {-sc, +sc} with unbiased stochastic rounding over [-sc, +sc]
+  if (r <= 2) {
+    const u = clamp(val / sc, -1, 1);
+    const pPlus = 0.5 * (1 + u);
+    return (rng() < pPlus ? 1 : -1) * sc;
+  }
+  // R5: BitNet ternary b1.58 {-sc, 0, +sc} with unbiased stochastic rounding
+  if (r === 5) {
+    const u = clamp(val / sc, -1, 1);
+    if (u >= 0) return rng() < u ? sc : 0.0;
+    return rng() < -u ? -sc : 0.0;
+  }
+  // Uniform integer rungs with unbiased stochastic rounding: R3(2b), R4(3b), R6-R7(INT4), R9(INT6), R10(INT8), R13(INT12), R17(INT16)
+  const intBitsMap = { 3: 2, 4: 3, 6: 4, 7: 4, 9: 6, 10: 8, 13: 12, 17: 16 };
+  if (intBitsMap[r] !== undefined) {
+    const bits = intBitsMap[r];
+    const levels = (1 << (bits - 1)) - 1;
+    const step = sc / Math.max(1, levels);
+    const clamped = clamp(val, -sc, sc);
+    const qFloor = Math.floor(clamped / step);
+    const frac = clamped / step - qFloor;
+    return (qFloor + (rng() < frac ? 1 : 0)) * step;
+  }
+  // Floating-point mantissa rungs with unbiased stochastic rounding:
+  // R8=FP4(E2M1,M=1), R11=FP8(E4M3,M=3), R12=FP8(E5M2,M=2), R14=FP16(M=10), R15=BF16(M=7), R16/R18=TF32(M=10), R19=FP24(M=15), R21=FP48(M=39)
+  const mantMap = { 8: 1, 11: 3, 12: 2, 14: 10, 15: 7, 16: 10, 18: 10, 19: 15, 21: 39 };
+  const expMaxMap = { 8: 2, 11: 8, 12: 15, 14: 15, 15: 127, 16: 127, 18: 127, 19: 127, 21: 1023 };
+  const M = mantMap[r] ?? 10;
+  const eMax = expMaxMap[r] ?? 127;
+  if (val === 0) return 0.0;
+  const sgn = val < 0 ? -1 : 1;
+  const av = Math.abs(val);
+  const exp = Math.floor(Math.log2(av));
+  if (exp < -eMax - M) return 0.0;
+  if (exp > eMax) return sgn * Math.pow(2, eMax) * (2 - Math.pow(2, -M));
+  const twoPowE = Math.pow(2, exp);
+  const mant = av / twoPowE; // in [1, 2)
+  const stepM = Math.pow(2, -M);
+  const qM = Math.floor((mant - 1) / stepM);
+  const fracM = (mant - 1) / stepM - qM;
+  const roundedMant = 1 + (qM + (rng() < fracM ? 1 : 0)) * stepM;
+  return sgn * twoPowE * roundedMant;
+}
+
+// =============================================================================
 // 2. HEPTARCH v0.2 Seven-Seat Council, Raider Cold Strike & NESTOR Governor
 // =============================================================================
 export const SEAT_NAMES = ['Surge', 'Chronoscope', 'Keel', 'Capacitor', 'Wildcard', 'LongGame', 'Jester'];
@@ -210,6 +493,7 @@ const MODE_CAPS = {
 export class HeptarchCouncil {
   constructor(seed = 1) {
     this.rng = mulberry((seed * 48271 + 97) >>> 0);
+    this.srRng = mulberry((seed * 65537 + 131) >>> 0); // dedicated NESTOR stochastic-rounding stream
     this.t = 0;
 
     // 7-seat weights pi_m(t) (sum = 1, max <= 0.46)
@@ -253,43 +537,48 @@ export class HeptarchCouncil {
     this.rivalPredictEntropy = 0.5;
 
     // NESTOR 23-rung adaptive precision ladder & Bicursive Self Sync (BSS = DSD + RSR)
+    this.nestorMode = 'adaptive'; // 'adaptive' | 'fixedLow' | 'fixedHigh'
     this.rungs = {
       spindleReflex: 5,    // ternary b1.58
       gangliaCfC: 8,       // FP4 E2M1 / ChronoBlock-4
       cortexCSR: 10,       // INT8 + stochastic rounding
       foveaFlowVAE: 15,    // BF16
-      femHemodynamics: 18, // FP32
-      ring0Ledger: 20,     // FP64 + Kahan
+      femHemodynamics: 18, // TF32
+      ring0Ledger: 22,     // IEEE FP64 + Kahan
     };
+    this.meanActiveBits = 12.5;
+    this.nestorComputeATP = 0;
+    this.landauerBitsErased = 0;
     this.shadowQuantDiv = 0.02;
     this.activeMotifs = 24.0; // N(t) evolved by Eq. 23: dN/dt = r_+ - r_-
     this.dsdMerges = 0;
     this.rsrSplits = 0;
 
-    // DSD-24 Stagnation / Limit-Cycle Detector & Exuvia Nullspace Escape
+    // DSD-24 Stagnation / Limit-Cycle Detector & SVD Trajectory Nullspace Exuvia Escape
     this.posRing = [];
     this.stuckScore = 0;
     this.exuviaCount = 0;
     this.escapeImpulse = 0;
     this.escapeHeading = 0;
+    this.lastNullspaceOrtho = 0; // |v_escape . v_principal| ~ 0 orthogonality certificate
 
-    // Avian/Amphibian Cryptochrome-4 Radical-Pair Magnetoreception
+    // Avian/Amphibian Cryptochrome-4 8x8 Radical-Pair Magnetoreception
     this.magAz = null;
     this.singletContrast = 0;
     this.spinCoherence = 0;
+    this.cry4YieldSum = 1.0;
     this.inSanctuary = false;
     this.nearMonolith = -1;
 
-    // Michael Levin Somatic Bioelectric V_mem Prepattern & Blastema Limb Regeneration (10 limb slots)
-    this.vMem = new Float64Array(10);
-    this.vTarget = new Float64Array(10);
-    this.limbIntegrity = new Float64Array(10);
-    for (let l = 0; l < 10; l++) {
-      const vt = -55.0 + 4.5 * Math.cos((2 * Math.PI * l) / 10);
-      this.vTarget[l] = vt;
-      this.vMem[l] = vt;
-      this.limbIntegrity[l] = 1.0;
-    }
+    // Michael Levin Bistable Somatic Bioelectric Syncytium (Kir2.1 / Ca_v + Voltage-Gated Connexin Gap Junctions)
+    // Two dynamical attractors WITHOUT any hardcoded vTarget array:
+    //   V_pol = -56.0 mV (canonical hyperpolarized morphogenetic attractor -> morphScale = 1.00)
+    //   V_dep = -14.0 mV (depolarized injury / cryptic ectopic attractor -> morphScale = 1.32)
+    //   V_sep = -34.0 mV (unstable saddle separatrix)
+    this.vMem = new Float64Array(10).fill(-56.0);
+    this.limbIntegrity = new Float64Array(10).fill(1.0);
+    this.limbMorphScale = new Float64Array(10).fill(1.0);
+    this.bioelectricState = 'canonical'; // 'canonical' (-56mV) | 'cryptic-ectopic' (-14mV)
 
     // Live Quantum Contextuality Witness snapshot (KCBS / CEGA-18 / Hoggar / C3)
     this.ctxWitness = evalContextualitySuites(0, 0);
@@ -300,9 +589,10 @@ export class HeptarchCouncil {
   }
 
   /**
-   * 8-state [FAD.- ... TrpH.+] Avian/Amphibian Cryptochrome-4 radical-pair compass.
-   * Integrates anisotropic hyperfine coupling (A_perp, A_z) against the Dome's geomagnetic inclination vector
-   * across 8 retinal cryptochrome orientations around `heading` to infer magnetic north azimuth in darkness!
+   * 8-state (H_{e1} x H_{e2} x H_{I=1/2}) Avian/Amphibian Cryptochrome-4 radical-pair compass.
+   * Evaluates exact 8x8 Hermitian density-matrix Liouville-Haberkorn singlet yields Phi_S(B) across 16
+   * circular retinal Cry4 outer-segment sectors, including inclination parity symmetry Phi_S(-B) == Phi_S(+B)
+   * and resonant Larmor RF disruption at omega_RF = gamma_e * B0 (Ritz et al., Nature 2004).
    */
   stepCryptochrome4(dt, heading, pos, world, lesionMagneto = false) {
     if (lesionMagneto || !world?.dome) {
@@ -312,7 +602,7 @@ export class HeptarchCouncil {
       return null;
     }
     const D = world.dome;
-    // Check crystal monolith & Big-Tree sanctuary geomagnetic/storm shielding
+    // Crystal monolith & Big-Tree sanctuary geomagnetic/storm shielding
     let shield = 0;
     if (world.sanctuaries) {
       for (let i = 0; i < world.sanctuaries.length; i++) {
@@ -327,24 +617,22 @@ export class HeptarchCouncil {
       }
     }
 
-    // Effective geomagnetic field vector B_dome in uT (horizontal North +Z / Azimuth D.magDeclination, vertical dip D.inclination)
     const stormNoise = (D.auroraStorm || 0) * (1 - shield);
-    const B0 = D.fieldUT || 48.5; // ~48.5 uT Earth-like biodome field
-    const omegaL = 0.176 * B0;    // electron Larmor rad/us (gamma_e * B)
+    const B0 = D.fieldUT || 48.5; // ~48.5 uT biodome geomagnetic intensity
     const inc = D.inclination ?? 1.08;
     const decl = D.declination ?? 0.0;
-    // Anisotropic axial 14N hyperfine coupling constants (rad/us scale) & spin-coherence lifetime tau_c (us)
-    const Az = 9.4, Aperp = 1.15;
-    const tauC = Math.max(0.35, 3.2 * (1 - 0.78 * stormNoise)); // storm RF noise collapses spin coherence time!
-    const kR = 1 / tauC;
+    const gammaSpin = 0.22 * stormNoise; // geomagnetic storm spin-relaxation rate (us^-1)
+    const rfAmpUT = (D.rfAmpUT || 0) * (1 - shield);
+    const rfFreqRadUs = D.rfFreqRadUs ?? (0.176 * B0);
 
-    // Evaluate Haberkorn singlet yield Phi_S(phi_k) across 16 circular retinal Cry4 outer-segment sectors
-    // (Nyquist-clean angular sampling of the axial + dipolar-broadened 14N hyperfine radical-pair kernel)
+    // Exact 8x8 Liouville-Haberkorn axial singlet yield curve in u = cos^2(alpha) in [0, 1]
+    const curve = getCry4AxialCurve(B0, gammaSpin, rfAmpUT, rfFreqRadUs);
+    const nGrid = curve.length - 1;
+
     let cosSum = 0, sinSum = 0, yMin = 1, yMax = 0;
     const bxH = Math.cos(inc) * Math.cos(decl);
     const bzH = Math.cos(inc) * Math.sin(decl);
     const byV = -Math.sin(inc);
-    const dipBroad2 = 14.5; // electron-electron dipolar + exchange homogeneous line broadening (rad^2/us^2)
 
     const NSEC = 16;
     for (let k = 0; k < NSEC; k++) {
@@ -353,70 +641,103 @@ export class HeptarchCouncil {
       // Cry4 trp-triad axis tilted 24 deg upward in retinal outer segment
       const ax = Math.cos(worldAng) * 0.9135, az = Math.sin(worldAng) * 0.9135, ay = 0.4067;
       const cosAlpha = clamp(ax * bxH + ay * byV + az * bzH, -1, 1);
-      const sin2Alpha = Math.max(0, 1 - cosAlpha * cosAlpha);
+      const u = cosAlpha * cosAlpha; // exact parity invariance: (-B) gives identical cos^2(alpha)!
+      const posU = u * nGrid;
+      const idx = Math.min(nGrid - 1, Math.floor(posU));
+      const frac = posU - idx;
+      const phiS = curve[idx] * (1 - frac) + curve[idx + 1] * frac;
 
-      // Sum over m_I in {-1, 0, +1} nuclear spin projections of 14N (3 subspaces x singlet-triplet mixing)
-      let phiS = 0;
-      for (let mI = -1; mI <= 1; mI++) {
-        const hPar = omegaL * cosAlpha + Az * mI;
-        const hPerp2 = (omegaL * omegaL * sin2Alpha) + Aperp * Aperp * (mI === 0 ? 2 : 1);
-        const deltaE2 = hPar * hPar + hPerp2;
-        const effW2 = kR * kR + dipBroad2;
-        // Coherent singlet-to-triplet quantum yield modulation (Ritz-Adem-Schulten / Hore analytical Haberkorn kernel)
-        const mix = hPerp2 / (effW2 + deltaE2 + 1e-6);
-        phiS += (1 / 3) * (0.25 + 0.375 * (1 - 0.55 * mix) * (effW2 / (effW2 + 0.35 * hPar * hPar)));
-      }
       if (phiS < yMin) yMin = phiS;
       if (phiS > yMax) yMax = phiS;
-      // Retinal opponent ring vector decoding of inclination yield modulation
       cosSum += phiS * Math.cos(relAng);
       sinSum += phiS * Math.sin(relAng);
     }
 
     this.singletContrast = yMax - yMin;
-    this.spinCoherence = clamp((tauC / 3.2) * (this.singletContrast / 0.0102), 0, 1);
+    // Reference clean 48.5 uT Quantum Needle contrast from 8x8 Haberkorn master equation is ~0.156
+    this.spinCoherence = clamp(this.singletContrast / 0.145, 0, 1);
 
-    // Correlated Ornstein-Uhlenbeck spin-decoherence noise (prevents unphysical 60-Hz finite-difference spikes in Nav VOR)
-    const sigmaNoise = (1 - this.spinCoherence) * 0.55;
-    this.magNoise = (this.magNoise || 0) * Math.exp(-dt * 4.0) + sigmaNoise * Math.sqrt(Math.max(0, 1 - Math.exp(-dt * 8.0))) * ((this.rng() - 0.5) * 2.4);
-    // Inclination dip (byV = -sin(inc), ay = +0.4067) minimizes sin^2(alpha) -> maximizes singlet yield opposite North (-cosSum, -sinSum)
-    const estRelNorth = Math.atan2(-sinSum, -cosSum) + this.magNoise;
-    // Align with celestial SUN_AZ (0.8 rad) consolidated coordinate frame in Nav so day->night HD ring weights Wv transfer seamlessly
+    // Retinal Cry4 phototransduction cascade filter (tau ~ 1.25 s) + Weber shot-noise disorientation when spinCoherence collapses
+    const noiseDrive = Math.pow(1 - this.spinCoherence, 1.5) * 2.6;
+    this.magNoise = (this.magNoise || 0) * Math.exp(-dt * 0.8)
+      + noiseDrive * Math.sqrt(Math.max(0, 1 - Math.exp(-dt * 1.6))) * ((this.rng() - 0.5) * 2.4);
+    // Hiscock-Hore Quantum Needle peak around u = cos^2(alpha) ~ 0.12 maximizes Phi_S in the poleward (North) sector (+sinSum, +cosSum)
+    const estRelNorth = Math.atan2(sinSum, cosSum) + this.magNoise;
     const rawAz = 0.8 + estRelNorth;
     this.magAz = Math.atan2(Math.sin(rawAz), Math.cos(rawAz));
     return this.magAz;
   }
 
-  /** Damage limb `l` (predator bite / hard rock crush): depolarizes V_mem -> -12 mV and drops structural integrity */
+  /** Damage limb `l`: depolarizes local V_mem past the -34 mV saddle into the -14 mV injury basin and drops integrity */
   inflictLimbTrauma(limbIdx, severity = 0.35) {
     const l = ((limbIdx % 10) + 10) % 10;
-    this.vMem[l] = clamp(this.vMem[l] + 42 * severity, -65, -10);
+    this.vMem[l] = clamp(this.vMem[l] + 84 * severity, -65, -12);
     this.limbIntegrity[l] = clamp(this.limbIntegrity[l] - severity, 0.30, 1.0);
   }
 
-  /** Step Michael Levin gap-junction bioelectric network & ATP-paid blastema limb regrowth */
+  /**
+   * Transiently shift somatic syncytium V_mem (e.g. ionophore clamp to -14 mV or -56 mV) WITHOUT altering any gene!
+   * Demonstrates Levin's cryptic bioelectric pattern memory across subsequent blastema regeneration cycles.
+   */
+  clampBioelectricPattern(targetmV = -14.0) {
+    const v = clamp(targetmV, -68, -10);
+    for (let l = 0; l < 10; l++) this.vMem[l] = v;
+  }
+
+  /**
+   * Step Michael Levin bistable non-neural bioelectric PDE (Kir2.1 + injury Ca_v + voltage-gated Connexin G_GJ(dV))
+   * & ATP-paid blastema limb regrowth. Zero hardcoded vTarget lookup array!
+   */
   stepBioelectric(dt, metab, lesionBioelec = false) {
-    let meanIntegrity = 0, regenCostATP = 0;
-    const gGJ = lesionBioelec ? 0.0 : 1.35; // gap-junction conductance blocked under lesion.bioelec!
+    const V_POL = -56.0, V_SEP = -34.0, V_DEP = -14.0;
+    const kIon = 0.0022; // bistable cubic channel conductance scaling
+    const gGJ0 = lesionBioelec ? 0.0 : 2.8; // Connexin gap junctions blocked under octanol / lesion.bioelec!
+    const subSteps = 4;
+    const h = dt / subSteps;
     const nextV = new Float64Array(10);
-    for (let l = 0; l < 10; l++) {
-      const vL = this.vMem[(l + 9) % 10], vR = this.vMem[(l + 1) % 10], v = this.vMem[l];
-      const leak = lesionBioelec ? 0.04 : 0.65;
-      nextV[l] = clamp(v + dt * (gGJ * (vL + vR - 2 * v) + leak * (this.vTarget[l] - v)), -72, -8);
+
+    for (let s = 0; s < subSteps; s++) {
+      for (let l = 0; l < 10; l++) {
+        const v = this.vMem[l];
+        const vL = this.vMem[(l + 9) % 10], vR = this.vMem[(l + 1) % 10];
+        // Bistable Kir2.1 / Ca_v current: stable wells at -56 mV and -14 mV, unstable saddle at -34 mV
+        const iIon = kIon * (v - V_POL) * (v - V_SEP) * (v - V_DEP);
+        // Bell-shaped voltage-gated Connexin gap-junction conductance G_GJ(Delta V) = g0 / (1 + (dV / 32)^2)
+        const dVL = vL - v, dVR = vR - v;
+        const gL = gGJ0 / (1 + (dVL * dVL) / 1024.0);
+        const gR = gGJ0 / (1 + (dVR * dVR) / 1024.0);
+        nextV[l] = clamp(v + h * (-iIon + gL * dVL + gR * dVR), -70, -8);
+      }
+      this.vMem.set(nextV);
     }
+
+    let meanV = 0;
+    for (let l = 0; l < 10; l++) meanV += this.vMem[l] * 0.1;
+    // Detect collective syncytial attractor (canonical hyperpolarized -56 mV vs cryptic global depolarized -14 mV)
+    const isGlobalCryptic = !lesionBioelec && meanV > -24.0;
+    this.bioelectricState = isGlobalCryptic ? 'cryptic-ectopic' : 'canonical';
+
+    let meanIntegrity = 0, regenCostATP = 0;
     for (let l = 0; l < 10; l++) {
-      this.vMem[l] = nextV[l];
-      const errV = Math.abs(this.vMem[l] - this.vTarget[l]);
-      if (!lesionBioelec && metab.atp > 0.22 && this.limbIntegrity[l] < 0.999) {
-        const rate = 0.045 * Math.exp(-errV / 12.0) * (1 - this.limbIntegrity[l]);
+      const v = this.vMem[l];
+      // Canonical blastema regrowth requires syncytial repolarization below -42 mV; global cryptic memory regrows into ectopic 1.32x morph!
+      const inRegenAttractor = v < -42.0 || isGlobalCryptic;
+      if (!lesionBioelec && inRegenAttractor && metab.atp > 0.22 && this.limbIntegrity[l] < 0.999) {
+        const wellDist = isGlobalCryptic ? Math.abs(v - V_DEP) : Math.abs(v - V_POL);
+        const rate = 0.068 * Math.exp(-wellDist / 14.0) * (1 - this.limbIntegrity[l]);
         const dI = Math.min(1 - this.limbIntegrity[l], dt * rate);
         this.limbIntegrity[l] += dI;
         regenCostATP += dI * 0.08;
+        const targetMorph = isGlobalCryptic ? 1.32 : 1.00;
+        this.limbMorphScale[l] += Math.min(1, dI * 4.5) * (targetMorph - this.limbMorphScale[l]);
+      } else if (!lesionBioelec && this.limbIntegrity[l] >= 0.995) {
+        const targetMorph = isGlobalCryptic ? 1.32 : 1.00;
+        this.limbMorphScale[l] += dt * 0.05 * (targetMorph - this.limbMorphScale[l]);
       }
       meanIntegrity += this.limbIntegrity[l] * 0.1;
     }
     if (regenCostATP > 0) metab.atp = Math.max(0.05, metab.atp - regenCostATP);
-    return { meanIntegrity, regenCostATP };
+    return { meanIntegrity, regenCostATP, meanVMem: meanV, bioelectricState: this.bioelectricState };
   }
 
   /**
@@ -676,25 +997,70 @@ export class HeptarchCouncil {
     this.dominantSeat = SEAT_NAMES[bestM];
     this.rivalPredictEntropy = clamp(0.35 + 0.95 * this.seats[4] + 0.55 * this.deceive, 0, 1.58);
 
-    // 9) NESTOR 23-Rung Dynamic Precision Ladder + BSS (Eq. 23: dN/dt = r_+ - r_-)
-    // Shadow ternary b1.58 quantization divergence on current SSM latent cr.z[0..15]
+    // 9) NESTOR 23-Rung Dynamic Precision Ladder + Bit-Accurate Stochastic-Rounding Quantizer + BSS (Eq. 23)
     let qDiff2 = 0, qNorm2 = 1e-6;
     if (cr.z) {
       let meanAbs = 0;
       for (let i = 0; i < 16; i++) meanAbs += Math.abs(cr.z[i]) / 16;
-      const scale = Math.max(0.05, meanAbs);
+      const scale = Math.max(0.05, meanAbs * 1.8);
       for (let i = 0; i < 16; i++) {
         const v = cr.z[i];
-        const tern = Math.abs(v) < 0.45 * scale ? 0 : (v > 0 ? scale : -scale); // b1.58 {-1, 0, +1}
+        const tern = quantizeNestorRung(v, 5, this.rng, scale);
         qDiff2 += (v - tern) * (v - tern);
         qNorm2 += v * v;
       }
     }
     this.shadowQuantDiv = Math.sqrt(qDiff2 / qNorm2);
-    // Promote rungs under high surprise / divergence; demote in Stillwater/low-ATP for frugality
-    this.rungs.spindleReflex = (this.shadowQuantDiv > 0.52 && atp > 0.4) ? 7 : 5;
-    this.rungs.gangliaCfC = (nearPred || this.csPhase === 5) ? 11 : (atp < 0.3 ? 7 : 8);
-    this.rungs.foveaFlowVAE = (wmUncert > 0.30 && atp > 0.35) ? 17 : 15;
+
+    if (this.nestorMode === 'fixedLow') {
+      this.rungs.spindleReflex = 1;
+      this.rungs.gangliaCfC = 2;
+      this.rungs.cortexCSR = 3;
+      this.rungs.foveaFlowVAE = 3;
+      this.rungs.femHemodynamics = 6;
+      this.rungs.ring0Ledger = 22;
+    } else if (this.nestorMode === 'fixedHigh') {
+      this.rungs.spindleReflex = 22;
+      this.rungs.gangliaCfC = 22;
+      this.rungs.cortexCSR = 22;
+      this.rungs.foveaFlowVAE = 22;
+      this.rungs.femHemodynamics = 22;
+      this.rungs.ring0Ledger = 22;
+    } else {
+      // Adaptive governor: promote rungs under high surprise/threat; demote in Stillwater/low-ATP for frugality
+      this.rungs.spindleReflex = (this.shadowQuantDiv > 0.52 && atp > 0.4) ? 8 : 5;
+      this.rungs.gangliaCfC = (nearPred || this.csPhase === 5) ? 19 : (atp < 0.3 ? 14 : 18);
+      this.rungs.cortexCSR = nearPred ? 14 : 10;
+      this.rungs.foveaFlowVAE = (wmUncert > 0.30 && atp > 0.35) ? 18 : 15;
+      this.rungs.femHemodynamics = 18;
+      this.rungs.ring0Ledger = 22;
+    }
+
+    // Causally apply live bit-level NESTOR quantization across the entire 72-D SSM+synergy latent cr.z & charge quadratic bit-width ATP + Landauer heat
+    if (cr.z) {
+      const nZ = cr.z.length;
+      let maxAbsZ = 0.25;
+      for (let i = 0; i < nZ; i++) if (Math.abs(cr.z[i]) > maxAbsZ) maxAbsZ = Math.abs(cr.z[i]);
+      const gRung = this.rungs.gangliaCfC;
+      for (let i = 0; i < nZ; i++) {
+        cr.z[i] = quantizeNestorRung(cr.z[i], gRung, this.srRng, maxAbsZ * 1.15);
+      }
+    }
+    const rungKeys = ['spindleReflex', 'gangliaCfC', 'cortexCSR', 'foveaFlowVAE', 'femHemodynamics'];
+    let bitSum = 0, bitSqSum = 0;
+    for (let i = 0; i < rungKeys.length; i++) {
+      const b = NESTOR_RUNG_BITS[this.rungs[rungKeys[i]]] || 8;
+      bitSum += b;
+      bitSqSum += b * b;
+    }
+    this.meanActiveBits = bitSum / rungKeys.length;
+    // Quadratic MAC energy cost (~ b^2): fixedHigh (5 x 64^2 = 20,480) burns ~20x more compute ATP than adaptive (~1,020)!
+    const computeCost = dt * 6.0e-7 * bitSqSum;
+    this.nestorComputeATP += computeCost;
+    M.atp = Math.max(0.05, (M.atp ?? 0.8) - computeCost);
+    const erasedBits = dt * 640 * bitSum;
+    this.landauerBitsErased += erasedBits;
+    if (W?.recordLandauerBits) W.recordLandauerBits(erasedBits, computeCost * 0.5);
 
     const util = clamp(1.15 - atp, 0.1, 0.98);
     const rPlus = 0.45 * Math.max(0, 0.4 * wmUncert + 0.5 * stall) * Math.max(0, 1 - util);
@@ -704,7 +1070,7 @@ export class HeptarchCouncil {
     if (Math.round(this.activeMotifs) > prevMotifs) this.rsrSplits++;
     else if (Math.round(this.activeMotifs) < prevMotifs) this.dsdMerges++;
 
-    // 10) DSD-24 Limit-Cycle Detection & Exuvia Chitin Shedding Escape
+    // 10) DSD-24 Limit-Cycle Detection & Exact Trajectory-Covariance Nullspace Exuvia Escape
     this.posRing.push([com[0], com[2]]);
     if (this.posRing.length > 50) this.posRing.shift(); // 5 seconds at 10 Hz
     this.escapeImpulse = Math.max(0, this.escapeImpulse - dt * 0.9);
@@ -715,8 +1081,22 @@ export class HeptarchCouncil {
       if (this.stuckScore > 0.92) {
         this.stuckScore = 0;
         this.exuviaCount++;
-        // Orthogonal Gram-Schmidt heading escape (+90 deg +/- QRNG sign) + shed physical Exuvia into Dome!
-        this.escapeHeading = bodyHdg + (this.rng() < 0.5 ? 1 : -1) * (Math.PI * 0.58);
+        // Compute 2x2 trajectory covariance C of posRing and project onto exact minor eigenvector (nullspace of stuck oscillation)!
+        let mx = 0, mz = 0;
+        for (let i = 0; i < 50; i++) { mx += this.posRing[i][0] * 0.02; mz += this.posRing[i][1] * 0.02; }
+        let cxx = 0, czz = 0, cxz = 0;
+        for (let i = 0; i < 50; i++) {
+          const dx = this.posRing[i][0] - mx, dz = this.posRing[i][1] - mz;
+          cxx += dx * dx; czz += dz * dz; cxz += dx * dz;
+        }
+        // Principal oscillation eigenvector vMax = [cos(theta), sin(theta)] via exact 2x2 Jacobi angle 2*theta = atan2(2*cxz, cxx - czz)
+        const thetaPrin = 0.5 * Math.atan2(2 * cxz, cxx - czz);
+        const vxPrin = Math.cos(thetaPrin), vzPrin = Math.sin(thetaPrin);
+        // Orthogonal nullspace basis vector vNull = [-sin(theta), cos(theta)] (exact dot product == 0)
+        const sgn = this.rng() < 0.5 ? 1 : -1;
+        const vxNull = -sgn * vzPrin, vzNull = sgn * vxPrin;
+        this.lastNullspaceOrtho = Math.abs(vxPrin * vxNull + vzPrin * vzNull);
+        this.escapeHeading = Math.atan2(vzNull, vxNull);
         this.escapeImpulse = 1.0;
         if (W?.spawnExuvia) W.spawnExuvia(com[0], com[2], cr.gen?.pigmentHue ?? 0.72);
       }

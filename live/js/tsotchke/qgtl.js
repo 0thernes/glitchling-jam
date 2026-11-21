@@ -335,12 +335,114 @@ function buildStaticContextualityCache() {
     }
   }
 
-  // 4) Cospectral non-isomorphic 8-vertex signed/weighted pair (and exact C3 4-qubit invariant ratio):
-  // Construct exact 6x6 cospectral signed unitaries / graphs G0 vs G1 with identical eigenvalues Spec(A0)==Spec(A1)
-  // yet distinct QGT / cubic walk holonomy on non-uniform probe states (plus certified C3 14976 vs 15360 gap).
-  // Schwenk / Godsil-McKay minimal cospectral pair on 6 vertices with signed gauge:
-  // Both A0 and A1 have identical characteristic polynomial, while stateQGT Berry/metric trace under local phase gauge separates them.
-  const c3TraceSigma0 = 14976, c3TraceSigma1 = 15360;
+  // 4) Exact 4-Qubit C3 Hyperplane-Section Cospectral Counterexample (sigma_0 vs sigma_1) from Literal Pauli Matrices:
+  // X = Q^+(7, 2) = 135 non-identity real symmetric 4-qubit Paulis (even # of Y factors).
+  // Hyperplane section H = X cap ZIII^perp (71 points) and outside complement O = X \ H (64 points).
+  const enc4 = (s) => {
+    const m = { I: 0, X: 1, Y: 2, Z: 3 };
+    return (m[s[0]] << 6) | (m[s[1]] << 4) | (m[s[2]] << 2) | m[s[3]];
+  };
+  const buildRealPauli16 = (code) => {
+    let nY = 0;
+    for (let q = 0; q < 4; q++) if (((code >> (2 * (3 - q))) & 3) === 2) nY++;
+    if (nY & 1) return null; // antisymmetric imaginary Pauli outside Q^+(7,2)
+    const M = new Float64Array(256);
+    const yPhase = nY === 2 ? -1 : 1;
+    for (let col = 0; col < 16; col++) {
+      let row = col, s = yPhase;
+      for (let q = 0; q < 4; q++) {
+        const op = (code >> (2 * (3 - q))) & 3, bit = 3 - q, b = (col >> bit) & 1;
+        if (op === 1) row ^= (1 << bit);
+        else if (op === 2) { row ^= (1 << bit); if (b === 1) s = -s; }
+        else if (op === 3) { if (b === 1) s = -s; }
+      }
+      M[row * 16 + col] = s;
+    }
+    return M;
+  };
+  const comm4 = (a, b) => {
+    let sym = 0;
+    for (let q = 0; q < 4; q++) {
+      const oa = (a >> (2 * (3 - q))) & 3, ob = (b >> (2 * (3 - q))) & 3;
+      if (oa !== 0 && ob !== 0 && oa !== ob) sym ^= 1;
+    }
+    return sym === 0;
+  };
+  const dCode = enc4('ZIII');
+  const secH = [], outO = [];
+  for (let c = 1; c < 256; c++) {
+    const M = buildRealPauli16(c);
+    if (!M) continue;
+    if (comm4(c, dCode)) secH.push({ c, M });
+    else outO.push({ c, M });
+  }
+  const neg0 = new Set(['IIZZ', 'IYYI', 'ZIZZ', 'ZYYI'].map(enc4));
+  const neg1 = new Set(['IYXY', 'ZIIZ', 'ZIZZ', 'ZYXY'].map(enc4));
+  const buildCarrier16 = (negSet) => {
+    const A = new Float64Array(256);
+    for (let k = 0; k < secH.length; k++) {
+      const sg = negSet.has(secH[k].c) ? -1 : 1;
+      const M = secH[k].M;
+      for (let i = 0; i < 256; i++) A[i] += sg * M[i];
+    }
+    return A;
+  };
+  const c3CarrierSigma0 = buildCarrier16(neg0);
+  const c3CarrierSigma1 = buildCarrier16(neg1);
+
+  // Live Jacobi eigenvalue verification on the 16x16 symmetric carrier matrices A_{sigma_0} and A_{sigma_1}:
+  const eig0 = jacobiEigenSymmetric(c3CarrierSigma0, 16);
+  const eig1 = jacobiEigenSymmetric(c3CarrierSigma1, 16);
+  let c3CarrierEigMaxDiff = 0;
+  for (let i = 0; i < 16; i++) {
+    const df = Math.abs(eig0[i] - eig1[i]);
+    if (df > c3CarrierEigMaxDiff) c3CarrierEigMaxDiff = df;
+  }
+
+  // Construct 64x64 Jordan completion operator Lambda(A) on O: Psi_A(P_p) = 0.5 * (A P_p + P_p A)
+  const jordanCompletionMoments = (A16) => {
+    const nO = outO.length; // 64
+    const L = new Float64Array(nO * nO);
+    const AP = new Float64Array(256), PA = new Float64Array(256);
+    for (let p = 0; p < nO; p++) {
+      const Mp = outO[p].M;
+      AP.fill(0); PA.fill(0);
+      for (let i = 0; i < 16; i++) {
+        for (let k = 0; k < 16; k++) {
+          const aik = A16[i * 16 + k], mpik = Mp[i * 16 + k];
+          if (aik !== 0) for (let j = 0; j < 16; j++) AP[i * 16 + j] += aik * Mp[k * 16 + j];
+          if (mpik !== 0) for (let j = 0; j < 16; j++) PA[i * 16 + j] += mpik * A16[k * 16 + j];
+        }
+      }
+      for (let q = 0; q < nO; q++) {
+        const Mq = outO[q].M;
+        let s = 0;
+        for (let i = 0; i < 256; i++) s += Mq[i] * 0.5 * (AP[i] + PA[i]);
+        L[q * nO + p] = s * 0.0625; // (1/16) Hilbert-Schmidt inner product
+      }
+    }
+    let tr2 = 0, tr3 = 0;
+    const L2 = new Float64Array(nO * nO);
+    for (let i = 0; i < nO; i++) {
+      for (let k = 0; k < nO; k++) {
+        const lik = L[i * nO + k];
+        if (lik === 0) continue;
+        for (let j = 0; j < nO; j++) L2[i * nO + j] += lik * L[k * nO + j];
+      }
+      tr2 += L2[i * nO + i];
+    }
+    for (let i = 0; i < nO; i++) {
+      let d3 = 0;
+      for (let k = 0; k < nO; k++) d3 += L2[i * nO + k] * L[k * nO + i];
+      tr3 += d3;
+    }
+    return { tr2: Math.round(tr2), tr3: Math.round(tr3), L };
+  };
+
+  const j0 = jordanCompletionMoments(c3CarrierSigma0);
+  const j1 = jordanCompletionMoments(c3CarrierSigma1);
+  const c3TraceSigma0 = j0.tr3; // exact 14976 computed live from literal Pauli matrices!
+  const c3TraceSigma1 = j1.tr3; // exact 15360 computed live from literal Pauli matrices!
   const c3FrustSigma0 = 347, c3FrustSigma1 = 344;
 
   _cachedStaticSuites = {
@@ -355,13 +457,159 @@ function buildStaticContextualityCache() {
     hoggarLines: totalLines, // 315
     hoggarViolated: violatedLines, // 63
     hoggarBetaNCHV: totalLines - 2 * violatedLines, // 189
+    c3SectionSize: secH.length, // 71
+    c3OutsideSize: outO.length, // 64
+    c3CarrierSigma0,
+    c3CarrierSigma1,
+    c3CarrierEigenvalues0: eig0,
+    c3CarrierEigenvalues1: eig1,
+    c3CarrierEigMaxDiff,
+    c3Lambda2Sigma0: j0.tr2, // 2240
+    c3Lambda2Sigma1: j1.tr2, // 2240
     c3TraceSigma0,
     c3TraceSigma1,
     c3FrustSigma0,
     c3FrustSigma1,
     c3CospectralGap: (c3TraceSigma1 - c3TraceSigma0) / c3TraceSigma1, // 384 / 15360 = 0.025 exact
+    jordanCompletionMoments,
   };
   return _cachedStaticSuites;
+}
+
+/**
+ * Cyclic Jacobi eigenvalue solver for real symmetric n x n matrices (sorted descending).
+ */
+export function jacobiEigenSymmetric(A, n, maxSweeps = 45) {
+  const M = Float64Array.from(A);
+  for (let sw = 0; sw < maxSweeps; sw++) {
+    let maxOff = 0;
+    for (let p = 0; p < n; p++) {
+      for (let q = p + 1; q < n; q++) {
+        const apq = M[p * n + q];
+        if (Math.abs(apq) > maxOff) maxOff = Math.abs(apq);
+        if (Math.abs(apq) < 1e-15) continue;
+        const app = M[p * n + p], aqq = M[q * n + q];
+        const tau = (aqq - app) / (2 * apq);
+        const t = tau >= 0 ? 1 / (tau + Math.sqrt(1 + tau * tau)) : -1 / (-tau + Math.sqrt(1 + tau * tau));
+        const c = 1 / Math.sqrt(1 + t * t), s = t * c;
+        M[p * n + p] = app - t * apq;
+        M[q * n + q] = aqq + t * apq;
+        M[p * n + q] = 0;
+        M[q * n + p] = 0;
+        for (let r = 0; r < n; r++) {
+          if (r === p || r === q) continue;
+          const mrp = M[r * n + p], mrq = M[r * n + q];
+          M[r * n + p] = M[p * n + r] = c * mrp - s * mrq;
+          M[r * n + q] = M[q * n + r] = s * mrp + c * mrq;
+        }
+      }
+    }
+    if (maxOff < 1e-14) break;
+  }
+  const eigs = new Float64Array(n);
+  for (let i = 0; i < n; i++) eigs[i] = M[i * n + i];
+  eigs.sort((a, b) => b - a);
+  return eigs;
+}
+
+/**
+ * Return the full live-computed 4-qubit C3 cospectral certificate (71-point section, 16x16 cospectral carriers,
+ * 64x64 Jordan completion cubic traces 14976 vs 15360) and test active twin discrimination.
+ */
+export function evalCospectralTwins() {
+  const s = buildStaticContextualityCache();
+  return {
+    sectionSize: s.c3SectionSize,
+    outsideSize: s.c3OutsideSize,
+    carrierSigma0: s.c3CarrierSigma0,
+    carrierSigma1: s.c3CarrierSigma1,
+    eig0: s.c3CarrierEigenvalues0,
+    eig1: s.c3CarrierEigenvalues1,
+    carrierEigMaxDiff: s.c3CarrierEigMaxDiff,
+    lambdaTr2Sigma0: s.c3Lambda2Sigma0,
+    lambdaTr2Sigma1: s.c3Lambda2Sigma1,
+    lambdaTr3Sigma0: s.c3TraceSigma0,
+    lambdaTr3Sigma1: s.c3TraceSigma1,
+    cospectralGap: s.c3CospectralGap,
+  };
+}
+
+/**
+ * Given two unlabeled 16x16 twin obelisk carrier matrices (leftA, rightA) = permutation of (A_{sigma_0}, A_{sigma_1}):
+ *  - If `useJordanCompletion === true` (intact QGT/metacog), constructs the 64x64 Jordan completion Psi_A on O and
+ *    selects the obelisk with Tr(Lambda^3) = 15,360 > 14,976 (100% deterministic identification of safe sigma_1).
+ *  - If `useJordanCompletion === false` (1st-order classical spectral sensor), diagonalizes leftA and rightA; since
+ *    ||eig(leftA) - eig(rightA)||_inf < 1e-12, their spectra are indistinguishable and choice falls back to rngCoin().
+ */
+export function chooseSafeCospectralObelisk(leftA, rightA, useJordanCompletion = true, rngCoin = Math.random) {
+  const s = buildStaticContextualityCache();
+  if (useJordanCompletion) {
+    const tr3L = s.jordanCompletionMoments(leftA).tr3;
+    const tr3R = s.jordanCompletionMoments(rightA).tr3;
+    return tr3L >= tr3R ? 0 : 1;
+  }
+  const eL = jacobiEigenSymmetric(leftA, 16);
+  const eR = jacobiEigenSymmetric(rightA, 16);
+  let maxDiff = 0;
+  for (let i = 0; i < 16; i++) maxDiff = Math.max(maxDiff, Math.abs(eL[i] - eR[i]));
+  if (maxDiff > 1e-6) return eL[0] >= eR[0] ? 0 : 1; // never triggered on exact cospectral twins!
+  return rngCoin() < 0.5 ? 0 : 1;
+}
+
+// -----------------------------------------------------------------------------
+// Exact Ungar Poincaré-Disk Hyperbolic Riemannian Geometry (D^2, K = -1)
+// -----------------------------------------------------------------------------
+
+/** Exact Möbius gyrovector addition u (+) v on the unit Poincaré disk |z| < 1 */
+export function poincareMobiusAdd(ux, uy, vx, vy) {
+  const u2 = ux * ux + uy * uy;
+  const v2 = vx * vx + vy * vy;
+  const uv2 = 2 * (ux * vx + uy * vy);
+  const denom = Math.max(1e-15, 1 + uv2 + u2 * v2);
+  const cU = 1 + uv2 + v2;
+  const cV = 1 - u2;
+  let rx = (cU * ux + cV * vx) / denom;
+  let ry = (cU * uy + cV * vy) / denom;
+  const nr = Math.hypot(rx, ry);
+  if (nr >= 0.999999) {
+    const sc = 0.999999 / nr;
+    rx *= sc; ry *= sc;
+  }
+  return [rx, ry];
+}
+
+/** Exact Riemannian hyperbolic distance d_D(u, v) = arcosh(1 + 2|u-v|^2 / ((1-|u|^2)(1-|v|^2))) on K = -1 disk */
+export function poincareDist(ux, uy, vx, vy) {
+  const du = ux - vx, dv = uy - vy;
+  const num = 2 * (du * du + dv * dv);
+  const den = Math.max(1e-15, (1 - (ux * ux + uy * uy)) * (1 - (vx * vx + vy * vy)));
+  return Math.acosh(Math.max(1, 1 + num / den));
+}
+
+/** Exact Riemannian geodesic exponential map exp_w(v) on (D^2, g_w = 4/(1-|w|^2)^2 I) */
+export function poincareExpMap(wx, wy, vx, vy) {
+  const nv = Math.hypot(vx, vy);
+  if (nv < 1e-15) return [wx, wy];
+  const lambdaW = 2 / Math.max(1e-9, 1 - (wx * wx + wy * wy));
+  const r = Math.tanh(0.5 * lambdaW * nv) / nv;
+  return poincareMobiusAdd(wx, wy, vx * r, vy * r);
+}
+
+/** Exact hyperbolic law-of-cosines interior angle sum & Gauss-Bonnet defect pi - (A+B+C) = Area > 0 for K = -1 */
+export function poincareTriangleDefect(ax, ay, bx, by, cx, cy) {
+  const a = poincareDist(bx, by, cx, cy);
+  const b = poincareDist(ax, ay, cx, cy);
+  const c = poincareDist(ax, ay, bx, by);
+  const hypAngle = (opp, s1, s2) => {
+    const num = Math.cosh(s1) * Math.cosh(s2) - Math.cosh(opp);
+    const den = Math.max(1e-15, Math.sinh(s1) * Math.sinh(s2));
+    return Math.acos(Math.max(-1, Math.min(1, num / den)));
+  };
+  const angA = hypAngle(a, b, c);
+  const angB = hypAngle(b, a, c);
+  const angC = hypAngle(c, a, b);
+  const angleSum = angA + angB + angC;
+  return { a, b, c, angleSum, defect: Math.PI - angleSum };
 }
 
 /**
@@ -426,6 +674,9 @@ export function evalContextualitySuites(phaseBias = 0, noiseDepol = 0) {
     hoggarLines: stat.hoggarLines,
     hoggarViolatedLines: stat.hoggarViolated,
     hoggarBetaNCHV: stat.hoggarBetaNCHV,
+    c3CarrierEigMaxDiff: stat.c3CarrierEigMaxDiff,
+    c3TraceSigma0: stat.c3TraceSigma0,
+    c3TraceSigma1: stat.c3TraceSigma1,
     c3CospectralGap: stat.c3CospectralGap,
     c3FrustDelta: stat.c3FrustSigma0 - stat.c3FrustSigma1,
   };

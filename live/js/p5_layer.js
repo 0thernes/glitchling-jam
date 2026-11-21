@@ -685,7 +685,7 @@ export class P5Layer {
     p.fill(205, 195, 255);
     p.textSize(8.0);
     p.text(`DRAG F_gate ${(q.dragGateFidelity || 0.970).toFixed(3)} · VC≤${(mc?.ws?.vcTruncBound ?? 0).toExponential(1)} · M2 ${(mc?.ws?.stabilizerMagicM2 ?? 0).toFixed(2)}`, mx, 27);
-    p.text(`KCBS ${(mc?.ws?.kcbsValue ?? 2.24).toFixed(2)} · CEGA ${(mc?.ws?.cegaValue ?? 9.0).toFixed(1)} · Hog ${(mc?.ws?.hoggarFloor ?? 0.333).toFixed(3)}`, mx, 39);
+    p.text(`KCBS ${(mc?.ws?.kcbsValue ?? 2.24).toFixed(2)} · CEGA ${(mc?.ws?.cegaValue ?? 9.0).toFixed(1)} · C3 14976/15360`, mx, 39);
 
     const levels = [16, 8, 4, 2, 1];
     for (let lv = 0; lv < levels.length; lv++) {

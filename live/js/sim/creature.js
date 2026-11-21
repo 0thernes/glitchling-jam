@@ -24,7 +24,8 @@ import { Metab } from './metab.js';
 import { SelectiveSSM, WorldModel, Sleep, PredictiveCoding, HTNPlanner, N_VIS_PATCH } from './mind.js';
 import { Skin } from './skin.js';
 import { Ecosystem } from './ecosystem.js';
-import { HeptarchCouncil } from './heptarch.js';
+import { HeptarchCouncil, quantizeNestorRung } from './heptarch.js';
+import { evalCospectralTwins, chooseSafeCospectralObelisk } from '../tsotchke/qgtl.js';
 
 export const CLOCK_MODES = {
   circadian: { framesPerMin: 15, scale: 240, label: '240× (6-min day · fast demo)' },
@@ -484,6 +485,10 @@ export class Creature {
     // Retinal lateral boulder looming (left vs right hemifield), roll-stabilised
     P[18] = obstL * (tg ? Math.max(0.35, turnStab) : 0.4);
     P[19] = obstR * (tg ? Math.max(0.35, turnStab) : 0.4);
+    if (this.heptarch?.nestorMode === 'fixedLow') {
+      const rLow = this.heptarch.rungs.spindleReflex;
+      for (let q = 0; q < 4; q++) P[q] = quantizeNestorRung(P[q], rLow, this.heptarch.rng, 1.0);
+    }
 
     // World-model 25-dim proprioceptive + vestibular + contact + bearing vector y
     const y = this.y;
@@ -1216,13 +1221,19 @@ export class Creature {
         mf[64 + i] = this.brain.rate[R0.CTX + Math.min(RN.CTX - 1, i * ctxSt)] / 20;
         mf[80 + i] = this.brain.rate[R0.HIP + Math.min(RN.HIP - 1, i * hipSt)] / 20;
       }
-      this.metacog.step(mf, wmStepSE, this.wm.predVar, this.familiar, this.progEMA, this.lastRaceAltG, this.lastRaceBestG, !!this.lesion.metacog);
+      const smSample = {
+        env: Math.sin(this.bear || 0) + 0.35 * (this.body.F[3]?.s?.[1] || 0),
+        sens: z[0] - this.zMean[0],
+        act: this.lesion.mn ? 0 : ((this.motRate[1] - this.motRate[2]) + 0.5 * (this.body.u[0] - this.body.u[1])),
+      };
+      this.metacog.step(mf, wmStepSE, this.wm.predVar, this.familiar, this.progEMA, this.lastRaceAltG, this.lastRaceBestG, !!this.lesion.metacog, smSample);
       if (!this.lesion.metacog && this.frame % 60 === 0) this.metacog.auditAndConsolidate(this, false);
     }
 
     // HEPTARCH v0.2 7-Seat Council, Raider ColdStrike, NESTOR 23-Rung Governor & Levin Bioelectric Regeneration
     if (this.heptarch) {
       this.heptarch.step(0.1, this);
+      this.zPrev.set(z);
       this.heptarch.stepBioelectric(0.1, this.metab, !!this.lesion.bioelec);
     }
     this.world.transferEnergy?.(4, 9, 0.006);
@@ -1525,13 +1536,23 @@ export class Creature {
               // CK-31 ray anchor stabilizes phase-drift flaw bursts temporarily
               this.ev('monolith', 'Conway-Kochen 31-ray monolith anchored phase drift');
             } else if (mn.kind === 'hoggar64') {
-              // C3 Cospectral Twins (sigma_0 vs sigma_1): intact QGT/Jordan sensing taps safe sigma_1; lesioned misfires on sigma_0!
-              if (!this.lesion.metacog && !this.lesion.heptarch) {
+              // C3 Cospectral Twins (sigma_0 vs sigma_1): blind left/right obelisk assignment discriminated ONLY via live 64x64 Jordan completion!
+              const twins = evalCospectralTwins();
+              const rngCoin = this.heptarch?.rng || this.r;
+              const swap = rngCoin() < 0.5;
+              const leftA = swap ? twins.carrierSigma1 : twins.carrierSigma0;
+              const rightA = swap ? twins.carrierSigma0 : twins.carrierSigma1;
+              const safeIdx = swap ? 0 : 1;
+              const useJordan = !this.lesion.metacog && !this.lesion.heptarch;
+              const pick = chooseSafeCospectralObelisk(leftA, rightA, useJordan, rngCoin);
+              if (pick === safeIdx) {
                 this.metab.atp = clamp(this.metab.atp + 0.12, 0, 1);
-                this.ev('monolith', 'Hoggar-64 + C3 Jordan trace discriminated safe twin σ1 (+ATP)');
+                this.stats.c3SafeHits = (this.stats.c3SafeHits || 0) + 1;
+                this.ev('monolith', 'Hoggar-64 + C3 Jordan cubic trace (15360 > 14976) picked safe twin σ1 (+ATP)');
               } else {
                 this.nociception = Math.max(this.nociception, 0.5);
-                this.ev('monolith', 'blind to C3 cospectrality: misfired on contextual twin σ0!');
+                this.stats.c3TrapHits = (this.stats.c3TrapHits || 0) + 1;
+                this.ev('monolith', 'spectral-only observer blind to C3 cospectrality: misfired on contextual twin σ0!');
               }
             } else {
               this.ev('monolith', `resonated with ${mn.label} (+Capacitor)`);

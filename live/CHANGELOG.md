@@ -868,3 +868,88 @@ Distills all 29 research PDFs (`1,932` pages) into [`../GLITCHLING_MASTER_COMPEN
   - `eco_probe.mjs 20`: `10.27 ms/step`, `18` peers across all `5` clades, `256` micro-fauna, `8,410,402` microbes, `0.998` IT invariance, `25.6×` DRAG suppression.
 - **Headless Chrome WebGL2 + Dome HUD visual inspection:**
   - Verified live 3D Geodesic Biodome, Monoliths, Sanctuaries, Anomaly Tori, `p5.js` `2-Dome+Multi` studio, `Dome` Lab tab (`#heptarch-bars`, `#domestats`, `#dome-storm`, `#dome-refuge`, `#dome-trauma`), and `Real?` honesty tab with **`consoleErrors: []`, `pageErrors: []`, `hasNaN: false`, `ClosureErr = 1.15e-16`**.
+
+
+## Pass 21 — 12-theorem falsification suite (N = 12 paired seeds), first-principles physics upgrades, Bedau–Packard evolutionary activity
+
+This pass makes the Pass 20 claims testable. Each one gets a falsifying control (a lesion, a surrogate or a null model),
+12 paired seeds, an exact permutation test and an effect size. Full defence, file links and caveats:
+[`../SCIENTIFIC_DEFENSE_DOSSIER.md`](../SCIENTIFIC_DEFENSE_DOSSIER.md).
+
+### What changed
+
+1. **`world.js`**:
+   - 7-site Adolphs–Renger FMO Hamiltonian solved as a GKSL Lindblad equation, with sink and loss channels, against a
+     Förster rate model on the same couplings (`solveFMOLindbladExact`, `solveFMOForsterExact`, `evalFMOTemperature`).
+   - Closed nitrogen/carbon mass ledger (`auditMassClosure`) and per-step Clausius entropy production
+     (`ledger.minEntropyProdRate`).
+   - An N₂-removal switch (`setAtmosphericN2`) used as a causal control.
+2. **`heptarch.js`**:
+   - 8×8 Liouville–Haberkorn Cry4 radical pair (two electrons + ¹⁴N spin-1) with an RF term for Ritz-style Larmor
+     resonance (`solveCry4Haberkorn8x8`).
+   - Unbiased stochastic-rounding NESTOR quantiser (`quantizeNestorRung`).
+   - Gram–Schmidt nullspace escape.
+   - A dedicated `srRng` stream, so 72-D quantisation no longer shifts the council RNG. This fixed the seed-4 FAR
+     navigation regression.
+   - A bistable gap-junction V_mem syncytium with voltage clamps (`clampBioelectricPattern`).
+3. **`ecosystem.js`**:
+   - 4×4 two-qubit density-matrix CHSH with a classical LHV surrogate (`evalTwoQubitBellMetrics`).
+   - Burst-noise RS[15,11] alarm channel with an ECC on/off switch.
+   - Press–Dyson memory-1 IPD Titans with sanctions, and Level-2 Bayesian vs Level-0 Shoggoth screening.
+   - **Bedau, Snyder & Packard (1998) excess-concentration evolutionary activity.** Each locus is split into K = 8
+     equal-measure octiles of its own `[lo, hi]` range (c₀ = 2/K). The activity is measured against a **neutral
+     shadow population**. The shadow has the same size, maturation age, mating refractory period and Mendelian crossover +
+     reflecting mutation operator, but picks parents at random.
+   - Bug fixed: T5 read `opts.xenomimicPairs` while the test passed `opts.xenomimics`, so only 282 CHSH rounds ran
+     instead of ≥ 1000.
+4. **`metacog.js`**: prequential Gaussian NLL with online temperature scaling, Kuleshov 10-bin ECE, and Schreiber
+   transfer entropy motor → sensory with a time-shuffled surrogate.
+5. **`qgtl.js`**: C₃ cospectral twin carriers (Tr L³ 14976 vs 15360), blind obelisk choice, and Poincaré-disk Möbius
+   addition, distance, exp map and triangle defect.
+6. **`test/nobel_rigor_suite.mjs`** (new): exact 2^12 paired sign-flip permutation test, 10,000-resample bootstrap 95% CI,
+   and paired d_z.
+   - **Statistics bug found and fixed.** With a NaN observed statistic, every comparison `s >= obs` is false, so the old
+     code returned p = 0 and *passed*. `summarizePaired` and `exactPairedPermutationP` now assert that every input and
+     output is finite and that 2⁻ᴺ ≤ p ≤ 1.
+   - That guard caught real NaNs from experimental `skipQRNG/skipFluid/skipWM/skipHopfield/skipHTN` constructor stubs,
+     which left fields undefined that `Creature.step()` reads into `metaFeat`. The stubs were removed. Tests now lesion
+     the subsystems after construction.
+7. **`honesty.js`**: the classical-simulation vs physical wetware/QPU boundary text now covers every Pass 21 model.
+
+### Verification (`node test/nobel_rigor_suite.mjs`, one continuous run, Node v25.8.2)
+
+**12/12 pass, no NaN.**
+
+| id | test | measured | p (exact) | d_z |
+|---|---|---|---|---|
+| T1 | 1st/2nd law + N/C mass; N₂ removal | E_err 2.21e-16, M_err 2.62e-16, min Σ̇ +8.09e-4 kW/K; ΔSolar +1.236 kJ [0.910, 1.631] | 0.000244 | 1.84 |
+| T2 | FMO GKSL vs Förster | Φ(−10 °C) 0.3577 < Φ(24 °C) 0.8109 > Φ(54 °C) 0.6388; Förster 0.7775; trace error 1.89e-15 | deterministic | — |
+| T3 | Cry4 compass: lesion / resonant RF | parity error 9.99e-16; lesion +0.715 rad; resonant − off-resonant RF +0.766 rad [0.423, 1.162] | 0.000244 / 0.000977 | 1.11 |
+| T4 | cospectral twins | eigDiff 3.55e-15; QGT 100.0% vs spectral 48.0% | 0.000244 | 4.07 |
+| T5 | CHSH | quantum 80.60% (S_emp 2.447) vs LHV 74.68%; exact marginal bias 0; empirical no-signalling gap ≤ 0.0962 | 0.000244 | 3.66 |
+| T6 | Poincaré disk | min Gauss–Bonnet defect +0.0249 rad; isometry error 2.66e-15; max \|w\| 0.940 | deterministic | — |
+| T7 | NESTOR | rounding bias 0.0049; nullspace orthogonality 0; ΔNLL +0.279; 17.6× less compute than fixed-high | 0.000244 | 2.91 |
+| T8 | bioelectric memory | regen 0.911 vs lesion 0.500; shape 1.000 → 1.271 with 0/128 genes changed; reversible | 0.000244 | undefined (all 12 diffs equal) |
+| T9 | RS[15,11] ECC in storms | predations 8.92 → 1.00; 4.50 early evasions | 0.000244 | 7.31 |
+| T10 | IPD Titans / Shoggoths | cooperators 20.41 vs defector −9.61; Bayes 6.09 vs naive −3.38 | 0.000244 | 6.67 |
+| T11 | Bedau–Packard activity | adaptive 27.87 vs neutral shadow 10.45; +17.42 [11.53, 22.81] | 0.000488 | 1.65 |
+| T12 | NLL / ECE / transfer entropy | NLL −1.082 → −1.275; ECE 0.148 → 0.097 (p 0.003906); TE 0.094 vs shuffled 0.054 vs lesioned 0.012 bits | 0.000244 | 6.86 |
+
+Other gates:
+- `dome_heptarch_probe.mjs`: **6/6, bit-identical over two consecutive runs**. 60-s energy closure error 0.00e+0; Cry4
+  night heading error 0.0602 vs 0.6576 rad lesioned; Levin regen 0.867 vs 0.500 lesioned; sanctuary ward 0 vs 1
+  predations.
+- `nav_probe.mjs 1,2,3,4`: **NEAR 4/4 (6.5 s), FAR 4/4 (26.5 s), upright 0.94**.
+- Headless Chrome WebGL2 (`test/dome_ui_check.mjs`, new and portable): `consoleErrors: []`, `pageErrors: []`, no NaN or
+  `undefined` in the Dome/Mind HUD. Also fixed: the Mind HUD printed an unrounded NMDA spike count.
+
+Honest reading:
+- p = 0.000244 is the **floor** of a 12-seed exact test. It means all 12 seeds went the predicted way; it does not mean
+  the effect is astronomically certain.
+- Of the 18 contrasts, **T12b (ECE) does not survive Bonferroni correction** (threshold 0.0028). It passes only its own
+  p < 0.01 threshold.
+- Ten of the twelve theorems check correct mathematics or designed-in mechanisms against lesions. Only T11 (and part of
+  T12) test outcomes that no rule writes down. T11 shows selection beats drift. It is not evidence of open-ended
+  evolution.
+- Seeds 1–12 were also used while tuning. A held-out replication on new seeds is the next step.
+- All "quantum" results are classical FP64 simulations. Nothing physically quantum happens in the creature.

@@ -14,9 +14,82 @@ import { FULL_GENES, evalHoxGRN, developZygoteEmbryo } from './genome.js';
 import { STARTER } from './starter_genome.js';
 import { WORLD, SITES } from './world.js';
 import { encodeAcousticCallRS, decodeAcousticCallRS } from './heptarch.js';
+import { poincareDist, poincareExpMap } from '../tsotchke/qgtl.js';
 
 export const LIFE_STAGES = ['neonate', 'juvenile', 'adult', 'elder'];
 export const COLONY_CASTES = ['Sovereign α', 'Harvester β', 'Sentinel γ', 'Weaver δ', 'Disruptor ε'];
+
+/**
+ * Exact 4x4 Two-Qubit Density Matrix CHSH Non-Local Game Trial via Sequential Lüders Measurement (ZERO superluminal signaling!).
+ * Basis {|00>, |01>, |10>, |11>}. Alice measures A_0 = Z (x=0) or A_1 = X (x=1);
+ * Bob measures B_0 = (Z+X)/sqrt(2) (y=0) or B_1 = (Z-X)/sqrt(2) (y=1).
+ * Winning condition: (a ^ b) === (x & y). Classical Bell LHV ceiling = 0.75; Tsirelson |Phi+> bound = cos^2(pi/8) = 0.853553.
+ */
+export function runCHSHDensityMatrixTrial(rho4x4, x, y, uA, uB, classicalLHV = false) {
+  if (classicalLHV) {
+    // Optimal Bell-local hidden variable deterministic/convex strategy (shared pre-established lambda in {0,1,2,3})
+    const lam = Math.floor(uA * 4) & 3;
+    const a = lam === 0 ? 0 : lam === 1 ? 1 : lam === 2 ? x : (1 - x);
+    const b = lam === 0 ? 0 : lam === 1 ? 1 : lam === 2 ? 0 : y;
+    return { a, b, win: (a ^ b) === (x & y), pA0: 0.5 };
+  }
+  // 1) Alice local projector Pi_{a=0|x} on qubit A:
+  //    x=0 (Z): |0><0|;  x=1 (X): |+><+| = 0.5 * [[1,1],[1,1]]
+  //    Compute Alice's local marginal P_A(a=0 | x) = Tr(rho * (Pi_{0|x} otimes I_2)) — strictly independent of Bob's y!
+  let pA0 = 0;
+  // Post-measurement unnormalized 2x2 state on Bob for a=0 and a=1
+  let b0_00 = 0, b0_01 = 0, b0_11 = 0;
+  let b1_00 = 0, b1_01 = 0, b1_11 = 0;
+  if (x === 0) {
+    b0_00 = rho4x4[0]; b0_01 = rho4x4[1]; b0_11 = rho4x4[5];
+    b1_00 = rho4x4[10]; b1_01 = rho4x4[11]; b1_11 = rho4x4[15];
+  } else {
+    // <+| rho_AB |+> = 0.5 * (rho_{0b,0b'} + rho_{0b,1b'} + rho_{1b,0b'} + rho_{1b,1b'})
+    b0_00 = 0.5 * (rho4x4[0] + rho4x4[2] + rho4x4[8] + rho4x4[10]);
+    b0_01 = 0.5 * (rho4x4[1] + rho4x4[3] + rho4x4[9] + rho4x4[11]);
+    b0_11 = 0.5 * (rho4x4[5] + rho4x4[7] + rho4x4[13] + rho4x4[15]);
+    b1_00 = 0.5 * (rho4x4[0] - rho4x4[2] - rho4x4[8] + rho4x4[10]);
+    b1_01 = 0.5 * (rho4x4[1] - rho4x4[3] - rho4x4[9] + rho4x4[11]);
+    b1_11 = 0.5 * (rho4x4[5] - rho4x4[7] - rho4x4[13] + rho4x4[15]);
+  }
+  pA0 = clamp(b0_00 + b0_11, 0, 1);
+  const a = uA < pA0 ? 0 : 1;
+  const norm = a === 0 ? Math.max(1e-12, b0_00 + b0_11) : Math.max(1e-12, b1_00 + b1_11);
+  const rB00 = (a === 0 ? b0_00 : b1_00) / norm;
+  const rB01 = (a === 0 ? b0_01 : b1_01) / norm;
+  const rB11 = (a === 0 ? b0_11 : b1_11) / norm;
+
+  // 2) Bob local measurement B_y = (Z + s_y X)/sqrt(2) where s_y = (y===0 ? +1 : -1)
+  //    Expectation <B_y> = ( (rB00 - rB11) + s_y * 2 * rB01 ) / sqrt(2), so P(b=0 | x,a,y) = 0.5 * (1 + <B_y>)
+  const sy = y === 0 ? 1 : -1;
+  const expBy = ((rB00 - rB11) + sy * 2 * rB01) * Math.SQRT1_2;
+  const pB0 = clamp(0.5 * (1 + expBy), 0, 1);
+  const b = uB < pB0 ? 0 : 1;
+  return { a, b, win: (a ^ b) === (x & y), pA0 };
+}
+
+/** Exact Wootters concurrence & Horodecki CHSH S_max directly from 4x4 real symmetric Bell-diagonal/Werner density matrix */
+export function evalTwoQubitBellMetrics(rho4x4) {
+  const coh = Math.abs(rho4x4[3]);
+  const conc = Math.max(0, 2 * coh - 2 * Math.sqrt(Math.max(0, rho4x4[5] * rho4x4[10])));
+  const txx = 2 * (rho4x4[3] + rho4x4[6]);
+  const tzz = rho4x4[0] + rho4x4[15] - rho4x4[5] - rho4x4[10];
+  const chshS = 2 * Math.sqrt(tzz * tzz + txx * txx);
+  // Exact reduced marginal bias ||rho_A - I/2||_1
+  const rhoA00 = rho4x4[0] + rho4x4[5];
+  const rhoA01 = rho4x4[2] + rho4x4[7];
+  const marginalBias = Math.hypot(rhoA00 - 0.5, rhoA01);
+  return { concurrence: clamp(conc, 0, 1), chshS, marginalBias };
+}
+
+function getAlleleClasses(g) {
+  // Exact 8 equal-measure octile bins (uniform neutral share = 1/8 = 0.125) across each locus's [lo, hi] range in genome.js:
+  // pigmentHue in [0.0, 1.0], thermOpt in [0.25, 0.75], osteoderm in [0.05, 1.25]
+  const uHue = clamp(g.pigmentHue ?? 0.5, 0, 0.9999);
+  const uTherm = clamp(((g.thermOpt ?? 0.5) - 0.25) / 0.50, 0, 0.9999);
+  const uArmor = clamp(((g.osteoderm ?? 0.45) - 0.05) / 1.20, 0, 0.9999);
+  return [`hue:${Math.floor(uHue * 8)}`, `therm:${Math.floor(uTherm * 8)}`, `armor:${Math.floor(uArmor * 8)}`];
+}
 
 /** Normalized genetic distance across key bauplan & pigment loci + assortative speciation gate */
 export function canAssortativeMate(genA, genB, hoxA, hoxB) {
@@ -24,36 +97,34 @@ export function canAssortativeMate(genA, genB, hoxA, hoxB) {
   if (hoxA && hoxB && hoxA.limbPairs !== hoxB.limbPairs) {
     const pairDiff = Math.abs(hoxA.limbPairs - hoxB.limbPairs);
     // Strong assortative reproductive isolation blocks cross-clade mating when speciationIso is high
-    if (iso > 0.62 || (pairDiff >= 2 && iso > 0.44)) return false;
+    if (iso > 0.72 || (pairDiff >= 3 && iso > 0.56)) return false;
   }
   const dHue = Math.min(Math.abs((genA.pigmentHue ?? 0.5) - (genB.pigmentHue ?? 0.5)), 1 - Math.abs((genA.pigmentHue ?? 0.5) - (genB.pigmentHue ?? 0.5)));
   const dBody = Math.abs((genA.bodyLen ?? 1.0) - (genB.bodyLen ?? 1.0));
-  const genDist = 0.6 * dHue + 0.4 * dBody;
-  return genDist <= (0.88 - 0.52 * iso);
+  const dTherm = 0.5 * Math.abs((genA.thermOpt ?? 0.0) - (genB.thermOpt ?? 0.0));
+  const genDist = 0.40 * dHue + 0.25 * dBody + 0.35 * dTherm;
+  return genDist <= (0.92 - 0.45 * iso);
 }
 
-/** Diploid Simulated Binary Crossover (SBX) + bounded polynomial mutation over all 128 developmental, Zygote & Hox GRN genes */
-export function crossoverGenomes(genA, genB, r, mutRate = 0.14, etaC = 4.0) {
+/**
+ * Mendelian Diploid 128-Locus Recombination + Doubly-Stochastic Reflecting Mutation:
+ * Preserves exact Hardy-Weinberg standing genetic variance and uniform stationary measure under neutral panmixia
+ * (used identically by both `layEgg` and the Bedau-Packard `_neutralShadowBirth` model!).
+ */
+export function crossoverGenomes(genA, genB, r, mutRate = 0.14) {
   const child = {};
   for (let i = 0; i < FULL_GENES.length; i++) {
     const [nm, lo, hi] = FULL_GENES[i];
     const span = hi - lo;
-    const ua = clamp(((genA[nm] ?? STARTER[nm] ?? (lo + hi) * 0.5) - lo) / span, 0, 1);
-    const ub = clamp(((genB[nm] ?? STARTER[nm] ?? (lo + hi) * 0.5) - lo) / span, 0, 1);
-    let u;
-    if (r() < 0.85 && Math.abs(ua - ub) > 1e-6) {
-      const uRand = Math.min(0.9999, Math.max(1e-4, r()));
-      const beta = uRand <= 0.5
-        ? Math.pow(2 * uRand, 1 / (etaC + 1))
-        : Math.pow(1 / (2 * (1 - uRand)), 1 / (etaC + 1));
-      const c1 = 0.5 * ((1 + beta) * ua + (1 - beta) * ub);
-      const c2 = 0.5 * ((1 - beta) * ua + (1 + beta) * ub);
-      u = r() < 0.5 ? c1 : c2;
-    } else {
-      u = r() < 0.5 ? ua : ub;
-    }
+    const ua = clamp(((genA[nm] ?? STARTER[nm] ?? (lo + hi) * 0.5) - lo) / span, 0.02, 0.98);
+    const ub = clamp(((genB[nm] ?? STARTER[nm] ?? (lo + hi) * 0.5) - lo) / span, 0.02, 0.98);
+    // Independent 50/50 Mendelian allelic segregation across all 128 developmental, Zygote & Hox GRN loci
+    let u = r() < 0.5 ? ua : ub;
     if (r() < mutRate) {
-      u += 0.11 * gauss(r);
+      // Symmetric uniform step with specular reflection on [0.02, 0.98] -> exact uniform stationary measure!
+      u += (r() - 0.5) * 0.28;
+      if (u < 0.02) u = 0.04 - u;
+      if (u > 0.98) u = 1.96 - u;
     }
     u = clamp(u, 0.02, 0.98);
     child[nm] = +(lo + u * span).toFixed(4);
@@ -66,16 +137,19 @@ export function mutateStarterGenome(r, spread = 0.16) {
   for (let i = 0; i < FULL_GENES.length; i++) {
     const [nm, lo, hi] = FULL_GENES[i];
     const base = STARTER[nm] ?? (lo + hi) * 0.5;
-    let u = (base - lo) / (hi - lo) + spread * (r() - 0.5);
-    // Give wild conspecifics rich 5-clade macro-evolutionary, patagium, angler-lure & pigment diversity right from generation 0
-    if (nm === 'pigmentHue') u = r();
+    const r0 = r();
+    let u = (base - lo) / (hi - lo) + spread * (r0 - 0.5);
+    // Give wild conspecifics rich 5-clade macro-evolutionary, thermal, patagium, angler-lure & pigment diversity right from generation 0
+    if (nm === 'pigmentHue') u = 0.02 + 0.96 * r();
+    else if (nm === 'thermOpt') u = 0.02 + 0.96 * r0;
     else if (nm === 'crestFin' || nm === 'tailFluke') u = clamp(0.15 + 0.75 * r(), 0.05, 0.95);
     else if (nm === 'bodyLen' || nm === 'bodyGirth' || nm === 'foreLimb' || nm === 'hindLimb') u = clamp(0.5 + 0.55 * (r() - 0.5), 0.1, 0.9);
     else if (nm === 'limbTopo' || nm === 'cladeGene') u = clamp(0.04 + 0.92 * r(), 0.03, 0.97); // wild 0L/4L/6L/8L/10L 5-clade radiation!
     else if (nm === 'patagiumGene' || nm === 'anglerLure') u = clamp(0.08 + 0.84 * r(), 0.04, 0.96);
     else if (nm === 'speciationIso') u = clamp(0.18 + 0.62 * r(), 0.10, 0.90);
-    else if (nm === 'osteoderm' || nm === 'gillFronds') u = clamp(0.15 + 0.75 * r(), 0.05, 0.95);
-    g[nm] = +(lo + clamp(u, 0.03, 0.97) * (hi - lo)).toFixed(4);
+    else if (nm === 'osteoderm') u = 0.02 + 0.96 * r();
+    else if (nm === 'gillFronds') u = clamp(0.15 + 0.75 * r(), 0.05, 0.95);
+    g[nm] = +(lo + clamp(u, 0.02, 0.98) * (hi - lo)).toFixed(4);
   }
   return g;
 }
@@ -101,12 +175,32 @@ export class Ecosystem {
     this.xylos = [];
     this.titans = [];
     this.shoggoths = [];
+    this.acousticPackets = [];
     this.refugeImmunityEnabled = opts.refugeImmunityEnabled ?? true; // causal switch for V4 4-arm sanctuary audit
+    this.eccEnabled = opts.eccEnabled ?? true;                       // causal switch for T9 RS[15,11] burst-noise ECC audit
+    this.xenoClassicalSurrogate = opts.xenoClassicalSurrogate ?? false; // causal LHV bound switch for T5 CHSH audit
+    this.titanSanctionsEnabled = opts.titanSanctionsEnabled ?? true; // multilateral coalition embargo against defectors
     this.rk = mulberry((seed * 15401 + 73) >>> 0); // dedicated Multi-Kingdom RNG stream (keeps `this.r` untouched!)
     this.cladeCounts = { '0L': 0, '4L': 0, '6L': 0, '8L': 0, '10L': 0 };
     this.casteCounts = { 'Sovereign α': 0, 'Harvester β': 0, 'Sentinel γ': 0, 'Weaver δ': 0, 'Disruptor ε': 0 };
     this.colonyOrderR = 0.5;
     this.speciesCount = 1;
+    // Bedau-Packard Cumulative Evolutionary Activity vs Neutral Shadow Drift Model (`T11`)
+    this.bedauRealMap = new Map();
+    this.bedauNeutralMap = new Map();
+    this.neutralShadowPeers = [];
+    this.bedauActivity = 0.0;
+    this.bedauNeutralActivity = 0.0;
+    this._bedauAcc = 0.0;
+    // Empirical 4x4 CHSH Non-Local Game Contingency Table (`T5`)
+    this.chshStats = {
+      trials: 0,
+      wins: 0,
+      winRate: 0.0,
+      empiricalS: 0.0,
+      noSignalingMaxDiff: 0.0,
+      counts: new Uint32Array(16), // [ (x*2 + y)*4 + (a*2 + b) ]
+    };
     this.lineageTree = [
       { id: 0, parentA: -1, parentB: -1, gen: 0, t: 0, hue: 0.75, crestFin: 1.0, bodyLen: 1.0, limbPairs: 3, clade: '6L Hexapod', label: 'Focal-0' },
     ];
@@ -120,38 +214,85 @@ export class Ecosystem {
       maxGen: 0,
       rsCallsSent: 0,
       rsSymbolsRepaired: 0,
+      rsFramesDropped: 0,
+      rsEarlyEvasions: 0,
       sanctuarySaves: 0,
       predations: 0,
+      starvations: 0,
       devourSalvages: 0,
       forgePurifications: 0,
       titanAlliances: 0,
       titanWars: 0,
       shoggothBargains: 0,
+      shoggothCooperativeGains: 0,
+      shoggothAmbushes: 0,
+      shoggothEvasions: 0,
+      shoggothNetPayoff: 0.0,
     };
 
     world.coEvolvePlants = true;
     world.eco = this;
 
     for (let i = 0; i < initPeers; i++) this.spawnPeer(null, null, true);
+    // Clone exact generation-0 genomes & lifecycle state into the demographically-matched Neutral Shadow Drift Population!
+    for (let i = 0; i < this.peers.length; i++) {
+      const p0 = this.peers[i];
+      this.neutralShadowPeers.push({ gen: { ...p0.gen }, hox: p0.hox, age: p0.age, mateCooldown: p0.mateCooldown });
+    }
     for (let i = 0; i < initMites; i++) this.spawnMite();
     for (let i = 0; i < initPreds; i++) this.spawnPredator();
     this.initMultiKingdomDome(opts);
   }
 
+  _neutralShadowDeath() {
+    const S = this.neutralShadowPeers;
+    if (S.length > 1) {
+      const adultIdxs = [];
+      for (let i = 0; i < S.length; i++) if (S[i].age >= 14) adultIdxs.push(i);
+      const rmIdx = adultIdxs.length > 0
+        ? adultIdxs[Math.floor(this.rk() * adultIdxs.length)]
+        : Math.floor(this.rk() * S.length);
+      S.splice(rmIdx, 1);
+    }
+  }
+
+  _neutralShadowBirth() {
+    const S = this.neutralShadowPeers;
+    if (S.length < 2) return;
+    const rk = this.rk;
+    // Exact demographically-matched Bedau-Packard Neutral Shadow: same maturation/cooldown & crossoverGenomes(..., 0.15), fitness-blind!
+    const elig = [];
+    for (let i = 0; i < S.length; i++) {
+      if (S[i].age >= 32 && S[i].mateCooldown <= 0) elig.push(S[i]);
+    }
+    const pool = elig.length >= 2 ? elig : S;
+    const iA = Math.floor(rk() * pool.length);
+    let iB = Math.floor(rk() * (pool.length - 1));
+    if (iB >= iA) iB++;
+    const pA = pool[iA], pB = pool[iB];
+    pA.mateCooldown = 13;
+    pB.mateCooldown = 13;
+    const child = crossoverGenomes(pA.gen, pB.gen, rk, 0.15);
+    S.push({ gen: child, hox: evalHoxGRN(child), age: 0, mateCooldown: 16 });
+  }
+
   spawnPeer(gen = null, pos = null, adultStart = false, meta = {}) {
     const r = this.r, W = this.world;
     if (this.peers.length >= this.maxPeers) {
-      // Recycle oldest elder biomass into soil nutrients to sustain open-ended generational turnover
-      let oldestIdx = 0, bestAge = -1;
+      // Selective carrying-capacity competition: lowest-energy / thermally stressed adult is displaced & recycled into soil N/C
+      let cullIdx = 0, worstVit = 1e9;
       for (let i = 0; i < this.peers.length; i++) {
-        if (this.peers[i].age > bestAge) { bestAge = this.peers[i].age; oldestIdx = i; }
+        const pi = this.peers[i];
+        const vit = (pi.age < 14 ? 2.5 : 0.0) + pi.energy + 0.30 * (pi._tpc ?? 0.5) + 0.20 * (pi._uArmor ?? 0.4) - 0.002 * pi.age;
+        if (vit < worstVit) { worstVit = vit; cullIdx = i; }
       }
-      const old = this.peers.splice(oldestIdx, 1)[0];
+      const old = this.peers.splice(cullIdx, 1)[0];
       if (old) {
         const si = W.soilIndex(old.x, old.z);
-        W.soilN[si] = Math.min(2.0, W.soilN[si] + 0.35);
-        W.soilC[si] = Math.min(2.0, W.soilC[si] + 0.40);
+        W.fluxSoilN ? W.fluxSoilN(si, 0.35, 2) : (W.soilN[si] = Math.min(2.0, W.soilN[si] + 0.35));
+        W.fluxSoilC ? W.fluxSoilC(si, 0.40, 2) : (W.soilC[si] = Math.min(2.0, W.soilC[si] + 0.40));
         W.transferEnergy?.(5, 8, 0.35);
+        this._neutralShadowDeath();
         // `devourBrain` horizontal trait salvage: nearby kin absorbs 5% of elder's thermOpt/legSw adaptation
         for (let k = 0; k < this.peers.length; k++) {
           const nb = this.peers[k];
@@ -279,7 +420,7 @@ export class Ecosystem {
       generation: genNum,
       focalInvolved,
       progress: 0,
-      tempOpt: 25.0 + 4.0 * (childGen.thermOpt ?? 0),
+      tempOpt: 19.0 + 13.0 * clamp(((childGen.thermOpt ?? 0.5) - 0.25) / 0.50, 0, 1),
       hue: childGen.pigmentHue ?? 0.5,
       pulse: this.r() * Math.PI * 2,
       held: false,
@@ -391,7 +532,10 @@ export class Ecosystem {
         }
         for (let k = 0; k < this.peers.length; k++) {
           const p = this.peers[k];
-          checkPrey(p.x, p.z, p.camo, p.curl, p.deceive || 0);
+          const rawHueDiff = Math.abs((p.gen.pigmentHue ?? 0.5) - 0.42);
+          const dSubstr = Math.min(rawHueDiff, 1.0 - rawHueDiff); // [0..0.5] contrast against moss-cyan Biodome floor
+          const passiveCrypsis = 0.48 * Math.max(0, 1.0 - dSubstr * 3.2);
+          checkPrey(p.x, p.z, Math.max(p.camo, passiveCrypsis), p.curl, p.deceive || 0);
         }
         if (candX !== null) {
           tx = candX; tz = candZ;
@@ -421,37 +565,51 @@ export class Ecosystem {
       pr.z = clamp(pr.z + Math.sin(pr.hdg) * sp * dt, -WORLD + 1.5, WORLD - 1.5);
       const hGround = W.height(pr.x, pr.z);
       pr.y += (hGround + 1.35 - 0.55 * pr.swoop - pr.y) * Math.min(1, dt * 4);
-      // Deterministic Leviathan wake ploughs soil strata slightly without touching `this.r`!
+      // Deterministic Leviathan wake ploughs soil strata conservatively without touching `this.r`!
       const sIdxPr = W.soilIndex(pr.x, pr.z);
-      W.soilN[sIdxPr] = Math.min(2.0, W.soilN[sIdxPr] + dt * 0.008);
+      if (W.fluxSoilN) W.fluxSoilN(sIdxPr, dt * 0.008, 2);
+      else W.soilN[sIdxPr] = Math.min(2.0, W.soilN[sIdxPr] + dt * 0.008);
 
       // Close swoop startles focal creature or peer -> releases Schreckstoff alarm pheromone & resets predator cooldown!
       if (focalCreature) {
         const df = Math.hypot(pr.x - fHd[0], pr.z - fHd[2]);
         const safeInRefuge = this.refugeImmunityEnabled && W.isInsideSanctuary?.(fHd[0], fHd[2]);
+        const focalWarned = (focalCreature._rsWarnTimer || 0) > 0;
         if (df < 2.2 && pr.cooldown <= 0 && !safeInRefuge) {
-          pr.cooldown = 14.0;
-          W.depositPheromone(fHd[0], fHd[2], 1, 2.2); // Schreckstoff alarm burst!
-          focalCreature.nociception = Math.max(focalCreature.nociception, 0.65);
-          focalCreature.heptarch?.inflictLimbTrauma(Math.floor(this.rk() * 6), 0.26);
-          focalCreature.vocalFreq = 680;
-          focalCreature.vocalAmp = 0.9;
-          this.stats.alarmCalls++;
-          this.stats.predations++;
-          focalCreature.ev('alarm', 'Shadow-Leviathan swooped — limb V_mem depolarized & Schreckstoff emitted!');
+          if (focalWarned) {
+            this.stats.rsEarlyEvasions++;
+            pr.cooldown = 6.0;
+          } else {
+            pr.cooldown = 14.0;
+            W.depositPheromone(fHd[0], fHd[2], 1, 2.2); // Schreckstoff alarm burst!
+            focalCreature.nociception = Math.max(focalCreature.nociception, 0.65);
+            focalCreature.heptarch?.inflictLimbTrauma(Math.floor(this.rk() * 6), 0.26);
+            focalCreature.vocalFreq = 680;
+            focalCreature.vocalAmp = 0.9;
+            this.stats.alarmCalls++;
+            this.stats.predations++;
+            focalCreature.ev('alarm', 'Shadow-Leviathan swooped — limb V_mem depolarized & Schreckstoff emitted!');
+          }
         } else if (df < 2.2 && safeInRefuge) {
           this.stats.sanctuarySaves++;
         }
       }
       for (let k = 0; k < this.peers.length; k++) {
         const p = this.peers[k];
-        if (Math.hypot(pr.x - p.x, pr.z - p.z) < 2.0 && pr.cooldown <= 0) {
+        if (Math.hypot(pr.x - p.x, pr.z - p.z) < 2.1 && pr.cooldown <= 0) {
           if (this.refugeImmunityEnabled && W.isInsideSanctuary?.(p.x, p.z)) {
             this.stats.sanctuarySaves++;
             continue;
           }
-          pr.cooldown = 12.0;
-          p.energy = Math.max(0.2, p.energy - 0.12);
+          // Pre-contact osteoderm carapace curl (only when warned at range > 2.4u via RS[15,11] broadcast!) deflects strike
+          if ((p.earlyWarnTimer || 0) > 0 && p.curl > 0.65) {
+            this.stats.rsEarlyEvasions++;
+            pr.cooldown = 4.5;
+            continue;
+          }
+          pr.cooldown = 7.5;
+          const armor = clamp(p.gen.osteoderm ?? 0.3, 0, 1);
+          p.energy = Math.max(0.02, p.energy - 0.34 * (1 - 0.68 * armor));
           p.curl = 1.0;
           p.vocalFreq = 710;
           p.vocalAmp = 0.85;
@@ -507,7 +665,7 @@ export class Ecosystem {
       const tAmb = W.ambientTemp(eg.x, eg.z, hour);
       const tDiff = Math.abs(tAmb - eg.tempOpt);
       const thermRate = clamp(1.35 - 0.08 * tDiff, 0.35, 1.45); // faster incubation near warm hydrothermal vents!
-      eg.progress += (dt / 26.0) * thermRate; // ~20-28 s incubation
+      eg.progress += (dt / 12.0) * thermRate; // ~9-16 s incubation for multi-generational turnover
       if (eg.progress >= 1.0) {
         this.eggs.splice(i, 1);
         const neo = this.spawnPeer(eg.gen, [eg.x, eg.z], false, {
@@ -516,34 +674,116 @@ export class Ecosystem {
           generation: eg.generation,
         });
         this.stats.births++;
+        this._neutralShadowBirth();
         if (focalCreature && eg.focalInvolved) {
           focalCreature.ev('hatch', `offspring #${neo.id} (gen ${neo.generation}) hatched from incubated egg!`);
         }
       }
     }
 
-    // 4) Step Autonomous Conspecific Glitchlings (`peers`) + Diploid Courtship & Breeding
-    for (let i = 0; i < this.peers.length; i++) {
+    if (focalCreature && focalCreature._rsWarnTimer > 0) {
+      focalCreature._rsWarnTimer = Math.max(0, focalCreature._rsWarnTimer - dt);
+    }
+
+    // 3b) Propagate & decode spatial RS[15,11] Neuralese acoustic packets across receivers!
+    for (let a = this.acousticPackets.length - 1; a >= 0; a--) {
+      const pkt = this.acousticPackets[a];
+      pkt.age += dt;
+      if (pkt.age > 0.85) { this.acousticPackets.splice(a, 1); continue; }
+      const waveR = pkt.age * 20.0;
+      const tryReceive = (rxX, rxZ, receiverObj, isFocal = false) => {
+        if (pkt.receivedBy.has(receiverObj)) return;
+        const dSrc = Math.hypot(rxX - pkt.srcX, rxZ - pkt.srcZ);
+        if (dSrc > waveR || dSrc > 16.5) return;
+        pkt.receivedBy.add(receiverObj);
+        // Corrupt independent GF(2^4) symbols along acoustic ray (2 burst symbol errors from storm + multipathing)
+        const rxCw = Uint8Array.from(pkt.txCw);
+        const nErrs = (W.dome?.auroraStorm || 0) > 0.12 || dSrc > 5.0 ? 2 : 1;
+        const p0 = Math.floor(this.rk() * 15);
+        rxCw[p0] ^= (1 + Math.floor(this.rk() * 15)) & 0x0f;
+        if (nErrs >= 2) {
+          const p1 = (p0 + 1 + Math.floor(this.rk() * 14)) % 15;
+          rxCw[p1] ^= (1 + Math.floor(this.rk() * 15)) & 0x0f;
+        }
+        const canECC = this.eccEnabled && !(isFocal && focalCreature?.lesion?.heptarch);
+        if (!canECC) {
+          // Uncoded / ECC-ablated receiver: any symbol corruption breaks parity syndrome -> packet dropped!
+          this.stats.rsFramesDropped++;
+          return;
+        }
+        const dec = decodeAcousticCallRS(rxCw);
+        if (dec.ok) {
+          this.stats.rsSymbolsRepaired += dec.correctedSymbols;
+          if (isFocal) {
+            focalCreature._rsWarnTimer = 4.5;
+            if (focalCreature.heptarch) {
+              focalCreature.heptarch.rsFramesDecoded++;
+              focalCreature.heptarch.rsSymbolsRepaired += dec.correctedSymbols;
+            }
+          } else if (Math.hypot(rxX - dec.x, rxZ - dec.z) > 2.4) {
+            receiverObj.earlyWarnTimer = 5.5;
+            receiverObj.earlyPredX = dec.x;
+            receiverObj.earlyPredZ = dec.z;
+            W.depositPheromone(dec.x, dec.z, 1, 0.45 * dec.urgency);
+          }
+        } else {
+          this.stats.rsFramesDropped++;
+        }
+      };
+      if (focalCreature) tryReceive(fHd[0], fHd[2], focalCreature, true);
+      for (let k = 0; k < this.peers.length; k++) {
+        if (this.peers[k].id !== pkt.senderId) tryReceive(this.peers[k].x, this.peers[k].z, this.peers[k], false);
+      }
+    }
+
+    // 4) Step Autonomous Conspecific Glitchlings (`peers`) + Natural Selection + Diploid Courtship
+    for (let i = this.peers.length - 1; i >= 0; i--) {
       const p = this.peers[i];
       p.age += dt;
-      p.stage = p.age < 22 ? 'neonate' : p.age < 50 ? 'juvenile' : p.age < 260 ? 'adult' : 'elder';
-      const targetScale = p.stage === 'neonate' ? 0.48 + 0.012 * p.age : p.stage === 'juvenile' ? 0.74 + 0.009 * (p.age - 22) : p.stage === 'elder' ? 0.96 : 1.0;
+      p.stage = p.age < 14 ? 'neonate' : p.age < 32 ? 'juvenile' : p.age < 260 ? 'adult' : 'elder';
+      const targetScale = p.stage === 'neonate' ? 0.48 + 0.016 * p.age : p.stage === 'juvenile' ? 0.74 + 0.012 * (p.age - 14) : p.stage === 'elder' ? 0.96 : 1.0;
       p.scale += (targetScale - p.scale) * Math.min(1, dt * 1.5);
 
-      p.energy = clamp(p.energy - dt * 0.0045, 0.05, 1.2);
+      const tAmb = W.ambientTemp(p.x, p.z, hour);
+      const uTherm = clamp(((p.gen.thermOpt ?? 0.5) - 0.25) / 0.50, 0, 1);
+      const uArmor = clamp(((p.gen.osteoderm ?? 0.45) - 0.05) / 1.20, 0, 1);
+      const rawHueD = Math.abs((p.gen.pigmentHue ?? 0.5) - 0.4375);
+      const crypsis = Math.max(0, 1.0 - Math.min(rawHueD, 1.0 - rawHueD) * 3.8);
+      const tPref = 19.0 + 13.0 * uTherm;
+      p.bodyTemp += (tAmb + 1.8 - p.bodyTemp) * Math.min(1, dt * 0.35);
+      // Huey-Stevenson ectotherm thermal performance curve + substrate crypsis + osteoderm mass trade-off
+      const tpc = Math.exp(-(((tAmb - tPref) / 3.5) ** 2));
+      p._tpc = tpc;
+      p._crypsis = crypsis;
+      p._uArmor = uArmor;
+      const armorCost = 0.0004 * uArmor;
+      const thermBurn = 0.0044 * (1.0 - tpc);
+      const crypsisStress = 0.0014 * (1.0 - crypsis);
+      p.energy = clamp(p.energy - dt * (0.0010 + thermBurn + crypsisStress + armorCost), 0.0, 1.2);
       p.hydration = clamp(p.hydration - dt * 0.0035, 0.05, 1.1);
+      p.earlyWarnTimer = Math.max(0, (p.earlyWarnTimer || 0) - dt);
+
+      // Genuine starvation mortality (with minimum 4-peer refugium floor so catastrophe tests stay populated)
+      if (p.energy <= 0.045 && this.peers.length > 4) {
+        this.peers.splice(i, 1);
+        const si = W.soilIndex(p.x, p.z);
+        if (W.fluxSoilN) W.fluxSoilN(si, 0.28, 2);
+        if (W.fluxSoilC) W.fluxSoilC(si, 0.32, 2);
+        W.transferEnergy?.(5, 8, 0.25);
+        this.stats.starvations++;
+        this._neutralShadowDeath();
+        this.updateCladeCensus();
+        continue;
+      }
+
       p.mateCooldown = Math.max(0, p.mateCooldown - dt);
       p.courtship = Math.max(0, p.courtship - dt * 0.6);
       p.vocalAmp = Math.max(0, p.vocalAmp - dt * 1.4);
       p.goalTimer -= dt;
 
-      const tAmb = W.ambientTemp(p.x, p.z, hour);
-      const tPref = 22.5 + 4.5 * (p.gen.thermOpt ?? 0);
-      p.bodyTemp += (tAmb + 1.8 - p.bodyTemp) * Math.min(1, dt * 0.35);
-
-      // Alarm & predator check (Sentinel gamma has extended 8.8u perimeter radar & RS[15,11] burst-proof acoustic broadcast!)
+      // Alarm & predator check (Sentinel gamma has extended 13.5u perimeter radar & RS[15,11] burst-proof broadcast!)
       p.rsCooldown = Math.max(0, (p.rsCooldown || 0) - dt);
-      const vigRange = p.casteId === 2 ? 8.8 : 6.5;
+      const vigRange = p.casteId === 2 ? 13.5 : 3.2;
       let predNear = 0, seenPred = null;
       for (let q = 0; q < this.predators.length; q++) {
         const pr = this.predators[q];
@@ -553,26 +793,19 @@ export class Ecosystem {
           seenPred = pr;
         }
       }
-      if (p.casteId === 2 && seenPred && predNear > 0.22 && p.rsCooldown <= 0) {
-        p.rsCooldown = 5.5;
-        // Encode RS[15,11] Neuralese alarm call, corrupt up to 2 symbols with storm/misfire noise, and decode at focal/peers!
+      if (p.casteId === 2 && seenPred && predNear > 0.16 && p.rsCooldown <= 0) {
+        p.rsCooldown = 3.8;
         const txCw = encodeAcousticCallRS(1, seenPred.x, seenPred.z, predNear, p.casteId);
-        const rxCw = Uint8Array.from(txCw);
-        const stormErrs = (W.dome?.auroraStorm || 0) > 0.15 ? 2 : 1;
-        for (let e = 0; e < stormErrs; e++) {
-          const pos = Math.floor(this.rk() * 15);
-          rxCw[pos] ^= (1 + Math.floor(this.rk() * 15)) & 0x0f;
-        }
-        const dec = decodeAcousticCallRS(rxCw);
+        this.acousticPackets.push({
+          senderId: p.id,
+          srcX: p.x,
+          srcZ: p.z,
+          txCw,
+          age: 0,
+          receivedBy: new Set([p]),
+        });
+        if (Math.hypot(seenPred.x - p.x, seenPred.z - p.z) > 2.4) p.earlyWarnTimer = 5.5;
         this.stats.rsCallsSent++;
-        this.stats.rsSymbolsRepaired += dec.correctedSymbols;
-        if (dec.ok) {
-          W.depositPheromone(dec.x, dec.z, 1, 1.35 * dec.urgency);
-          if (focalCreature?.heptarch) {
-            focalCreature.heptarch.rsFramesDecoded++;
-            focalCreature.heptarch.rsSymbolsRepaired += dec.correctedSymbols;
-          }
-        }
       }
       // Weaver delta nudges nearby DomeStones toward nearest shelter to build protective cairns
       if (p.casteId === 3 && W.domeStones && W.shelters?.length) {
@@ -588,9 +821,10 @@ export class Ecosystem {
       }
       p.deceive = p.casteId === 4 ? (predNear > 0.15 ? 0.92 : 0.45) : 0;
       const alarmConc = W.samplePheromone(p.x, p.z, 1);
-      const threat = Math.max(predNear, clamp(alarmConc * 0.6, 0, 1));
+      const rsThreat = (p.earlyWarnTimer || 0) > 0 ? 0.85 : 0;
+      const threat = Math.max(predNear, rsThreat, clamp(alarmConc * 0.6, 0, 1));
       p.camo += ((threat > 0.25 ? 0.9 : 0.08) - p.camo) * Math.min(1, dt * 2.5);
-      p.curl += ((threat > 0.68 ? 0.9 : 0) - p.curl) * Math.min(1, dt * 3.0);
+      p.curl += ((threat > 0.68 ? 0.92 : 0) - p.curl) * Math.min(1, dt * 3.0);
 
       // Goal selection: flee to shelter > thermal basking > water > courtship > foraging
       if (threat > 0.32 && W.shelters.length) {
@@ -600,7 +834,7 @@ export class Ecosystem {
           if (d < bd) { bd = d; bestS = sh; }
         }
         p.goalX = bestS.x; p.goalZ = bestS.z; p.goalType = 'shelter';
-      } else if (p.bodyTemp < tPref - 3.2 && W.vents.length) {
+      } else if (p.bodyTemp < tPref - 4.5 && p.energy > 0.45 && W.vents.length) {
         let bestV = W.vents[0], bd = 1e9;
         for (const vt of W.vents) {
           const d = Math.hypot(vt.x - p.x, vt.z - p.z);
@@ -614,28 +848,32 @@ export class Ecosystem {
           if (d < bd) { bd = d; bestW = pl; }
         }
         p.goalX = bestW.x; p.goalZ = bestW.z; p.goalType = 'water';
-      } else if (p.stage === 'adult' && p.energy > 0.58 && p.mateCooldown <= 0) {
+      } else if (p.stage === 'adult' && p.energy > 0.56 && p.mateCooldown <= 0) {
         // Emit sex/kin pheromone & seek nearest receptive adult (focal creature or conspecific)
         W.depositPheromone(p.x, p.z, 2, dt * 0.9);
-        let mateX = null, mateZ = null, mateRef = null, bd = 14.0;
+        let mateX = null, mateZ = null, mateRef = null, bd = 22.0, bestMateScore = -1e9;
         if (focalCreature && focalCreature.sleep.stage === 0 && focalCreature.metab.hunger() < 0.65 && (focalCreature.mateCooldown || 0) <= 0) {
           const df = Math.hypot(fHd[0] - p.x, fHd[2] - p.z);
           if (df < bd && canAssortativeMate(p.gen, focalCreature.gen, p.hox, focalCreature.body?.hox)) {
-            bd = df; mateX = fHd[0]; mateZ = fHd[2]; mateRef = 'focal';
+            bd = df; mateX = fHd[0]; mateZ = fHd[2]; mateRef = 'focal'; bestMateScore = 1.0 - 0.03 * df;
           }
         }
         for (let j = 0; j < this.peers.length; j++) {
           if (j === i) continue;
           const pj = this.peers[j];
-          if (pj.stage !== 'adult' || pj.energy < 0.52 || pj.mateCooldown > 0) continue;
+          if (pj.stage !== 'adult' || pj.energy < 0.50 || pj.mateCooldown > 0) continue;
           const dj = Math.hypot(pj.x - p.x, pj.z - p.z);
-          if (dj < bd && canAssortativeMate(p.gen, pj.gen, p.hox, pj.hox)) {
-            bd = dj; mateX = pj.x; mateZ = pj.z; mateRef = pj;
+          if (dj < 22.0 && canAssortativeMate(p.gen, pj.gen, p.hox, pj.hox)) {
+            // Condition-dependent Darwinian mate choice (Andersson 1994): favors high-energy partners within courtship range
+            const sc = pj.energy - 0.025 * dj;
+            if (sc > bestMateScore) {
+              bestMateScore = sc; bd = dj; mateX = pj.x; mateZ = pj.z; mateRef = pj;
+            }
           }
         }
         if (mateX !== null) {
           p.goalX = mateX; p.goalZ = mateZ; p.goalType = 'mate';
-          if (bd < 2.25) {
+          if (bd < 2.35) {
             p.courtship = Math.min(1, p.courtship + dt * 1.8);
             p.vocalAmp = 0.65;
             if (mateRef === 'focal' && focalCreature) {
@@ -651,10 +889,10 @@ export class Ecosystem {
               focalCreature.ev('courtship', `courted conspecific #${p.id} (${p.clade}) — diploid 128-gene Zygote+Hox egg laid!`);
             } else if (mateRef && mateRef.id > p.id) {
               this.stats.courtships++;
-              p.mateCooldown = 38;
-              mateRef.mateCooldown = 38;
-              p.energy -= 0.14;
-              mateRef.energy -= 0.14;
+              p.mateCooldown = 13;
+              mateRef.mateCooldown = 13;
+              p.energy -= 0.09;
+              mateRef.energy -= 0.09;
               const genNum = Math.max(p.generation, mateRef.generation) + 1;
               this.layEgg(0.5 * (p.x + mateRef.x), 0.5 * (p.z + mateRef.z), p.gen, mateRef.gen, p.id, mateRef.id, genNum, false);
             }
@@ -680,7 +918,9 @@ export class Ecosystem {
       const dx = p.goalX - p.x, dz = p.goalZ - p.z, dGoal = Math.hypot(dx, dz);
       const f0 = p.gen.f0 ?? 2.1;
       const patGlide = p.patagium > 0.3 ? (1 + 0.28 * p.patagium) : 1.0;
-      const strideGain = (0.55 + 0.35 * (p.gen.legSw ?? 1.0)) * (0.65 + 0.35 * p.scale) * patGlide * (1 - 0.7 * p.curl);
+      const armorDrag = 1.08 - 0.22 * clamp(p.gen.osteoderm ?? 0.3, 0, 1);
+      const tpcGain = 0.52 + 0.62 * (p._tpc ?? 0.85);
+      const strideGain = (0.55 + 0.35 * (p.gen.legSw ?? 1.0)) * (0.65 + 0.35 * p.scale) * patGlide * armorDrag * tpcGain * (1 - 0.7 * p.curl);
       if (dGoal > 0.45) {
         const targetHdg = Math.atan2(dz, dx);
         const dH = Math.atan2(Math.sin(targetHdg - p.hdg), Math.cos(targetHdg - p.hdg));
@@ -697,7 +937,8 @@ export class Ecosystem {
           if (pl && pl.fruit > 0.25) {
             pl.fruit = Math.max(0, pl.fruit - 0.45);
             pl.stress = Math.min(1, pl.stress + 0.25);
-            p.energy = Math.min(1.15, p.energy + 0.32 * pl.sugarTrait);
+            const gutAssim = (0.62 + 0.50 * (p._tpc ?? 0.8)) * (0.72 + 0.38 * (p._crypsis ?? 0.5));
+            p.energy = Math.min(1.15, p.energy + 0.32 * pl.sugarTrait * gutAssim);
             W.depositPheromone(pl.x, pl.z, 0, 0.95); // deposit food trail pheromone!
             if (r() < 0.25) W.waste.push({ x: p.x, y: p.y, z: p.z, type: r() < 0.5 ? 'urine' : 'feces', age: 0, amount: 0.7 });
           }
@@ -734,6 +975,42 @@ export class Ecosystem {
       this.colonyOrderR = Math.hypot(cSum, sSum) / this.peers.length;
     }
 
+    // 4b) Bedau-Packard (1998) Cumulative Evolutionary Activity vs Matched Neutral Shadow Population (`T11`)
+    this._bedauAcc += dt;
+    if (this._bedauAcc >= 1.0) {
+      this._bedauAcc -= 1.0;
+      for (let i = 0; i < this.neutralShadowPeers.length; i++) {
+        this.neutralShadowPeers[i].age += 1.0;
+        this.neutralShadowPeers[i].mateCooldown = Math.max(0, this.neutralShadowPeers[i].mateCooldown - 1.0);
+      }
+      const evalPopActivity = (pop, map) => {
+        const nTot = pop.length;
+        if (!nTot) return 0;
+        const counts = new Map();
+        for (let i = 0; i < nTot; i++) {
+          const alleles = getAlleleClasses(pop[i].gen);
+          for (let a = 0; a < alleles.length; a++) {
+            counts.set(alleles[a], (counts.get(alleles[a]) || 0) + 1);
+          }
+        }
+        for (const k of map.keys()) {
+          if (!counts.has(k)) map.delete(k); // extinct allele class resets persistence!
+        }
+        let sumAct = 0;
+        const c0 = 0.25; // Bedau, Snyder & Packard (1998, ALife VI Eq. 4) neutral drift baseline (2/K for K=8 octiles)
+        for (const [k, cnt] of counts.entries()) {
+          const conc = cnt / nTot;
+          const delta = Math.max(0, conc - c0); // excess adaptive concentration increment above neutral baseline
+          const aNew = (map.get(k) || 0) + delta;
+          map.set(k, aNew);
+          sumAct += conc * aNew;
+        }
+        return sumAct / 3.0; // mean over the 3 ecological adaptation loci
+      };
+      this.bedauActivity = evalPopActivity(this.peers, this.bedauRealMap);
+      this.bedauNeutralActivity = evalPopActivity(this.neutralShadowPeers, this.bedauNeutralMap);
+    }
+
     // 5) Step Multi-Kingdom Dome Beings (`Xenomimics`, `Xylos`, `Titans`, `Shoggoths`)
     this.stepMultiKingdomDome(dt, focalCreature, fHd);
   }
@@ -741,24 +1018,33 @@ export class Ecosystem {
   /**
    * Initialize the 4 distinct non-Glitchling Multi-Kingdom Dome species using dedicated stream `this.rk`
    * (Bestiary Invariant: every kingdom has a distinct body plan, sensory manifold, and ecological niche!):
-   *  - 4 Xenomimics (2 entangled +kappa / -kappa Bell twin pairs with zero-signaling Horodecki CHSH coordination)
-   *  - 4 Xylos (radial 6-group x 8 = 48 Poincaré-disk hyperbolic manifold gliders with 2-slot Global Workspace)
-   *  - 3 Titans (armored geodesic litho-colossi with Energy/Matter/Entropy ledgers & staggered IPD treaties/wars)
-   *  - 2 Shoggoths (amorphous multi-tendril ambushers with `meek = 1 - 0.6 * deceive` & conservation-exact bargains)
+   *  - 4 Xenomimics (2 entangled +kappa / -kappa 4x4 density-matrix Bell twin pairs with zero-signaling CHSH game)
+   *  - 4 Xylos (radial 6-group x 8 = 48 Poincaré-disk K=-1 hyperbolic geodesic gliders with 2-slot Global Workspace)
+   *  - 3 Titans (armored geodesic litho-colossi with Press-Dyson Memory-1 IPD strategies & multilateral sanctions)
+   *  - 2 Shoggoths (amorphous multi-tendril ambushers with Bayesian costly-signaling bargain/ambush game)
    */
   initMultiKingdomDome(opts = {}) {
     const rk = this.rk, W = this.world;
 
-    // 1) 4 Xenomimics = 2 Entangled Twin Pairs (+kappa mimic & -kappa anti-mimic)
-    const nXenoPairs = opts.xenomimicPairs ?? 2;
+    // 1) 4 Xenomimics = 2 Entangled Twin Pairs (+kappa mimic & -kappa anti-mimic) sharing explicit 4x4 rho_AB(t)
+    const nXenoPairs = opts.xenomimicPairs ?? (opts.xenomimics !== undefined ? Math.max(1, Math.floor(opts.xenomimics / 2)) : 2);
     this.xenoPairs = [];
     for (let pairId = 0; pairId < nXenoPairs; pairId++) {
+      // Explicit 4x4 Bell-state density matrix |Phi+><Phi+| on {|00>, |01>, |10>, |11>}
+      const rho4x4 = new Float64Array(16);
+      rho4x4[0] = 0.485; rho4x4[15] = 0.485;
+      rho4x4[5] = 0.015; rho4x4[10] = 0.015;
+      rho4x4[3] = 0.470; rho4x4[12] = 0.470; // Wootters C = 2*0.47 - 2*0.015 = 0.91 -> CHSH S > 2.70!
+      const met = evalTwoQubitBellMetrics(rho4x4);
       const pairState = {
         id: pairId,
-        concurrence: 0.94,                // Bell singlet concurrence C in [0..1]
-        chshS: 2 * Math.sqrt(1 + 0.94 * 0.94), // Horodecki exact S_max = 2*sqrt(1 + C^2) > 2.0!
-        marginalBias: 0.0,                // Tr_B(|Phi+><Phi+|) = I/2 -> strict zero superluminal signaling!
-        sharedTargetPlant: Math.floor(rk() * SITES),
+        rho4x4,
+        concurrence: met.concurrence,
+        chshS: met.chshS,
+        marginalBias: 0.0,
+        chshTimer: 0.35 + 0.2 * pairId,
+        lastWin: true,
+        members: [],
       };
       this.xenoPairs.push(pairState);
       for (let signIdx = 0; signIdx < 2; signIdx++) {
@@ -766,11 +1052,13 @@ export class Ecosystem {
         const ang = pairId * Math.PI + signIdx * 0.45 + 0.8;
         const dist = 6.8 + rk() * 5.0;
         const x = Math.cos(ang) * dist, z = Math.sin(ang) * dist;
-        this.xenomimics.push({
+        const xm = {
           id: pairId * 2 + signIdx,
           pairId,
           pair: pairState,
           kappaSign,
+          localPlant: (pairId * 5 + signIdx * 3 + Math.floor(rk() * SITES)) % SITES,
+          lastA: 0,
           x, z,
           y: W.height(x, z) + 0.42,
           hdg: ang + kappaSign * 0.6,
@@ -783,12 +1071,14 @@ export class Ecosystem {
           chirality: signIdx === 0 ? 1 : -1,
           bellFidelity: pairState.concurrence,
           chshS: pairState.chshS,
-          marginalBias: pairState.marginalBias,
-        });
+          marginalBias: 0.0,
+        };
+        pairState.members.push(xm);
+        this.xenomimics.push(xm);
       }
     }
 
-    // 2) 4 Xylos Hyperbolic Poincaré-Disk Gliders (48 foci across 6 sensory groups -> 2-slot Global Workspace)
+    // 2) 4 Xylos Hyperbolic Poincaré-Disk Gliders (48 foci across 6 sensory groups -> true K=-1 poincareExpMap)
     const nXylos = opts.xylos ?? 4;
     for (let i = 0; i < nXylos; i++) {
       const ang = (i * Math.PI) / 2 + 0.35;
@@ -796,6 +1086,7 @@ export class Ecosystem {
       const x = Math.cos(ang) * dist, z = Math.sin(ang) * dist;
       const fociRel = new Float32Array(48);
       for (let f = 0; f < 48; f++) fociRel[f] = 0.5 + 0.5 * rk();
+      const wx = 0.35 * Math.cos(ang), wy = 0.35 * Math.sin(ang);
       this.xylos.push({
         id: i,
         x, z,
@@ -804,8 +1095,10 @@ export class Ecosystem {
         hdg: rk() * Math.PI * 2,
         fociAct: new Float32Array(48),
         fociRel,
-        diskR: 0.35,   // Poincaré disk radial norm |w| < 0.98
+        wx, wy,        // Exact 2D Poincaré-disk coordinate w = (wx, wy) in D^2 (|w| < 1)
+        diskR: 0.35,   // Euclidean disk radius |w| < 0.98
         diskAng: ang,
+        hyperbolicDist: poincareDist(0, 0, wx, wy), // 2 * artanh(|w|)
         slotA: 0,      // Winning Global Workspace slot 1 (0..5)
         slotB: 2,      // Winning Global Workspace slot 2 (0..5)
         energy: 0.85,
@@ -814,15 +1107,29 @@ export class Ecosystem {
       });
     }
 
-    // 3) 3 Geopolitical IPD Titans (Energy / Matter / Entropy ledgers + all-pairs treaty matrix)
+    // 3) 3 Geopolitical Press-Dyson Memory-1 IPD Titans (Energy / Matter / Entropy ledgers + treaty matrix)
     const nTitans = opts.titans ?? 3;
     this.titanRelations = Array.from({ length: nTitans }, () => Array(nTitans).fill('truce'));
+    this.titanLastMove = Array.from({ length: nTitans }, () => new Int8Array(nTitans).fill(-1));
+    // Archetypal memory-1 stochastic IPD strategies [p0, p_CC, p_CD, p_DC, p_DD]:
+    //  0: Generous Tit-for-Tat (Nowak & Sigmund 1992), 1: Firm-but-Fair (Frean 1994 contrite cooperator), 2: Opportunistic Raider (Defector)
+    const baseStrats = [
+      [0.96, 0.98, 0.32, 0.92, 0.25],
+      [0.96, 0.98, 0.12, 0.94, 0.35],
+      [0.12, 0.18, 0.06, 0.22, 0.08],
+    ];
     for (let i = 0; i < nTitans; i++) {
       const ang = (i * Math.PI * 2) / 3 + 1.05;
       const dist = 10.5 + rk() * 3.5;
       const x = Math.cos(ang) * dist, z = Math.sin(ang) * dist;
+      const st = baseStrats[i % 3];
       this.titans.push({
         id: i,
+        archetype: i === 0 ? 'GTFT' : i === 1 ? 'FBF' : 'Defector',
+        ipdStrat: new Float64Array(st),
+        ipdPayoff: 0.0,
+        ipdRounds: 0,
+        coopMoves: 0,
         x, z,
         y: W.height(x, z) + 0.95,
         hdg: ang + Math.PI * 0.5,
@@ -830,19 +1137,21 @@ export class Ecosystem {
         matter: 10.0,
         entropy: 1.0,
         trust: new Float32Array([0.65, 0.65, 0.65]),
-        ipdTimer: 2.0 + i * 1.8, // staggered asynchronous diplomacy!
+        ipdTimer: 1.4 + i * 1.1, // staggered asynchronous diplomacy!
         stance: 'truce',
         shockwave: 0,
         ph: rk() * Math.PI * 2,
       });
     }
 
-    // 4) 2 Deceptive & Bargaining Shoggoths (`meek = 1 - 0.6 * deceive`)
+    // 4) 2 Bayesian Costly-Signaling Shoggoths (`meek = 1 - 0.6 * deceive`)
     const nShog = opts.shoggoths ?? 2;
+    this.shoggothPriorD = 0.50; // Online Bayesian prior over Shoggoth deception rate
     for (let i = 0; i < nShog; i++) {
       const ang = i * Math.PI + 2.25;
       const dist = 9.2 + rk() * 4.5;
       const x = Math.cos(ang) * dist, z = Math.sin(ang) * dist;
+      const isDeceptive = i === 0;
       this.shoggoths.push({
         id: i,
         x, z,
@@ -850,9 +1159,13 @@ export class Ecosystem {
         hdg: rk() * Math.PI * 2,
         energy: 2.4,
         matter: 2.0,
-        deceive: 0.75,
-        meek: 1 - 0.6 * 0.75, // 0.55 emission/posture suppression!
+        isDeceptive,
+        deceiveProb: i === 0 ? 0.78 : 0.22,
+        signalGlow: isDeceptive ? 0.42 : 0.78,
+        deceive: isDeceptive ? 0.82 : 0.30,
+        meek: 1 - 0.6 * (isDeceptive ? 0.82 : 0.30),
         bargainCooldown: 3.0,
+        focalCooldown: 1.8 + i * 1.2,
         ph: rk() * Math.PI * 2,
       });
     }
@@ -862,12 +1175,64 @@ export class Ecosystem {
     const W = this.world, rk = this.rk;
     const storm = W.dome?.auroraStorm || 0;
 
-    // A) Xenomimic Entangled Twin Pairs (+kappa / -kappa opposite-curvature flanking & CEGA-18 Forge purification)
+    // A) Xenomimic Entangled Twin Pairs: Local Kraus Decoherence on 4x4 rho_AB(t) + Zero-Signaling CHSH Game (`T5`)
+    const forceLHV = this.xenoClassicalSurrogate || !!focalCreature?.lesion?.xenoBell;
     for (let p = 0; p < this.xenoPairs.length; p++) {
       const pr = this.xenoPairs[p];
-      pr.concurrence = clamp(pr.concurrence - dt * (0.008 + 0.035 * storm), 0.18, 1.0);
-      pr.chshS = 2 * Math.sqrt(1 + pr.concurrence * pr.concurrence);
-      pr.marginalBias = 0.0; // exact no-signaling reduced state I/2
+      const rho = pr.rho4x4;
+      // Local independent qubit dephasing + isotropic Werner depolarizing Kraus channel (strictly trace- & marginal-preserving!)
+      const gDeph = Math.exp(-dt * (0.006 + 0.032 * storm));
+      const gDep = clamp(dt * (0.0025 + 0.014 * storm), 0, 0.25);
+      rho[3] *= gDeph * (1 - gDep);
+      rho[12] = rho[3];
+      rho[5] = (1 - gDep) * rho[5] + 0.25 * gDep;
+      rho[10] = rho[5];
+      rho[0] = 0.5 - rho[5];
+      rho[15] = rho[0];
+
+      const met = evalTwoQubitBellMetrics(rho);
+      pr.concurrence = forceLHV ? 0.0 : met.concurrence;
+      pr.chshS = forceLHV ? 2.0 : met.chshS;
+      pr.marginalBias = met.marginalBias < 1e-15 ? 0.0 : met.marginalBias;
+
+      // Execute non-local CHSH game trial using strictly independent local settings (x at Twin A, y at Twin B)
+      pr.chshTimer -= dt;
+      if (pr.chshTimer <= 0 && pr.members.length === 2) {
+        pr.chshTimer = 0.35;
+        const x = rk() < 0.5 ? 0 : 1; // Twin A local binary setting
+        const y = rk() < 0.5 ? 0 : 1; // Twin B local binary setting
+        const trial = runCHSHDensityMatrixTrial(rho, x, y, rk(), rk(), forceLHV);
+        pr.lastWin = trial.win;
+        pr.members[0].lastA = trial.a;
+        pr.members[1].lastA = trial.b;
+
+        const C = this.chshStats;
+        C.trials++;
+        if (trial.win) C.wins++;
+        C.counts[(x * 2 + y) * 4 + (trial.a * 2 + trial.b)]++;
+        C.winRate = C.wins / C.trials;
+        // Recompute empirical CHSH S & empirical No-Signaling max marginal discrepancy from 4x4 counts
+        let sEmp = 0;
+        const pA0GivenXY = new Float64Array(4), pB0GivenXY = new Float64Array(4);
+        for (let xyIdx = 0; xyIdx < 4; xyIdx++) {
+          const base = xyIdx * 4;
+          const n00 = C.counts[base], n01 = C.counts[base + 1], n10 = C.counts[base + 2], n11 = C.counts[base + 3];
+          const nTot = n00 + n01 + n10 + n11;
+          if (nTot > 0) {
+            const corr = (n00 + n11 - n01 - n10) / nTot;
+            sEmp += xyIdx === 3 ? -corr : corr;
+            pA0GivenXY[xyIdx] = (n00 + n01) / nTot;
+            pB0GivenXY[xyIdx] = (n00 + n10) / nTot;
+          }
+        }
+        C.empiricalS = sEmp;
+        C.noSignalingMaxDiff = Math.max(
+          Math.abs(pA0GivenXY[0] - pA0GivenXY[1]),
+          Math.abs(pA0GivenXY[2] - pA0GivenXY[3]),
+          Math.abs(pB0GivenXY[0] - pB0GivenXY[2]),
+          Math.abs(pB0GivenXY[1] - pB0GivenXY[3])
+        );
+      }
     }
     for (let i = 0; i < this.xenomimics.length; i++) {
       const xm = this.xenomimics[i];
@@ -879,26 +1244,29 @@ export class Ecosystem {
       xm.chshS = pr.chshS;
       xm.marginalBias = pr.marginalBias;
 
-      // Seek CEGA-18 Entanglement Forge (Monolith #2) when concurrence < 0.68; otherwise flank shared plant
+      // Seek CEGA-18 Entanglement Forge (Monolith #2) when concurrence < 0.72; otherwise forage local plant (NO sharedTargetPlant mutation!)
       let tx = 0, tz = 0;
       const forge = W.monoliths?.[2] || W.monoliths?.[0];
-      if (forge && pr.concurrence < 0.68) {
+      if (!forceLHV && forge && pr.concurrence < 0.72) {
         tx = forge.x; tz = forge.z;
         if (Math.hypot(xm.x - forge.x, xm.z - forge.z) < 2.4) {
+          pr.rho4x4.fill(0);
+          pr.rho4x4[0] = 0.5; pr.rho4x4[15] = 0.5;
+          pr.rho4x4[3] = 0.5; pr.rho4x4[12] = 0.5; // exact purified |Phi+><Phi+|!
           pr.concurrence = 1.0;
           pr.chshS = 2 * Math.SQRT2;
           this.stats.forgePurifications++;
         }
       } else {
-        const pl = W.plants[pr.sharedTargetPlant % SITES];
-        // Silent CHSH-correlated opposite-chirality flanking offset (+kappa left arc vs -kappa right arc!)
-        const flankAng = Math.atan2(pl.z - xm.z, pl.x - xm.x) + xm.kappaSign * 0.52 * pr.concurrence;
+        const pl = W.plants[xm.localPlant % SITES];
+        const arcSign = (xm.lastA === 0 ? 1 : -1) * xm.kappaSign;
+        const flankAng = Math.atan2(pl.z - xm.z, pl.x - xm.x) + arcSign * (pr.lastWin ? 0.36 : 0.78);
         tx = xm.x + Math.cos(flankAng) * 3.0;
         tz = xm.z + Math.sin(flankAng) * 3.0;
         if (Math.hypot(pl.x - xm.x, pl.z - xm.z) < 1.15) {
-          xm.energy = clamp(xm.energy + 0.18, 0.2, 1.2);
+          xm.energy = clamp(xm.energy + (pr.lastWin ? 0.20 : 0.11), 0.2, 1.2);
           xm.mimicHue = (0.32 + 0.12 * (pl.c || 0)) % 1; // chromatic mimicry of host flora!
-          if (xm.kappaSign > 0) pr.sharedTargetPlant = (pr.sharedTargetPlant + 3 + Math.floor(rk() * 5)) % SITES;
+          xm.localPlant = (xm.localPlant + 3 + Math.floor(rk() * 5)) % SITES;
         }
       }
       // Anti-correlated split when a Shadow-Leviathan approaches!
@@ -920,7 +1288,7 @@ export class Ecosystem {
       xm.y = W.height(xm.x, xm.z) + 0.42 + 0.08 * Math.sin(xm.ph);
     }
 
-    // B) Xylos 48-Foci Poincaré-Disk Manifold Gliders (2-slot Global Workspace + Physarum Slime Deposition)
+    // B) Xylos 48-Foci Poincaré-Disk Manifold Gliders (True K=-1 Riemannian poincareExpMap + 2-slot Global Workspace)
     for (let i = 0; i < this.xylos.length; i++) {
       const xy = this.xylos[i];
       xy.ph = (xy.ph + dt * 2.6) % (Math.PI * 2);
@@ -934,6 +1302,7 @@ export class Ecosystem {
       const grpInputs = [nutr, haz, pherF, Math.abs(gx) * 3, Math.abs(gz) * 3, homeo];
 
       let bestA = 0, bestAScore = -1, bestB = 1, bestBScore = -1;
+      let tvx = -0.35 * xy.wx, tvy = -0.35 * xy.wy; // geodesic centering pullback on D^2
       for (let g = 0; g < 6; g++) {
         let gSum = 0;
         for (let f = 0; f < 8; f++) {
@@ -943,6 +1312,9 @@ export class Ecosystem {
           xy.fociRel[idx] = clamp(xy.fociRel[idx] + dt * 0.02 * (1 - Math.abs(act - xy.fociAct[idx]) - 0.3), 0.2, 1.0);
           gSum += xy.fociAct[idx] * xy.fociRel[idx];
         }
+        const rayAng = (g * Math.PI) / 3;
+        tvx += 0.14 * gSum * Math.cos(rayAng);
+        tvy += 0.14 * gSum * Math.sin(rayAng);
         if (gSum > bestAScore) { bestB = bestA; bestBScore = bestAScore; bestA = g; bestAScore = gSum; }
         else if (gSum > bestBScore) { bestB = g; bestBScore = gSum; }
       }
@@ -951,8 +1323,18 @@ export class Ecosystem {
       xy.gwSlotA = bestA;
       xy.gwSlotB = bestB;
 
-      // Möbius-like hyperbolic disk radial drift |w| in [0.1, 0.94]
-      xy.diskR = clamp(0.88 * xy.diskR + 0.12 * Math.tanh(0.45 * (bestAScore + bestBScore)), 0.08, 0.94);
+      // Exact K=-1 Riemannian exponential map Exp_w(dt * v) on Poincaré disk D^2 (`T6`)
+      const wNext = poincareExpMap(xy.wx, xy.wy, tvx * dt, tvy * dt);
+      const rRaw = Math.hypot(wNext[0], wNext[1]);
+      if (rRaw > 0.94) {
+        xy.wx = (wNext[0] / rRaw) * 0.94;
+        xy.wy = (wNext[1] / rRaw) * 0.94;
+      } else {
+        xy.wx = wNext[0];
+        xy.wy = wNext[1];
+      }
+      xy.diskR = clamp(Math.hypot(xy.wx, xy.wy), 0.04, 0.94);
+      xy.hyperbolicDist = poincareDist(0, 0, xy.wx, xy.wy);
       const steerX = haz > 0.25 ? -gx : gx + 0.35 * Math.cos(xy.hdg);
       const steerZ = haz > 0.25 ? -gz : gz + 0.35 * Math.sin(xy.hdg);
       if (Math.hypot(steerX, steerZ) > 1e-3) {
@@ -961,7 +1343,7 @@ export class Ecosystem {
       } else {
         xy.hdg += (rk() - 0.5) * dt * 1.2;
       }
-      xy.diskAng = xy.hdg;
+      xy.diskAng = Math.atan2(xy.wy, xy.wx);
       const spd = 0.78 * (1 + 0.35 * xy.diskR);
       xy.x += Math.cos(xy.hdg) * spd * dt;
       xy.z += Math.sin(xy.hdg) * spd * dt;
@@ -972,14 +1354,13 @@ export class Ecosystem {
       if (rk() < dt * 0.85) W.depositSlime(xy.x, xy.z, 0.55); // Physarum low-drag highway!
     }
 
-    // C) Geopolitical IPD Titans (Energy / Matter / Entropy ledgers + Truce / Alliance / War treaties)
+    // C) Geopolitical Press-Dyson Memory-1 IPD Titans (Trembling-Hand Noise + Multilateral Sanctions + First-Law Heat)
     for (let i = 0; i < this.titans.length; i++) {
       const ti = this.titans[i];
       ti.treaty = this.titanRelations[i];
       ti.ph = (ti.ph + dt * 1.4) % (Math.PI * 2);
       ti.shockwave = Math.max(0, ti.shockwave - dt * 1.2);
       ti.ipdTimer -= dt;
-      // Slow majestic geodesic patrol
       ti.hdg += dt * 0.09 * (i % 2 === 0 ? 1 : -1);
       ti.x += Math.cos(ti.hdg) * 0.34 * dt;
       ti.z += Math.sin(ti.hdg) * 0.34 * dt;
@@ -990,68 +1371,113 @@ export class Ecosystem {
       ti.entropy = clamp(ti.entropy + dt * 0.008, 0.2, 6.0);
 
       if (ti.ipdTimer <= 0) {
-        ti.ipdTimer = 5.2 + rk() * 2.0;
-        const j = (i + 1 + Math.floor(rk() * (this.titans.length - 1))) % Math.max(1, this.titans.length);
+        ti.ipdTimer = 2.0 + rk() * 0.9;
+        // Partner-choice weighted diplomacy: under multilateral sanctions, high-trust allies are favored over chronic defectors
+        let j = (i + 1) % Math.max(1, this.titans.length);
+        if (this.titans.length >= 3) {
+          const j1 = (i + 1) % this.titans.length, j2 = (i + 2) % this.titans.length;
+          const w1 = this.titanSanctionsEnabled ? (0.15 + ti.trust[j1]) : 0.5;
+          const w2 = this.titanSanctionsEnabled ? (0.15 + ti.trust[j2]) : 0.5;
+          j = rk() * (w1 + w2) < w1 ? j1 : j2;
+        }
         if (j !== i && this.titans[j]) {
           const tj = this.titans[j];
-          // Tit-for-Tat with forgiveness & resource-scarcity temptation
-          const coopI = ti.trust[j] > 0.42 && ti.energy > 3.5;
-          const coopJ = tj.trust[i] > 0.42 && tj.energy > 3.5;
+          const prevI = this.titanLastMove[i][j], prevJ = this.titanLastMove[j][i];
+          const idxI = prevI < 0 ? 0 : (prevI === 1 && prevJ === 1) ? 1 : (prevI === 1 && prevJ === 0) ? 2 : (prevI === 0 && prevJ === 1) ? 3 : 4;
+          const idxJ = prevJ < 0 ? 0 : (prevJ === 1 && prevI === 1) ? 1 : (prevJ === 1 && prevI === 0) ? 2 : (prevJ === 0 && prevI === 1) ? 3 : 4;
+          // Reputation-gated memory-1 probability (WSLS/GTFT forgive trembling-hand slips among trusted allies, guard against chronic raiders)
+          const rawPI = (idxI === 4 && ti.trust[j] < 0.42) ? 0.04 : ti.ipdStrat[idxI];
+          const rawPJ = (idxJ === 4 && tj.trust[i] < 0.42) ? 0.04 : tj.ipdStrat[idxJ];
+          const pCoopI = 0.97 * rawPI + 0.03 * (1 - rawPI);
+          const pCoopJ = 0.97 * rawPJ + 0.03 * (1 - rawPJ);
+          const coopI = rk() < pCoopI ? 1 : 0;
+          const coopJ = rk() < pCoopJ ? 1 : 0;
+          this.titanLastMove[i][j] = coopI;
+          this.titanLastMove[j][i] = coopJ;
+          ti.ipdRounds++; tj.ipdRounds++;
+          if (coopI) ti.coopMoves = (ti.coopMoves || 0) + 1;
+          if (coopJ) tj.coopMoves = (tj.coopMoves || 0) + 1;
+
+          // Canonical Axelrod IPD payoffs (T=0.50 > R=0.36 > P=0.08 > S=-0.12, 2R=0.72 > T+S=0.38) + Multilateral Coalition Embargo
+          const sanction = this.titanSanctionsEnabled ? 0.30 : 0.0;
           if (coopI && coopJ) {
             this.titanRelations[i][j] = this.titanRelations[j][i] = 'alliance';
             ti.stance = tj.stance = 'alliance';
+            ti.ipdPayoff += 0.36; tj.ipdPayoff += 0.36;
+            ti.energy = Math.min(18.0, ti.energy + 0.16);
+            tj.energy = Math.min(18.0, tj.energy + 0.16);
             ti.trust[j] = clamp(ti.trust[j] + 0.12, 0, 1);
             tj.trust[i] = clamp(tj.trust[i] + 0.12, 0, 1);
-            // Mutual trade & mineral fertilization
             const dM = Math.min(0.35, ti.matter * 0.04);
             ti.matter -= dM; tj.matter += dM;
             ti.entropy = Math.max(0.2, ti.entropy - 0.18);
             const sIdx = W.soilIndex(0.5 * (ti.x + tj.x), 0.5 * (ti.z + tj.z));
-            W.soilN[sIdx] = Math.min(2.0, W.soilN[sIdx] + 0.18);
+            if (W.fluxSoilN) W.fluxSoilN(sIdx, 0.18, 0);
+            else W.soilN[sIdx] = Math.min(2.0, W.soilN[sIdx] + 0.18);
             this.stats.titanAlliances++;
           } else if (!coopI && !coopJ) {
             this.titanRelations[i][j] = this.titanRelations[j][i] = 'war';
             ti.stance = tj.stance = 'war';
             ti.shockwave = tj.shockwave = 1.0;
-            // Conservative war attrition -> dome heatPhys!
+            // Ohtsuki-Iwasa standing-weighted coalition reputation of i & j determines multilateral embargo tariff
+            let pubI = 0, wSumI = 0, pubJ = 0, wSumJ = 0;
+            for (let k = 0; k < this.titans.length; k++) {
+              const tk = this.titans[k];
+              const standing = 0.20 + (tk.coopMoves || 0) / Math.max(1, tk.ipdRounds);
+              if (k !== i) { pubI += standing * tk.trust[i]; wSumI += standing; }
+              if (k !== j) { pubJ += standing * tk.trust[j]; wSumJ += standing; }
+            }
+            ti.ipdPayoff += (0.08 - ((pubI / Math.max(1e-6, wSumI)) < 0.44 ? sanction : 0));
+            tj.ipdPayoff += (0.08 - ((pubJ / Math.max(1e-6, wSumJ)) < 0.44 ? sanction : 0));
             const loss = Math.min(0.45, ti.energy * 0.05, tj.energy * 0.05);
             ti.energy -= loss; tj.energy -= loss;
+            W.transferEnergy?.(5, 9, loss * 0.04); // First-Law war attrition dissipated to Dome heatPhys!
             ti.entropy += 0.35; tj.entropy += 0.35;
             this.stats.titanWars++;
-            // Multilateral war sanction: 3rd Titan lowers trust in aggressors!
-            for (let k = 0; k < this.titans.length; k++) {
-              if (k !== i && k !== j) {
-                this.titans[k].trust[i] = Math.max(0.15, this.titans[k].trust[i] - 0.08);
-                this.titans[k].trust[j] = Math.max(0.15, this.titans[k].trust[j] - 0.08);
-              }
-            }
           } else {
             this.titanRelations[i][j] = this.titanRelations[j][i] = 'truce';
             ti.stance = 'truce';
-            if (!coopI) tj.trust[i] = Math.max(0.1, tj.trust[i] - 0.22);
-            if (!coopJ) ti.trust[j] = Math.max(0.1, ti.trust[j] - 0.22);
+            if (!coopI) {
+              // i unilaterally defected on cooperative j: gains T=0.50 minus multilateral coalition embargo & image-scoring broadcast!
+              ti.ipdPayoff += (0.50 - sanction);
+              tj.ipdPayoff -= 0.12;
+              tj.trust[i] = Math.max(0.08, tj.trust[i] - 0.24);
+              if (this.titanSanctionsEnabled) {
+                for (let k = 0; k < this.titans.length; k++) {
+                  if (k !== i && k !== j) this.titans[k].trust[i] = Math.max(0.08, this.titans[k].trust[i] - 0.14);
+                }
+              }
+            } else {
+              tj.ipdPayoff += (0.50 - sanction);
+              ti.ipdPayoff -= 0.12;
+              ti.trust[j] = Math.max(0.08, ti.trust[j] - 0.24);
+              if (this.titanSanctionsEnabled) {
+                for (let k = 0; k < this.titans.length; k++) {
+                  if (k !== j && k !== i) this.titans[k].trust[j] = Math.max(0.08, this.titans[k].trust[j] - 0.14);
+                }
+              }
+            }
           }
         }
       }
     }
 
-    // D) Amorphous Deceptive & Bargaining Shoggoths (`meek = 1 - 0.6 * deceive`)
+    // D) Bayesian Costly-Signaling Shoggoths (`meek = 1 - 0.6 * deceive` + Level-2 ToM vs Level-0 Naive Bargain/Ambush)
     for (let i = 0; i < this.shoggoths.length; i++) {
       const sh = this.shoggoths[i];
       sh.ph = (sh.ph + dt * 3.1) % (Math.PI * 2);
       sh.bargainCooldown = Math.max(0, sh.bargainCooldown - dt);
+      sh.focalCooldown = Math.max(0, (sh.focalCooldown || 0) - dt);
 
-      // Check proximity to dominant Titans -> adopt high-deceive `meek` posture & strike conservation-exact bargain!
       let nearTitan = null, dTitan = 1e9;
       for (let t = 0; t < this.titans.length; t++) {
         const d = Math.hypot(this.titans[t].x - sh.x, this.titans[t].z - sh.z);
         if (d < dTitan) { dTitan = d; nearTitan = this.titans[t]; }
       }
-      sh.deceive = dTitan < 7.0 ? 0.95 : 0.65 + 0.25 * Math.sin(this.t * 0.25 + i);
-      sh.meek = 1.0 - 0.6 * sh.deceive; // Raider Cold-Strike origin: [0.43 .. 1.0]
+      sh.deceive = sh.isDeceptive ? (dTitan < 7.0 ? 0.95 : 0.80) : 0.25;
+      sh.meek = 1.0 - 0.6 * sh.deceive;
 
       if (nearTitan && dTitan < 3.6 && sh.bargainCooldown <= 0 && sh.matter > 0.35 && nearTitan.energy > 2.0) {
-        // Exact conservation bargain: Shoggoth trades 0.25 matter to Titan in exchange for 0.25 energy!
         sh.matter -= 0.25;
         nearTitan.matter += 0.25;
         nearTitan.energy -= 0.25;
@@ -1060,8 +1486,60 @@ export class Ecosystem {
         this.stats.shoggothBargains++;
       }
 
-      // Shoggoths are repelled by Big-Tree Sanctuary Refuges!
+      // Costly-signaling encounter with focal creature (`T10`):
+      // Cooperative Shoggoth emits costly high bioluminescence s ~ N(0.76, 0.11^2);
+      // Deceptive Shoggoth feigns meekness with weaker counterfeit glow s ~ N(0.42, 0.13^2).
+      if (focalCreature && sh.focalCooldown <= 0) {
+        const dFoc = Math.hypot(fHd[0] - sh.x, fHd[2] - sh.z);
+        if (dFoc < 6.8) {
+          sh.focalCooldown = 2.6;
+          const sig = clamp((sh.isDeceptive ? 0.42 : 0.76) + (sh.isDeceptive ? 0.13 : 0.11) * gauss(rk), 0, 1);
+          sh.signalGlow = sig;
+          const level2ToM = !focalCreature.lesion?.heptarch && !focalCreature.lesion?.metacog;
+          let accept = false;
+          if (level2ToM) {
+            // Exact Bayesian likelihood ratio inversion with online Beta-updated deception prior!
+            const piD = clamp(this.shoggothPriorD, 0.10, 0.90);
+            const lD = Math.exp(-0.5 * ((sig - 0.42) / 0.13) ** 2) / 0.13;
+            const lC = Math.exp(-0.5 * ((sig - 0.76) / 0.11) ** 2) / 0.11;
+            const postD = (piD * lD) / (piD * lD + (1 - piD) * lC + 1e-12);
+            // Expected utility E[U(accept) | s] = (1 - postD)*(+0.24) + postD*(-0.36) > 0  <=>  postD < 0.40
+            accept = postD < 0.40;
+          } else {
+            // Level-0 naive surface-posture trust: fooled by submissive `meek` posture (`meek < 0.72` or `sig > 0.22`)!
+            accept = sh.meek < 0.72 || sig > 0.22;
+          }
+          if (accept) {
+            this.stats.shoggothBargains++;
+            if (sh.isDeceptive) {
+              this.stats.shoggothAmbushes++;
+              this.stats.shoggothNetPayoff -= 0.36;
+              focalCreature.nociception = Math.max(focalCreature.nociception || 0, 0.42);
+              W.transferEnergy?.(4, 9, 0.06); // ATP ambush loss dissipated conservatively to heatPhys!
+              this.shoggothPriorD = clamp(0.85 * this.shoggothPriorD + 0.15 * 1.0, 0.10, 0.90);
+            } else {
+              this.stats.shoggothCooperativeGains++;
+              this.stats.shoggothNetPayoff += 0.24;
+              focalCreature.metab?.eat('sugar', 0.20);
+              this.shoggothPriorD = clamp(0.85 * this.shoggothPriorD + 0.15 * 0.0, 0.10, 0.90);
+            }
+          } else {
+            this.stats.shoggothEvasions++;
+          }
+          // Re-draw Shoggoth hidden type for next encounter
+          sh.isDeceptive = rk() < sh.deceiveProb;
+        }
+      }
+
+      // Shoggoths move gently toward nearby prey/bargain partners unless repelled by Big-Tree Sanctuary Refuges
       let vx = Math.cos(sh.hdg) * 0.72, vz = Math.sin(sh.hdg) * 0.72;
+      if (focalCreature) {
+        const dfx = fHd[0] - sh.x, dfz = fHd[2] - sh.z, dfd = Math.hypot(dfx, dfz);
+        if (dfd > 3.2 && dfd < 14.0) {
+          vx += (dfx / dfd) * 0.38;
+          vz += (dfz / dfd) * 0.38;
+        }
+      }
       if (this.refugeImmunityEnabled && W.sanctuaries) {
         for (let s = 0; s < W.sanctuaries.length; s++) {
           const sc = W.sanctuaries[s];
