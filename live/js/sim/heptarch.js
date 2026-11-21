@@ -260,12 +260,13 @@ function solveLinear64(A, b, n) {
 }
 
 /**
- * Exact infinite-time quantum yield solution of the 8x8 Cryptochrome-4 Radical-Pair Liouville-Haberkorn
- * Master Equation:
+ * Exact infinite-time quantum yield solution of the minimal 8x8 (2x2x2: two spin-1/2 electrons + one axial spin-1/2
+ * hyperfine nucleus, Ritz-Adem-Schulten 2000) Cryptochrome-4 Radical-Pair Liouville-Haberkorn Master Equation:
  *   d(rho)/dt = -i [H(B), rho] - (kS/2){P_S, rho} - (kT/2){I - P_S, rho} + D_{deph + RF}[rho],
  *   rho(0) = P_S / Tr(P_S) => L[R] = -rho(0), Phi_S = kS * Tr(P_S R), Phi_T = kT * Tr((I - P_S) R).
- * Includes resonant Larmor RF disruption (Ritz et al., Nature 2004): transverse oscillating field B_RF at
- * frequency `rfFreqRadUs` disrupts singlet-triplet coherence maximally when resonant with `omegaL = 0.176 * fieldUT`.
+ * Resonant Larmor RF disruption (Ritz et al., Nature 2004) is modeled as an effective rotating-wave Lorentzian
+ * transverse spin-flip channel peaking at omega_RF = omega_L = 0.176 * fieldUT (effective long-lifetime RF sensitivity
+ * susceptibility; cf. Hore & Mouritsen 2016 Annu. Rev. Biophys. on bare-lifetime RF amplitude scaling).
  */
 export function solveCry4Haberkorn8x8(bx, by, bz, opts = {}) {
   const fieldUT = opts.fieldUT ?? 48.5;

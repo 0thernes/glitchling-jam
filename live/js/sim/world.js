@@ -126,13 +126,17 @@ export function solveFMOLindbladExact(gammaDephPs, opts = {}) {
 }
 
 /**
- * Exact classical Förster incoherent dipole-dipole hopping rate solver derived from the identical 7x7 FMO_HAMILTONIAN_CM
- * (coherences eliminated; reorganization line-broadening gammaReorgPs = 55 ps^-1 ~ 35 cm^-1 phonon bath).
+ * Zero-free-parameter adiabatic / secular Pauli-Förster incoherent hopping limit derived directly by eliminating
+ * off-diagonal coherences from the identical 7x7 Adolphs-Renger GKSL equation:
+ *   w_ij = 2 J_ij^2 Gamma_ij / (Gamma_ij^2 + (E_i - E_j)^2),
+ *   Gamma_ij = gammaDeph + gammaReorg + kLoss + 0.5*(kTrap_i + kTrap_j)   (default gammaReorg = 0: zero extra parameters).
+ * Converges identically to solveFMOLindbladExact in the high-dephasing classical limit (gammaDeph >> |J_ij|).
  */
 export function solveFMOForsterExact(gammaDephPs, opts = {}) {
   const kLoss = opts.kLoss ?? 0.025;
   const kTrap = opts.kTrap ?? 1.0;
-  const gF = Math.max(0.05, gammaDephPs) + (opts.gammaReorgPs ?? 110.0);
+  const gDeph = Math.max(0.05, gammaDephPs);
+  const gReorg = opts.gammaReorgPs ?? 0.0;
   const M = new Float64Array(49);
   for (let i = 0; i < 7; i++) {
     let outSum = kLoss + (i === 2 ? kTrap : 0);
@@ -140,7 +144,8 @@ export function solveFMOForsterExact(gammaDephPs, opts = {}) {
       if (i === j) continue;
       const J = FMO_HAMILTONIAN_CM[i][j] * CM_TO_PS_INV;
       const dE = (FMO_HAMILTONIAN_CM[i][i] - FMO_HAMILTONIAN_CM[j][j]) * CM_TO_PS_INV;
-      const w = (2 * J * J * gF) / (gF * gF + dE * dE);
+      const gij = gDeph + gReorg + kLoss + (i === 2 ? 0.5 * kTrap : 0) + (j === 2 ? 0.5 * kTrap : 0);
+      const w = (2 * J * J * gij) / (gij * gij + dE * dE);
       M[j * 7 + i] += w;
       outSum += w;
     }

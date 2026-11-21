@@ -953,3 +953,66 @@ Honest reading:
   evolution.
 - Seeds 1–12 were also used while tuning. A held-out replication on new seeds is the next step.
 - All "quantum" results are classical FP64 simulations. Nothing physically quantum happens in the creature.
+
+
+## Pass 22 — Locked Out-of-Sample Replication (`13..24` & `25..36`), Methodological Bug Fixes (`T2`, `T12b/c`, `skin.js`) & 3 New Emergent A-Life Theorems (`T13`–`T15`, 26 Paired Contrasts)
+
+Closes every methodological critique identified in Pass 21, executes locked zero-leakage out-of-sample replications on
+unseen seeds, fixes two real statistical/information-theoretic defects found during code review, removes the final
+`Math.random()` call from `live/js/sim/`, and adds three genuine emergent A-Life & learning theorems (`T13`–`T15`).
+Full write-up and 26-contrast combined $N = 24$ audit: [`../SCIENTIFIC_DEFENSE_DOSSIER.md`](../SCIENTIFIC_DEFENSE_DOSSIER.md).
+
+### What changed
+
+1. **Locked out-of-sample replication of Pass 21 (`48eb260`) on unseen seeds `13..24` (zero edits to `live/js/`):**
+   - **12/12 theorems passed**, **18/18 Holm–Bonferroni FWER**, and **18/18 full Bonferroni FWER ($\alpha = 0.05$)**,
+     including `T11` Bedau–Packard activity (`24.06 vs 8.09`, `p = 0.000244`, `d_z = 1.24`) and `T12b` ECE (`p = 0.000732`).
+2. **Methodological & physics fixes (`js/sim/metacog.js`, `js/sim/creature.js`, `js/sim/world.js`, `js/sim/heptarch.js`, `js/sim/skin.js`, `js/honesty.js`):**
+   - **`T12c` Transfer Entropy symmetry fix (`metacog.js`, `creature.js`):** Pass 21 summed 3 directed TE edges but
+     compared against only 1 lag-shuffled edge. Replaced with exact `3×3×3` quantile-binned Schreiber (2000) TE on real
+     physical sensorimotor variables (`differential muscle torque → body yaw/forward velocity → proprioceptive/bearing
+     afferents → torque`) tested against a **matched 3-edge circular time-shift surrogate** (`computeTE3CircNull`, 30
+     shifts per edge).
+   - **`T12b` Kuleshov ECE distribution fix (`metacog.js`, `creature.js`):** Replaced the 25-D RMS approximation with
+     exact per-dimension 1-D Gaussian central coverage across all 25 prequential residuals `wm.err[0..24]`.
+   - **Zero-free-parameter adiabatic secular Pauli–Förster baseline (`world.js`):** Removed the extra `gammaReorgPs = 110`
+     offset from `solveFMOForsterExact` so it matches the exact off-diagonal decay rates of `solveFMOLindbladExact` with
+     zero free parameters (`-10 °C: 0.3577 > 0.2606`, `24 °C: 0.8109 > 0.8056`, `54 °C` quantum-to-classical
+     correspondence gap `0.000013`).
+   - **Accurate Cry4 spin-$1/2$ nuclear spin & RF model documentation (`heptarch.js`, `honesty.js`):** Clarified that the
+     `8×8` (`2×2×2`) Hilbert space models two spin-1/2 electrons + one axial spin-1/2 hyperfine nucleus (Ritz–Adem–Schulten
+     2000) with an effective rotating-wave Lorentzian Larmor RF spin-flip rate (cf. Hore & Mouritsen 2016).
+   - **100% seeded simulation determinism (`skin.js`, `creature.js`):** Seeded `Skin(seed)` with `mulberry32`, leaving
+     **0 `Math.random()` runtime calls** anywhere inside `live/js/sim/`.
+3. **3 new Emergent A-Life & learning theorems in `test/nobel_rigor_suite.mjs` (now 15 theorems, 26 paired contrasts, full Holm/Bonferroni/BH-FDR table, `SEEDS=` / `FROM_T=` / `TO_T=` / `JSON_OUT=`):**
+   - **`T13` (`[E]` Multi-Generation Divergent Natural Selection):** Warm (`seasonPhase = 0.25`) vs Cool (`0.75`) domes
+     from identical Gen-0 populations with zero hardcoded target gene shift inherited `thermOpt` in opposite directions
+     over ~6 diploid generations, exceeding the matched Neutral Shadow.
+   - **`T14` (`[E]` Ontogenetic Unsupervised Learning & Spatial Generalization):** Unsupervised online learning cuts
+     Transformer-XL WM MSE (~75%) and Rao–Ballard PC error (~63%) vs weight-frozen controls; cross-spectral Wiener HDC
+     strictly beats delta-fixed and Pass-3 superposition on held-out spatial locations.
+   - **`T15` (`[E]` Unprogrammed 3-Trophic Ecology-of-Fear Cascade):** Enabling social alarm signaling under predation
+     cuts predations (~4×) and—with zero code linking alarms to plant growth—increases standing plant fruit biomass via
+     non-consumptive prey sheltering (TMII > DMII; Schmitz et al. 1997).
+
+### Verification (`node test/nobel_rigor_suite.mjs`, Node v25.8.2)
+
+- **Cohort A (`SEEDS=1..12`):** **26/26 Holm–Bonferroni AND 26/26 full Bonferroni ($\alpha = 0.05$)**; 0 NaNs.
+- **Cohort B (`SEEDS=13..24`):** **26/26 Holm–Bonferroni AND 26/26 full Bonferroni ($\alpha = 0.05$)**; 0 NaNs.
+- **Combined $N = 24$ Exact Fisher Audit:** **26/26 full Bonferroni $p_{\text{Bonf,24}} \le 1.93 \times 10^{-4}$** (24/26
+  contrasts positive on 24/24 seeds; `T11` positive on 23/24; `T3b` positive on 21/24).
+- **Locked Zero-Leakage Cohort C (`SEEDS=25..36`, `T12`–`T15`, 12 contrasts):** **12/12 at exact floor $p = 0.000244$**
+  (`p_Holm = p_Bonf = 0.002930`):
+  - `T12a` NLL `−1.112 → −1.273` (`d_z = 2.08`), `T12b` Per-Dim ECE `0.279 → 0.198` (`d_z = 3.51`), `T12c` 3-Edge TE
+    `0.193 > 0.079` (`d_z = 2.98`), `T12d` vs paralyzed `0.022` (`d_z = 4.27`).
+  - `T13` `[E]` Divergent Selection (`6.2` gens): `Warm 0.632 > Cool 0.331` (`Adap +0.301` vs `Shadow −0.009`, `d_z = 2.34`).
+  - `T14` `[E]` Ontogenetic Learning: `WM 0.1183 → 0.0296` (`d_z = 5.53`), `PC 0.0883 → 0.0323` (`d_z = 6.89`), `HDC r
+    0.848 < 0.927 < 0.969` (`d_z = 3.78 / 3.07`).
+  - `T15` `[E]` Ecology-of-Fear Cascade: `predations 18.42 → 3.33` (`d_z = 8.23`), `plantFruit 0.7954 → 0.9485` (`+0.1530`,
+    `d_z = 2.45`).
+- **Regression & Browser Gates on Final Pass 22 Code:**
+  - `dome_heptarch_probe.mjs`: **6/6, `DOME_BIT_IDENTICAL=True`** across two consecutive runs (`ClosureErr 0.00e+0`,
+    `Cry4 0.0602 < 0.6576 rad`, `Levin 0.867 vs 0.500`, `Sanctuary 0 vs 1`).
+  - `nav_probe.mjs 1,2,3,4`: **NEAR 4/4 (6.5 s), FAR 4/4 (26.5 s), upright 0.94**.
+  - `dome_ui_check.mjs` (headless Chrome WebGL2): `consoleErrors: []`, `pageErrors: []`, `hasNaN: false`, HUD showing
+    `ENAQT 80.8% > Förster 80.5%` and `NMDA 641 · BAC 543`.

@@ -6,8 +6,10 @@
 //   - Standardized paired effect sizes (Cohen's d_z)
 
 import assert from 'node:assert/strict';
-import { mulberry } from '../js/sim/util.js';
+import fs from 'node:fs';
+import { mulberry, gauss } from '../js/sim/util.js';
 import { World, solveFMOLindbladExact, solveFMOForsterExact, evalFMOTemperature } from '../js/sim/world.js';
+import { HDCMap } from '../js/sim/memory.js';
 import {
   HeptarchCouncil,
   solveCry4Haberkorn8x8,
@@ -30,8 +32,22 @@ import {
 } from '../js/tsotchke/qgtl.js';
 import { MPSQuantumSimulator32Q } from '../js/tsotchke/moonlab.js';
 
-const SEEDS_12 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const SEEDS_12 = process.env.SEEDS
+  ? process.env.SEEDS.split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0)
+  : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+assert(SEEDS_12.length >= 2 && SEEDS_12.length <= 20, `SEEDS must contain 2..20 positive integers, got ${SEEDS_12.length}`);
 const FROM_T = Number(process.env.FROM_T || 1);
+const TO_T = Number(process.env.TO_T || 99);
+const runT = (k) => FROM_T <= k && k <= TO_T;
+const ALL_CONTRASTS = [];
+const SOFT_FAILURES = [];
+
+function check(cond, msg) {
+  if (!cond) {
+    SOFT_FAILURES.push(msg);
+    console.error(`[FAIL-GATE] ${msg}`);
+  }
+}
 
 function mean(arr) {
   let s = 0;
@@ -41,21 +57,27 @@ function mean(arr) {
 
 function cohenDz(diffs) {
   const n = diffs.length;
-  if (n < 2) return 0;
+  if (n < 2) return { dz: 0, zeroVar: false, label: '0.00' };
   const m = mean(diffs);
   let v = 0;
   for (let i = 0; i < n; i++) v += (diffs[i] - m) * (diffs[i] - m);
   const sd = Math.sqrt(v / (n - 1));
-  return sd < 1e-15 ? (m === 0 ? 0 : Math.sign(m) * 999) : m / sd;
+  if (sd < 1e-15) {
+    return m === 0
+      ? { dz: 0, zeroVar: true, label: '0.00' }
+      : { dz: null, zeroVar: true, label: 'det(sd=0)' };
+  }
+  const dz = m / sd;
+  return { dz, zeroVar: false, label: dz.toFixed(2) };
 }
 
 /**
  * Exact 2^N paired sign-flip permutation p-value (one-sided: 'greater' tests E[X - Y] > 0; 'less' tests E[X - Y] < 0).
- * Exact to 2^-12 = 0.000244140625 for N = 12 with zero parametric/normality assumptions.
+ * Exact to 2^-N (2^-12 = 0.000244140625 for N = 12) with zero parametric/normality assumptions.
  */
 function exactPairedPermutationP(diffs, direction = 'greater') {
   const n = diffs.length;
-  assert(n >= 2 && n <= 24, `Invalid sample size for exact permutation test: ${n}`);
+  assert(n >= 2 && n <= 20, `Invalid sample size for exact permutation test: ${n}`);
   const total = 1 << n;
   let obsSum = 0;
   for (let i = 0; i < n; i++) {
@@ -99,24 +121,40 @@ function summarizePaired(name, xArr, yArr, direction = 'greater') {
   const mDiff = mean(diffs);
   const [ciLo, ciHi] = bootstrapMeanCI(diffs);
   const p = exactPairedPermutationP(diffs, direction);
-  const dz = cohenDz(diffs);
+  const dzInfo = cohenDz(diffs);
   assert(
     Number.isFinite(meanX) && Number.isFinite(meanY) && Number.isFinite(mDiff) &&
-    Number.isFinite(ciLo) && Number.isFinite(ciHi) && Number.isFinite(p) && Number.isFinite(dz),
+    Number.isFinite(ciLo) && Number.isFinite(ciHi) && Number.isFinite(p) &&
+    (dzInfo.zeroVar || Number.isFinite(dzInfo.dz)),
     `${name}: non-finite summary statistic`
   );
-  return { name, meanX, meanY, meanDiff: mDiff, ciLo, ciHi, p, dz };
+  const rec = {
+    name,
+    direction,
+    n: xArr.length,
+    meanX,
+    meanY,
+    meanDiff: mDiff,
+    ciLo,
+    ciHi,
+    p,
+    dz: dzInfo.dz,
+    dzLabel: dzInfo.label,
+    diffs,
+  };
+  ALL_CONTRASTS.push(rec);
+  return rec;
 }
 
 const SUMMARY_ROWS = [];
 console.log('=========================================================================================');
-console.log('=== PASS 21: 12-THEOREM SCIENTIFIC FALSIFICATION & STATISTICAL RIGOR SUITE (N = 12)   ===');
+console.log(`=== PASS 22: 15-THEOREM FALSIFICATION & EMERGENT A-LIFE SUITE (N=${SEEDS_12.length}, SEEDS=[${SEEDS_12.join(',')}]) ===`);
 console.log('=========================================================================================');
 
 // =========================================================================================
 // THEOREM 1: First Law, Landsberg-Clausius Second Law & Closed N/C Biogeochemical Mass Ledger
 // =========================================================================================
-if (FROM_T <= 1) {
+if (runT(1)) {
   const solarIntact = [], solarScrubbed = [];
   let maxEnergyErr = 0, maxMassErr = 0, minSigObs = Infinity, maxNFixedAtZero = 0;
 
@@ -144,11 +182,11 @@ if (FROM_T <= 1) {
   }
 
   const st = summarizePaired('T1: Solar PAR Fixation (Intact N2 vs N2=0)', solarIntact, solarScrubbed, 'greater');
-  assert(maxEnergyErr < 1e-12, `T1 First-Law energy closure violated: ${maxEnergyErr}`);
-  assert(maxMassErr < 1e-12, `T1 Closed N/C mass conservation violated: ${maxMassErr}`);
-  assert(minSigObs > 0, `T1 Second-Law Clausius entropy production violated: min=${minSigObs}`);
-  assert(maxNFixedAtZero === 0, `T1 Evacuated N2 headspace must fix zero Nitrogen: ${maxNFixedAtZero}`);
-  assert(st.p < 0.001, `T1 N2 depletion causal photosynthetic drop failed p<0.001: p=${st.p}`);
+  check(maxEnergyErr < 1e-12, `T1 First-Law energy closure violated: ${maxEnergyErr}`);
+  check(maxMassErr < 1e-12, `T1 Closed N/C mass conservation violated: ${maxMassErr}`);
+  check(minSigObs > 0, `T1 Second-Law Clausius entropy production violated: min=${minSigObs}`);
+  check(maxNFixedAtZero === 0, `T1 Evacuated N2 headspace must fix zero Nitrogen: ${maxNFixedAtZero}`);
+  check(st.p < 0.001, `T1 N2 depletion causal photosynthetic drop failed p<0.001: p=${st.p}`);
 
   SUMMARY_ROWS.push({
     id: 'T1',
@@ -156,15 +194,15 @@ if (FROM_T <= 1) {
     metric: `E_err=${maxEnergyErr.toExponential(2)}, M_err=${maxMassErr.toExponential(2)}, minSig=+${minSigObs.toExponential(2)}`,
     effect: `dSolar=+${st.meanDiff.toFixed(3)} kJ [${st.ciLo.toFixed(3)}, ${st.ciHi.toFixed(3)}]`,
     p: st.p.toFixed(6),
-    d: st.dz.toFixed(2),
+    d: st.dzLabel,
   });
-  console.log(`[PASS] T1 Thermodynamics & Mass Closure: E_err=${maxEnergyErr.toExponential(2)}, M_err=${maxMassErr.toExponential(2)}, minEntropyRate=+${minSigObs.toExponential(2)} kW/K, N2=0 dSolar=+${st.meanDiff.toFixed(3)} kJ (p=${st.p.toFixed(6)}, d_z=${st.dz.toFixed(2)})`);
+  console.log(`[PASS] T1 Thermodynamics & Mass Closure: E_err=${maxEnergyErr.toExponential(2)}, M_err=${maxMassErr.toExponential(2)}, minEntropyRate=+${minSigObs.toExponential(2)} kW/K, N2=0 dSolar=+${st.meanDiff.toFixed(3)} kJ (p=${st.p.toFixed(6)}, d_z=${st.dzLabel})`);
 }
 
 // =========================================================================================
 // THEOREM 2: Published 7-Site Adolphs-Renger FMO GKSL Lindblad Master Eq vs Classical Förster
 // =========================================================================================
-if (FROM_T <= 2) {
+if (runT(2)) {
   let maxNormErr = 0;
   for (let tC = -10; tC <= 54; tC += 4) {
     const gammaPs = tC < -6 ? 0.08 : 22.0 * Math.exp((tC - 24.0) / 9.5);
@@ -176,27 +214,30 @@ if (FROM_T <= 2) {
   const cryo = evalFMOTemperature(-10);
   const room = evalFMOTemperature(24);
   const zeno = evalFMOTemperature(54);
+  const zenoGap = Math.abs(zeno.enaqtEff - zeno.forsterEff);
 
-  assert(maxNormErr < 1e-13, `T2 GKSL/Förster trace conservation violated: ${maxNormErr}`);
-  assert(room.enaqtEff > cryo.enaqtEff + 0.25, `T2 ENAQT must beat cryogenic Anderson localization (${room.enaqtEff} vs ${cryo.enaqtEff})`);
-  assert(room.enaqtEff > zeno.enaqtEff + 0.08, `T2 ENAQT must beat thermal quantum Zeno trap (${room.enaqtEff} vs ${zeno.enaqtEff})`);
-  assert(room.enaqtEff > room.forsterEff + 0.03, `T2 Coherent GKSL FMO must beat incoherent Förster hopping (${room.enaqtEff} vs ${room.forsterEff})`);
+  check(maxNormErr < 1e-13, `T2 GKSL/Förster trace conservation violated: ${maxNormErr}`);
+  check(room.enaqtEff > cryo.enaqtEff + 0.25, `T2 ENAQT must beat cryogenic Anderson localization (${room.enaqtEff} vs ${cryo.enaqtEff})`);
+  check(room.enaqtEff > zeno.enaqtEff + 0.08, `T2 ENAQT must beat thermal quantum Zeno trap (${room.enaqtEff} vs ${zeno.enaqtEff})`);
+  check(room.enaqtEff > room.forsterEff + 0.004, `T2 Coherent GKSL FMO must beat zero-free-parameter secular Pauli-Förster at 24C (${room.enaqtEff} vs ${room.forsterEff})`);
+  check(cryo.enaqtEff > cryo.forsterEff + 0.08, `T2 Coherent GKSL FMO must beat secular Pauli-Förster at -10C (${cryo.enaqtEff} vs ${cryo.forsterEff})`);
+  check(zenoGap < 0.002, `T2 GKSL must converge to secular Pauli-Förster at high dephasing 54C: gap=${zenoGap}`);
 
   SUMMARY_ROWS.push({
     id: 'T2',
     theorem: '7-Site Adolphs-Renger FMO GKSL',
-    metric: `|Phi_sink+Phi_loss-1|=${maxNormErr.toExponential(2)}`,
-    effect: `Cryo=${cryo.enaqtEff.toFixed(3)} < 24C=${room.enaqtEff.toFixed(3)} > Zeno=${zeno.enaqtEff.toFixed(3)}; Forster=${room.forsterEff.toFixed(3)}`,
+    metric: `|Phi_sink+Phi_loss-1|=${maxNormErr.toExponential(2)}, 54C_gap=${zenoGap.toFixed(4)}`,
+    effect: `Cryo=${cryo.enaqtEff.toFixed(3)}>${cryo.forsterEff.toFixed(3)} | 24C=${room.enaqtEff.toFixed(3)}>${room.forsterEff.toFixed(3)} | 54C=${zeno.enaqtEff.toFixed(3)}`,
     p: 'exact',
     d: 'exact',
   });
-  console.log(`[PASS] T2 7-Site FMO GKSL Lindblad vs Förster: normErr=${maxNormErr.toExponential(2)}, Phi(-10C)=${cryo.enaqtEff.toFixed(4)} < Phi(24C)=${room.enaqtEff.toFixed(4)} > Phi(54C)=${zeno.enaqtEff.toFixed(4)} > Förster(24C)=${room.forsterEff.toFixed(4)}`);
+  console.log(`[PASS] T2 7-Site FMO GKSL vs Zero-Param Secular Förster: normErr=${maxNormErr.toExponential(2)}, Phi(-10C)=${cryo.enaqtEff.toFixed(4)} (F=${cryo.forsterEff.toFixed(4)}) < Phi(24C)=${room.enaqtEff.toFixed(4)} (F=${room.forsterEff.toFixed(4)}) > Phi(54C)=${zeno.enaqtEff.toFixed(4)} (F=${zeno.forsterEff.toFixed(4)}, gap=${zenoGap.toFixed(4)})`);
 }
 
 // =========================================================================================
 // THEOREM 3: 8x8 Cryptochrome-4 Liouville-Haberkorn + Inclination Parity + Ritz Larmor RF (N=12)
 // =========================================================================================
-if (FROM_T <= 3) {
+if (runT(3)) {
   const rng = mulberry(314159);
   let maxYieldErr = 0, maxParityErr = 0;
   for (let k = 0; k < 32; k++) {
@@ -277,8 +318,8 @@ if (FROM_T <= 3) {
 
   const stLes = summarizePaired('T3a: Night HD Error (Magneto Lesion - Intact)', hdLesion, hdIntact, 'greater');
   const stRF = summarizePaired('T3b: Night HD Error (Resonant omega_L RF - Off-Resonant 7*omega_L RF)', hdResRF, hdOffRF, 'greater');
-  assert(stLes.p < 0.002, `T3a Nocturnal Cry4 vs lesion failed p<0.002: p=${stLes.p}`);
-  assert(stRF.p < 0.005, `T3b Ritz resonant Larmor RF disruption failed p<0.005: p=${stRF.p} (res=${stRF.meanX}, off=${stRF.meanY})`);
+  check(stLes.p < 0.002, `T3a Nocturnal Cry4 vs lesion failed p<0.002: p=${stLes.p}`);
+  check(stRF.p < 0.005, `T3b Ritz resonant Larmor RF disruption failed p<0.005: p=${stRF.p} (res=${stRF.meanX}, off=${stRF.meanY})`);
 
   SUMMARY_ROWS.push({
     id: 'T3',
@@ -286,15 +327,15 @@ if (FROM_T <= 3) {
     metric: `parityErr=${maxParityErr.toExponential(2)}, dPhi(res/off)=${cRes.toFixed(3)}/${cOff.toFixed(3)}`,
     effect: `Lesion:+${stLes.meanDiff.toFixed(3)} rad; ResRF:+${stRF.meanDiff.toFixed(3)} rad [${stRF.ciLo.toFixed(3)}, ${stRF.ciHi.toFixed(3)}]`,
     p: stRF.p.toFixed(6),
-    d: stRF.dz.toFixed(2),
+    d: stRF.dzLabel,
   });
-  console.log(`[PASS] T3 8x8 Cry4 Compass & Ritz RF: parity=${maxParityErr.toExponential(2)}, LesionDiff=+${stLes.meanDiff.toFixed(3)} rad (p=${stLes.p.toFixed(6)}), ResRF_vs_7wL=+${stRF.meanDiff.toFixed(3)} rad (p=${stRF.p.toFixed(6)}, d_z=${stRF.dz.toFixed(2)})`);
+  console.log(`[PASS] T3 8x8 Cry4 Compass & Ritz RF: parity=${maxParityErr.toExponential(2)}, LesionDiff=+${stLes.meanDiff.toFixed(3)} rad (p=${stLes.p.toFixed(6)}), ResRF_vs_7wL=+${stRF.meanDiff.toFixed(3)} rad (p=${stRF.p.toFixed(6)}, d_z=${stRF.dzLabel})`);
 }
 
 // =========================================================================================
 // THEOREM 4: 4-Qubit C3 Cospectral Twins (14,976 vs 15,360) + KCBS / CEGA-18 / Hoggar / MPS M2
 // =========================================================================================
-if (FROM_T <= 4) {
+if (runT(4)) {
   const ctx = evalContextualitySuites(0, 0);
   const twins = evalCospectralTwins();
   assert(Math.abs(ctx.kcbsValue - Math.sqrt(5)) < 1e-9 && ctx.kcbsOrthoErr < 1e-12, 'T4 KCBS exact witness failed');
@@ -329,7 +370,7 @@ if (FROM_T <= 4) {
     specAcc.push(wS / N_TRIALS);
   }
   const st = summarizePaired('T4: Blind C3 Cospectral Obelisk Accuracy (Jordan-QGT vs Classical Spectral)', qgtAcc, specAcc, 'greater');
-  assert(st.meanX === 1.0 && st.p < 0.001, `T4 Jordan-QGT must achieve 100% blind discrimination vs ~50% spectral: ${JSON.stringify(st)}`);
+  check(st.meanX === 1.0 && st.p < 0.001, `T4 Jordan-QGT must achieve 100% blind discrimination vs ~50% spectral: ${JSON.stringify(st)}`);
 
   SUMMARY_ROWS.push({
     id: 'T4',
@@ -337,15 +378,15 @@ if (FROM_T <= 4) {
     metric: `eigDiff=${twins.carrierEigMaxDiff.toExponential(2)}, Tr(L^3)=14976 vs 15360`,
     effect: `QGT=${(st.meanX * 100).toFixed(1)}% vs Spec=${(st.meanY * 100).toFixed(1)}% [+${(st.meanDiff * 100).toFixed(1)}%]`,
     p: st.p.toFixed(6),
-    d: st.dz.toFixed(2),
+    d: st.dzLabel,
   });
-  console.log(`[PASS] T4 4Q C3 Cospectral Twins & Contextuality: eigDiff=${twins.carrierEigMaxDiff.toExponential(2)}, Tr(L^3)=14976/15360, QGT=${(st.meanX * 100).toFixed(1)}% vs Spectral=${(st.meanY * 100).toFixed(1)}% (p=${st.p.toFixed(6)}, d_z=${st.dz.toFixed(2)})`);
+  console.log(`[PASS] T4 4Q C3 Cospectral Twins & Contextuality: eigDiff=${twins.carrierEigMaxDiff.toExponential(2)}, Tr(L^3)=14976/15360, QGT=${(st.meanX * 100).toFixed(1)}% vs Spectral=${(st.meanY * 100).toFixed(1)}% (p=${st.p.toFixed(6)}, d_z=${st.dzLabel})`);
 }
 
 // =========================================================================================
 // THEOREM 5: 4x4 Two-Qubit Density Matrix CHSH Non-Local Game & Zero Superluminal Signaling (N=12)
 // =========================================================================================
-if (FROM_T <= 5) {
+if (runT(5)) {
   const qWin = [], lhvWin = [], qEmpS = [];
   let maxExactMargBias = 0, maxEmpNoSig = 0;
 
@@ -373,10 +414,10 @@ if (FROM_T <= 5) {
 
   const stBell = summarizePaired('T5: CHSH Win Rate (Quantum rho_AB vs Classical LHV)', qWin, lhvWin, 'greater');
   const stBound = summarizePaired('T5b: Quantum Win Rate above 0.75 Bell Ceiling', qWin, SEEDS_12.map(() => 0.75), 'greater');
-  assert(maxExactMargBias < 1e-15, `T5 Exact reduced density-matrix marginal bias must be 0: ${maxExactMargBias}`);
-  assert(maxEmpNoSig < 0.11, `T5 Empirical finite-sample no-signaling discrepancy too large: ${maxEmpNoSig}`);
-  assert(mean(lhvWin) <= 0.768, `T5 Classical LHV surrogate exceeded Bell bound beyond binomial noise: ${mean(lhvWin)}`);
-  assert(stBell.p < 0.001 && stBound.p < 0.001, `T5 Quantum CHSH violation failed p<0.001: p=${stBell.p}`);
+  check(maxExactMargBias < 1e-15, `T5 Exact reduced density-matrix marginal bias must be 0: ${maxExactMargBias}`);
+  check(maxEmpNoSig < 0.11, `T5 Empirical finite-sample no-signaling discrepancy too large: ${maxEmpNoSig}`);
+  check(mean(lhvWin) <= 0.768, `T5 Classical LHV surrogate exceeded Bell bound beyond binomial noise: ${mean(lhvWin)}`);
+  check(stBell.p < 0.001 && stBound.p < 0.001, `T5 Quantum CHSH violation failed p<0.001: p=${stBell.p}`);
 
   SUMMARY_ROWS.push({
     id: 'T5',
@@ -384,15 +425,15 @@ if (FROM_T <= 5) {
     metric: `exactBias=${maxExactMargBias.toExponential(1)}, empS=${mean(qEmpS).toFixed(3)}>2`,
     effect: `Win: Q=${(stBell.meanX * 100).toFixed(2)}% vs LHV=${(stBell.meanY * 100).toFixed(2)}% (>75% Bell)`,
     p: stBell.p.toFixed(6),
-    d: stBell.dz.toFixed(2),
+    d: stBell.dzLabel,
   });
-  console.log(`[PASS] T5 4x4 Density-Matrix CHSH & No-Signaling: Q_win=${(stBell.meanX * 100).toFixed(2)}% (S_emp=${mean(qEmpS).toFixed(3)}) vs LHV=${(stBell.meanY * 100).toFixed(2)}%, exactMargBias=${maxExactMargBias.toExponential(1)}, empNoSigMax=${maxEmpNoSig.toFixed(4)} (p=${stBell.p.toFixed(6)}, d_z=${stBell.dz.toFixed(2)})`);
+  console.log(`[PASS] T5 4x4 Density-Matrix CHSH & No-Signaling: Q_win=${(stBell.meanX * 100).toFixed(2)}% (S_emp=${mean(qEmpS).toFixed(3)}) vs LHV=${(stBell.meanY * 100).toFixed(2)}%, exactMargBias=${maxExactMargBias.toExponential(1)}, empNoSigMax=${maxEmpNoSig.toFixed(4)} (p=${stBell.p.toFixed(6)}, d_z=${stBell.dzLabel})`);
 }
 
 // =========================================================================================
 // THEOREM 6: Exact Ungar K = -1 Poincaré-Disk Riemannian Geometry & Xylos Geodesic Motion
 // =========================================================================================
-if (FROM_T <= 6) {
+if (runT(6)) {
   const rng = mulberry(271828);
   const randDisk = (maxR = 0.85) => {
     const rad = (0.12 + (maxR - 0.12) * rng());
@@ -451,7 +492,7 @@ if (FROM_T <= 6) {
 // =========================================================================================
 // THEOREM 7: NESTOR 23-Rung Stochastic Rounding Unbiasedness, Nullspace Escape & Pareto Frugality (N=12)
 // =========================================================================================
-if (FROM_T <= 7) {
+if (runT(7)) {
   const rng = mulberry(161803);
   const testVal = 0.3719;
   let maxBias = 0;
@@ -512,8 +553,8 @@ if (FROM_T <= 7) {
   const stQual = summarizePaired('T7a: World-Model Error NLL (fixedLow - adaptive)', nllLow, nllAdapt, 'greater');
   const stFrug = summarizePaired('T7b: Compute ATP Burn (fixedHigh - adaptive)', atpHigh, atpAdapt, 'greater');
   const frugRatio = mean(atpHigh) / Math.max(1e-12, mean(atpAdapt));
-  assert(stQual.p < 0.005, `T7a Adaptive NESTOR must beat 1-bit fixedLow on WM fidelity: p=${stQual.p}`);
-  assert(stFrug.p < 0.001 && frugRatio > 10.0, `T7b Adaptive NESTOR must save >10x compute ATP vs fixedHigh: ratio=${frugRatio}`);
+  check(stQual.p < 0.005, `T7a Adaptive NESTOR must beat 1-bit fixedLow on WM fidelity: p=${stQual.p}`);
+  check(stFrug.p < 0.001 && frugRatio > 10.0, `T7b Adaptive NESTOR must save >10x compute ATP vs fixedHigh: ratio=${frugRatio}`);
 
   SUMMARY_ROWS.push({
     id: 'T7',
@@ -521,7 +562,7 @@ if (FROM_T <= 7) {
     metric: `maxBias=${maxBias.toFixed(4)}, ortho=${hc.lastNullspaceOrtho.toExponential(1)}`,
     effect: `dNLL(low-adap)=+${stQual.meanDiff.toFixed(3)}; ATP=${frugRatio.toFixed(1)}x frugal`,
     p: stQual.p.toFixed(6),
-    d: stQual.dz.toFixed(2),
+    d: stQual.dzLabel,
   });
   console.log(`[PASS] T7 NESTOR 23-Rung Pareto & Nullspace: SR_bias=${maxBias.toFixed(4)}, nullOrtho=${hc.lastNullspaceOrtho.toExponential(1)}, dNLL(low-adap)=+${stQual.meanDiff.toFixed(3)} (p=${stQual.p.toFixed(6)}), ATP_savings=${frugRatio.toFixed(1)}x (p=${stFrug.p.toFixed(6)})`);
 }
@@ -529,7 +570,7 @@ if (FROM_T <= 7) {
 // =========================================================================================
 // THEOREM 8: Levin Target-Free Bistable Bioelectric Syncytium & Cryptic Pattern Memory (N=12)
 // =========================================================================================
-if (FROM_T <= 8) {
+if (runT(8)) {
   const regIntact = [], regLesion = [], morphCanon = [], morphCryptic = [];
   for (const seed of SEEDS_12) {
     const hInt = new HeptarchCouncil(seed);
@@ -569,7 +610,7 @@ if (FROM_T <= 8) {
 
   const stReg = summarizePaired('T8a: Limb Regeneration (Intact - GapJunction Lesion)', regIntact, regLesion, 'greater');
   const stMem = summarizePaired('T8b: Cryptic Ectopic Morph Scale (-14mV - Canonical -56mV)', morphCryptic, morphCanon, 'greater');
-  assert(stReg.p < 0.001 && stMem.p < 0.001 && stMem.meanDiff > 0.25, `T8 Bioelectric regeneration/cryptic memory failed`);
+  check(stReg.p < 0.001 && stMem.p < 0.001 && stMem.meanDiff > 0.25, `T8 Bioelectric regeneration/cryptic memory failed`);
 
   SUMMARY_ROWS.push({
     id: 'T8',
@@ -577,7 +618,7 @@ if (FROM_T <= 8) {
     metric: `0/128 genes altered; regen=${stReg.meanX.toFixed(3)} vs ${stReg.meanY.toFixed(3)}`,
     effect: `Morph switch: ${stMem.meanY.toFixed(3)} -> ${stMem.meanX.toFixed(3)} (+${stMem.meanDiff.toFixed(3)})`,
     p: stMem.p.toFixed(6),
-    d: stMem.dz.toFixed(2),
+    d: stMem.dzLabel,
   });
   console.log(`[PASS] T8 Levin Bistable Bioelectric & Cryptic Memory: regen=${stReg.meanX.toFixed(3)} vs lesion=${stReg.meanY.toFixed(3)}, ectopicMorph=${stMem.meanX.toFixed(3)} vs canon=${stMem.meanY.toFixed(3)} (0/128 genes changed, p=${stMem.p.toFixed(6)})`);
 }
@@ -585,7 +626,7 @@ if (FROM_T <= 8) {
 // =========================================================================================
 // THEOREM 9: Spatial RS[15,11,d=5] GF(16) Bio-Acoustic Burst-Noise ECC Survival Advantage (N=12)
 // =========================================================================================
-if (FROM_T <= 9) {
+if (runT(9)) {
   const predOff = [], predOn = [], evasOn = [];
   for (const seed of SEEDS_12) {
     const runStormColony = (eccOn) => {
@@ -609,7 +650,7 @@ if (FROM_T <= 9) {
   }
 
   const stECC = summarizePaired('T9: Leviathan Predations Prevented (ECC_OFF - ECC_ON)', predOff, predOn, 'greater');
-  assert(stECC.p < 0.01 && mean(evasOn) > 0.5, `T9 RS[15,11] ECC survival advantage failed p<0.01: ${JSON.stringify(stECC)}`);
+  check(stECC.p < 0.01 && mean(evasOn) > 0.5, `T9 RS[15,11] ECC survival advantage failed p<0.01: ${JSON.stringify(stECC)}`);
 
   SUMMARY_ROWS.push({
     id: 'T9',
@@ -617,15 +658,15 @@ if (FROM_T <= 9) {
     metric: `meanEarlyEvasions=${mean(evasOn).toFixed(2)}`,
     effect: `Predations: raw=${stECC.meanX.toFixed(2)} -> ECC=${stECC.meanY.toFixed(2)} (-${stECC.meanDiff.toFixed(2)})`,
     p: stECC.p.toFixed(6),
-    d: stECC.dz.toFixed(2),
+    d: stECC.dzLabel,
   });
-  console.log(`[PASS] T9 Spatial RS[15,11] Burst-Noise ECC: predations raw=${stECC.meanX.toFixed(2)} -> ECC=${stECC.meanY.toFixed(2)} (diff=${stECC.meanDiff.toFixed(2)}, evasions=${mean(evasOn).toFixed(2)}, p=${stECC.p.toFixed(6)}, d_z=${stECC.dz.toFixed(2)})`);
+  console.log(`[PASS] T9 Spatial RS[15,11] Burst-Noise ECC: predations raw=${stECC.meanX.toFixed(2)} -> ECC=${stECC.meanY.toFixed(2)} (diff=${stECC.meanDiff.toFixed(2)}, evasions=${mean(evasOn).toFixed(2)}, p=${stECC.p.toFixed(6)}, d_z=${stECC.dzLabel})`);
 }
 
 // =========================================================================================
 // THEOREM 10: Press-Dyson Memory-1 IPD Titans & Level-2 Bayesian Costly-Signaling Shoggoths (N=12)
 // =========================================================================================
-if (FROM_T <= 10) {
+if (runT(10)) {
   const coopPay = [], defPay = [], shogBayes = [], shogNaive = [];
   for (const seed of SEEDS_12) {
     const w = new World(seed);
@@ -667,8 +708,8 @@ if (FROM_T <= 10) {
 
   const stTitan = summarizePaired('T10a: Titan IPD Payoff (GTFT/WSLS Cooperator - Defector)', coopPay, defPay, 'greater');
   const stShog = summarizePaired('T10b: Shoggoth Encounter Net Payoff (Level-2 Bayes - Level-0 Naive)', shogBayes, shogNaive, 'greater');
-  assert(stTitan.p < 0.002, `T10a Cooperative Titans with multilateral sanctions must beat Defector: p=${stTitan.p}`);
-  assert(stShog.p < 0.002, `T10b Level-2 Bayesian Shoggoth screening must beat Level-0 naive trust: p=${stShog.p}`);
+  check(stTitan.p < 0.002, `T10a Cooperative Titans with multilateral sanctions must beat Defector: p=${stTitan.p}`);
+  check(stShog.p < 0.002, `T10b Level-2 Bayesian Shoggoth screening must beat Level-0 naive trust: p=${stShog.p}`);
 
   SUMMARY_ROWS.push({
     id: 'T10',
@@ -676,15 +717,15 @@ if (FROM_T <= 10) {
     metric: `Titan(Coop-Def)=+${stTitan.meanDiff.toFixed(2)} (p=${stTitan.p.toFixed(4)})`,
     effect: `Shoggoth net: Bayes=${stShog.meanX.toFixed(2)} vs Naive=${stShog.meanY.toFixed(2)} (+${stShog.meanDiff.toFixed(2)})`,
     p: stShog.p.toFixed(6),
-    d: stShog.dz.toFixed(2),
+    d: stShog.dzLabel,
   });
-  console.log(`[PASS] T10 Game-Theoretic Kingdoms: Titan(Coop=${stTitan.meanX.toFixed(2)} > Def=${stTitan.meanY.toFixed(2)}, p=${stTitan.p.toFixed(6)}), Shoggoth(Bayes=${stShog.meanX.toFixed(2)} > Naive=${stShog.meanY.toFixed(2)}, p=${stShog.p.toFixed(6)}, d_z=${stShog.dz.toFixed(2)})`);
+  console.log(`[PASS] T10 Game-Theoretic Kingdoms: Titan(Coop=${stTitan.meanX.toFixed(2)} > Def=${stTitan.meanY.toFixed(2)}, p=${stTitan.p.toFixed(6)}), Shoggoth(Bayes=${stShog.meanX.toFixed(2)} > Naive=${stShog.meanY.toFixed(2)}, p=${stShog.p.toFixed(6)}, d_z=${stShog.dzLabel})`);
 }
 
 // =========================================================================================
 // THEOREM 11: Bedau-Packard Cumulative Evolutionary Activity vs Neutral Drift Shadow Model (N=12)
 // =========================================================================================
-if (FROM_T <= 11) {
+if (runT(11)) {
   const actAdaptive = [], actNeutral = [];
   for (const seed of SEEDS_12) {
     const w = new World(seed);
@@ -699,7 +740,7 @@ if (FROM_T <= 11) {
   }
 
   const stBedau = summarizePaired('T11: Bedau-Packard Evolutionary Activity (Adaptive - Neutral Shadow)', actAdaptive, actNeutral, 'greater');
-  assert(stBedau.p < 0.005, `T11 Adaptive evolutionary activity must exceed neutral shadow model: ${JSON.stringify(stBedau)}`);
+  check(stBedau.p < 0.005, `T11 Adaptive evolutionary activity must exceed neutral shadow model: ${JSON.stringify(stBedau)}`);
 
   SUMMARY_ROWS.push({
     id: 'T11',
@@ -707,15 +748,15 @@ if (FROM_T <= 11) {
     metric: `Adaptive=${stBedau.meanX.toFixed(2)} vs Neutral=${stBedau.meanY.toFixed(2)}`,
     effect: `dActivity=+${stBedau.meanDiff.toFixed(2)} [${stBedau.ciLo.toFixed(2)}, ${stBedau.ciHi.toFixed(2)}]`,
     p: stBedau.p.toFixed(6),
-    d: stBedau.dz.toFixed(2),
+    d: stBedau.dzLabel,
   });
-  console.log(`[PASS] T11 Bedau-Packard Evolutionary Activity: Adaptive=${stBedau.meanX.toFixed(2)} > NeutralShadow=${stBedau.meanY.toFixed(2)} (+${stBedau.meanDiff.toFixed(2)}, p=${stBedau.p.toFixed(6)}, d_z=${stBedau.dz.toFixed(2)})`);
+  console.log(`[PASS] T11 Bedau-Packard Evolutionary Activity: Adaptive=${stBedau.meanX.toFixed(2)} > NeutralShadow=${stBedau.meanY.toFixed(2)} (+${stBedau.meanDiff.toFixed(2)}, p=${stBedau.p.toFixed(6)}, d_z=${stBedau.dzLabel})`);
 }
 
 // =========================================================================================
-// THEOREM 12: Prequential Proper Gaussian NLL, Kuleshov 10-Bin ECE & Schreiber Transfer Entropy (N=12)
+// THEOREM 12: Prequential Proper NLL, Per-Dim Kuleshov 10-Bin ECE & Matched 3-Edge Schreiber TE (N=12)
 // =========================================================================================
-{
+if (runT(12)) {
   const rawNLL = [], calNLL = [], rawECE = [], calECE = [], teActive = [], teNull = [], teParalyzed = [];
   for (const seed of SEEDS_12) {
     const cAct = new Creature(seed, { brainScale: 'S', noVision: true });
@@ -752,27 +793,249 @@ if (FROM_T <= 11) {
   }
 
   const stNLL = summarizePaired('T12a: Proper Gaussian NLL Reduction (Raw - Calibrated)', rawNLL, calNLL, 'greater');
-  const stECE = summarizePaired('T12b: Kuleshov 10-Bin ECE Reduction (Raw - Calibrated)', rawECE, calECE, 'greater');
-  const stTENull = summarizePaired('T12c: Sensorimotor Loop TE (Active - Time-Shuffled Surrogate)', teActive, teNull, 'greater');
-  const stTEPar = summarizePaired('T12d: Sensorimotor Loop TE (Active - Motor-Lesioned)', teActive, teParalyzed, 'greater');
+  const stECE = summarizePaired('T12b: Per-Dim Kuleshov 10-Bin ECE Reduction (Raw - Calibrated)', rawECE, calECE, 'greater');
+  const stTENull = summarizePaired('T12c: Matched 3-Edge Loop TE (Active - 3-Edge Circular Null)', teActive, teNull, 'greater');
+  const stTEPar = summarizePaired('T12d: Matched 3-Edge Loop TE (Active - Motor-Lesioned)', teActive, teParalyzed, 'greater');
 
-  assert(stNLL.p < 0.005, `T12a Prequential temperature scaling must reduce proper Gaussian NLL: ${JSON.stringify(stNLL)}`);
-  assert(stECE.p < 0.01, `T12b Prequential calibration must reduce Kuleshov 10-bin ECE: ${JSON.stringify(stECE)}`);
-  assert(stTENull.p < 0.005 && stTEPar.p < 0.002, `T12c/d Closed-loop Schreiber TE must exceed shuffled & paralyzed baselines: null_p=${stTENull.p}, par_p=${stTEPar.p}`);
+  check(stNLL.p < 0.005, `T12a Prequential temperature scaling must reduce proper Gaussian NLL: ${JSON.stringify(stNLL)}`);
+  check(stECE.p < 0.005, `T12b Prequential calibration must reduce per-dim Kuleshov 10-bin ECE: ${JSON.stringify(stECE)}`);
+  check(stTENull.p < 0.005 && stTEPar.p < 0.002, `T12c/d Closed-loop 3-edge Schreiber TE must exceed matched 3-edge circular null & paralyzed baselines: null_p=${stTENull.p}, par_p=${stTEPar.p}`);
 
   SUMMARY_ROWS.push({
     id: 'T12',
-    theorem: 'Proper NLL + 10-Bin ECE + Schreiber TE',
+    theorem: 'Proper NLL + Per-Dim ECE + 3-Edge TE',
     metric: `NLL:${stNLL.meanX.toFixed(3)}->${stNLL.meanY.toFixed(3)}, ECE:${stECE.meanX.toFixed(3)}->${stECE.meanY.toFixed(3)}`,
-    effect: `TE_loop=${stTEPar.meanX.toFixed(3)} bits vs shuf=${mean(teNull).toFixed(3)} / mnLes=${stTEPar.meanY.toFixed(3)}`,
-    p: stTEPar.p.toFixed(6),
-    d: stTEPar.dz.toFixed(2),
+    effect: `TE_3=${stTEPar.meanX.toFixed(3)} vs null3=${mean(teNull).toFixed(3)} / mnLes=${stTEPar.meanY.toFixed(3)}`,
+    p: stTENull.p.toFixed(6),
+    d: stTENull.dzLabel,
   });
-  console.log(`[PASS] T12 Epistemic Calibration & Sensorimotor TE: NLL ${stNLL.meanX.toFixed(3)}->${stNLL.meanY.toFixed(3)} (p=${stNLL.p.toFixed(6)}), ECE ${stECE.meanX.toFixed(3)}->${stECE.meanY.toFixed(3)} (p=${stECE.p.toFixed(6)}), TE_loop=${stTEPar.meanX.toFixed(3)} > shuf=${mean(teNull).toFixed(3)} & mnLes=${stTEPar.meanY.toFixed(3)} (p=${stTEPar.p.toFixed(6)})`);
+  console.log(`[PASS] T12 Epistemic Calibration & Matched 3-Edge TE: NLL ${stNLL.meanX.toFixed(3)}->${stNLL.meanY.toFixed(3)} (p=${stNLL.p.toFixed(6)}), ECE ${stECE.meanX.toFixed(3)}->${stECE.meanY.toFixed(3)} (p=${stECE.p.toFixed(6)}, d_z=${stECE.dzLabel}), TE_3=${stTEPar.meanX.toFixed(3)} > null3=${mean(teNull).toFixed(3)} (p=${stTENull.p.toFixed(6)}, d_z=${stTENull.dzLabel}) & mnLes=${stTEPar.meanY.toFixed(3)} (p=${stTEPar.p.toFixed(6)})`);
 }
 
-console.log('\n=== SUMMARY TABLE (EXACT 2^12 PERMUTATION TESTS + 10,000-BOOTSTRAP 95% CIs) ===');
+// =========================================================================================
+// THEOREM 13 [EMERGENT]: Multi-Generation Divergent Natural Selection (Warm vs Cool Biome, Zero Target)
+// =========================================================================================
+if (runT(13)) {
+  const divAdaptive = [], divNeutral = [], warmMeans = [], coolMeans = [];
+  let meanMaxGen = 0;
+  for (const seed of SEEDS_12) {
+    const runBiome = (seasonInit) => {
+      const w = new World(seed);
+      w.seasonPhase = seasonInit;
+      const eco = new Ecosystem(w, seed, { peers: 24, maxPeers: 24, mites: 20, predators: 1 });
+      for (let f = 0; f < 360 * 20; f++) {
+        w.seasonPhase = seasonInit;
+        w.step(1 / 20, f);
+        eco.step(1 / 20, null);
+      }
+      const meanT = (arr) => arr.reduce((a, p) => a + p.gen.thermOpt, 0) / Math.max(1, arr.length);
+      return { real: meanT(eco.peers), shad: meanT(eco.neutralShadowPeers), maxGen: eco.stats.maxGen };
+    };
+    const warm = runBiome(0.25);
+    const cool = runBiome(0.75);
+    warmMeans.push(warm.real);
+    coolMeans.push(cool.real);
+    divAdaptive.push(warm.real - cool.real);
+    divNeutral.push(warm.shad - cool.shad);
+    meanMaxGen += 0.5 * (warm.maxGen + cool.maxGen);
+  }
+  meanMaxGen /= SEEDS_12.length;
+
+  const stDivZero = summarizePaired('T13a: Emergent Divergent Selection thermOpt (Warm - Cool)', warmMeans, coolMeans, 'greater');
+  const stDivShad = summarizePaired('T13b: Divergent Shift (Adaptive - Neutral Shadow)', divAdaptive, divNeutral, 'greater');
+  check(stDivZero.p < 0.002 && stDivShad.p < 0.005, `T13 Emergent divergent natural selection failed: p0=${stDivZero.p}, pShad=${stDivShad.p}`);
+
+  const sShad = `${stDivShad.meanY >= 0 ? '+' : ''}${stDivShad.meanY.toFixed(3)}`;
+  SUMMARY_ROWS.push({
+    id: 'T13',
+    theorem: '[E] Divergent Natural Selection (Warm/Cool)',
+    metric: `Warm=${mean(warmMeans).toFixed(3)} vs Cool=${mean(coolMeans).toFixed(3)} (${meanMaxGen.toFixed(1)} gens)`,
+    effect: `dTherm: Adap=+${stDivShad.meanX.toFixed(3)} vs Shad=${sShad}`,
+    p: stDivShad.p.toFixed(6),
+    d: stDivShad.dzLabel,
+  });
+  console.log(`[PASS] T13 [E] Divergent Natural Selection: Warm=${mean(warmMeans).toFixed(3)} > Cool=${mean(coolMeans).toFixed(3)} (Adap d=+${stDivShad.meanX.toFixed(3)} > Shadow d=${sShad}, p=${stDivShad.p.toFixed(6)}, d_z=${stDivShad.dzLabel}, ${meanMaxGen.toFixed(1)} gens)`);
+}
+
+// =========================================================================================
+// THEOREM 14 [EMERGENT]: Ontogenetic Unsupervised Learning (WM + PC) & Wiener HDC Generalization
+// =========================================================================================
+if (runT(14)) {
+  const wmFrozen = [], wmLearned = [], pcFrozen = [], pcLearned = [];
+  const hdcSup = [], hdcFix = [], hdcWien = [];
+  const pearson = (a, b) => {
+    const n = a.length;
+    const ma = mean(a), mb = mean(b);
+    let s = 0, sa = 0, sb = 0;
+    for (let i = 0; i < n; i++) {
+      const da = a[i] - ma, db = b[i] - mb;
+      s += da * db; sa += da * da; sb += db * db;
+    }
+    return s / Math.sqrt(Math.max(1e-18, sa * sb));
+  };
+
+  for (const seed of SEEDS_12) {
+    const runOnto = (freeze) => {
+      const c = new Creature(seed, { brainScale: 'S', noVision: true });
+      c.retina.skipSheet = true;
+      c.lesion.vision = true;
+      c.lesion.fluid = true;
+      c.lesion.fem = true;
+      c.lesion.hopfield = true;
+      c.lesion.qrng = true;
+      c.htn = null;
+      c.noSkin = true;
+      if (freeze) {
+        c.lesion.pc = true;
+        c.lesion.ssmLearn = true;
+        const origLearn = c.wm.learn.bind(c.wm);
+        c.wm.learn = (z, y, lr, ssm, isSeq, vp, vc) => origLearn(z, y, 0.0, null, isSeq, vp, vc);
+      }
+      let wmSum = 0, pcSum = 0, n = 0;
+      for (let f = 0; f < 45 * 60; f++) {
+        c.step();
+        if (f >= 30 * 60 && f % 6 === 5) {
+          let se = 0;
+          for (let i = 0; i < 25; i++) se += c.wm.err[i] * c.wm.err[i];
+          wmSum += se / 25;
+          pcSum += c.pc.err;
+          n++;
+        }
+      }
+      return { wmMSE: wmSum / n, pcErr: pcSum / n };
+    };
+    const on = runOnto(false), off = runOnto(true);
+    wmFrozen.push(off.wmMSE); wmLearned.push(on.wmMSE);
+    pcFrozen.push(off.pcErr); pcLearned.push(on.pcErr);
+
+    const evalHDC = (mode) => {
+      const r = mulberry(seed * 13 + 7);
+      const B = [];
+      for (let i = 0; i < 6; i++) B.push([r() * 30 - 15, r() * 30 - 15, 1 + r() * 5, r() < 0.5 ? 1 : -0.6]);
+      const fn = (x, z) => B.reduce((a, [bx, bz, w, h]) => a + h * Math.exp(-((x - bx) ** 2 + (z - bz) ** 2) / (2 * w * w)), 0);
+      const m = new HDCMap(seed, 1024, 0.80);
+      m.fixed = (mode === 'fixed');
+      const tr = [];
+      for (let i = 0; i < 300; i++) tr.push([r() * 34 - 17, r() * 34 - 17]);
+      for (let ep = 0; ep < 4; ep++) {
+        for (const [x, z] of tr) {
+          const y = fn(x, z) + 0.15 * gauss(r);
+          if (mode === 'superpose') { if (ep === 0) m.add(x, z, y); }
+          else m.learn(x, z, y, 0.3);
+        }
+        if (mode !== 'superpose' && ep < 3) for (let k = 0; k < 2; k++) m.sleep(m.fixed ? 0 : 0.25, 1);
+      }
+      const te = [];
+      for (let i = 0; i < 300; i++) te.push([r() * 34 - 17, r() * 34 - 17]);
+      return pearson(te.map(([x, z]) => fn(x, z)), te.map(([x, z]) => m.recall(x, z)));
+    };
+    hdcSup.push(evalHDC('superpose'));
+    hdcFix.push(evalHDC('fixed'));
+    hdcWien.push(evalHDC('wiener'));
+  }
+
+  const stWM = summarizePaired('T14a: Unsupervised Transformer-XL WM MSE Cut (Frozen - Learned)', wmFrozen, wmLearned, 'greater');
+  const stPC = summarizePaired('T14b: Unsupervised Rao-Ballard PC Error Cut (Frozen - Learned)', pcFrozen, pcLearned, 'greater');
+  const stWien = summarizePaired('T14c: Wiener HDC Held-Out Spatial Corr (Wiener - DeltaFixed)', hdcWien, hdcFix, 'greater');
+  const stFix = summarizePaired('T14d: DeltaFixed HDC Held-Out Spatial Corr (Fixed - Superpose)', hdcFix, hdcSup, 'greater');
+  check(stWM.p < 0.002 && stPC.p < 0.002 && stWien.p < 0.002 && stFix.p < 0.002,
+    `T14 Ontogenetic unsupervised learning failed: WM=${stWM.p}, PC=${stPC.p}, Wien=${stWien.p}, Fix=${stFix.p}`);
+
+  SUMMARY_ROWS.push({
+    id: 'T14',
+    theorem: '[E] Ontogenetic Learning (WM+PC+Wiener HDC)',
+    metric: `WM:${stWM.meanX.toFixed(3)}->${stWM.meanY.toFixed(3)}, PC:${stPC.meanX.toFixed(3)}->${stPC.meanY.toFixed(3)}`,
+    effect: `HDC r: ${mean(hdcSup).toFixed(3)}<${stWien.meanY.toFixed(3)}<${stWien.meanX.toFixed(3)}`,
+    p: stWien.p.toFixed(6),
+    d: stWien.dzLabel,
+  });
+  console.log(`[PASS] T14 [E] Ontogenetic Learning: WM ${stWM.meanX.toFixed(4)}->${stWM.meanY.toFixed(4)} (p=${stWM.p.toFixed(6)}), PC ${stPC.meanX.toFixed(4)}->${stPC.meanY.toFixed(4)} (p=${stPC.p.toFixed(6)}), HDC r ${mean(hdcSup).toFixed(3)}<${stWien.meanY.toFixed(3)}<${stWien.meanX.toFixed(3)} (p=${stWien.p.toFixed(6)}, d_z=${stWien.dzLabel})`);
+}
+
+// =========================================================================================
+// THEOREM 15 [EMERGENT]: 3-Trophic-Level Ecology-of-Fear Plant Biomass Cascade (TMII > DMII)
+// =========================================================================================
+if (runT(15)) {
+  const predSilent = [], predSocial = [], fruitSocial = [], fruitSilent = [];
+  for (const seed of SEEDS_12) {
+    const runCol = (socialOn) => {
+      const w = new World(seed);
+      if (!socialOn) {
+        w.depositPheromone = () => {};
+        w.samplePheromone = () => 0;
+      }
+      const eco = new Ecosystem(w, seed, { peers: 20, maxPeers: 24, mites: 16, predators: 2, eccEnabled: socialOn });
+      if (!socialOn) for (const p of eco.peers) p.rsCooldown = 1e9;
+      let fSum = 0, n = 0;
+      for (let f = 0; f < 90 * 20; f++) {
+        w.step(1 / 20, f);
+        w.dome.auroraStorm = 0.65;
+        eco.step(1 / 20, null);
+        if (f >= 45 * 20 && f % 20 === 0) {
+          fSum += w.plants.reduce((a, pl) => a + pl.fruit, 0) / w.plants.length;
+          n++;
+        }
+      }
+      return { pred: eco.stats.predations, fruit: fSum / n };
+    };
+    const on = runCol(true), off = runCol(false);
+    predSocial.push(on.pred); predSilent.push(off.pred);
+    fruitSocial.push(on.fruit); fruitSilent.push(off.fruit);
+  }
+
+  const stPred = summarizePaired('T15a: Social Alarm Predations Prevented (Silent - Social)', predSilent, predSocial, 'greater');
+  const stCasc = summarizePaired('T15b: Emergent 3-Trophic Plant Fruit Cascade (Social - Silent)', fruitSocial, fruitSilent, 'greater');
+  check(stPred.p < 0.002 && stCasc.p < 0.005, `T15 Ecology-of-Fear trophic cascade failed: pred_p=${stPred.p}, casc_p=${stCasc.p}`);
+
+  SUMMARY_ROWS.push({
+    id: 'T15',
+    theorem: '[E] 3-Trophic Ecology-of-Fear Cascade',
+    metric: `Predations: ${stPred.meanX.toFixed(2)} -> ${stPred.meanY.toFixed(2)}`,
+    effect: `Plant fruit: ${stCasc.meanY.toFixed(3)} -> ${stCasc.meanX.toFixed(3)} (+${stCasc.meanDiff.toFixed(3)})`,
+    p: stCasc.p.toFixed(6),
+    d: stCasc.dzLabel,
+  });
+  console.log(`[PASS] T15 [E] 3-Trophic Ecology-of-Fear Cascade: pred ${stPred.meanX.toFixed(2)}->${stPred.meanY.toFixed(2)} (p=${stPred.p.toFixed(6)}), plantFruit ${stCasc.meanY.toFixed(4)}->${stCasc.meanX.toFixed(4)} (+${stCasc.meanDiff.toFixed(4)}, p=${stCasc.p.toFixed(6)}, d_z=${stCasc.dzLabel})`);
+}
+
+// Compute exact Holm-Bonferroni FWER, full Bonferroni, and Benjamini-Hochberg FDR across ALL paired contrasts
+const M = ALL_CONTRASTS.length;
+const idxOrder = ALL_CONTRASTS.map((_, i) => i).sort((a, b) => ALL_CONTRASTS[a].p - ALL_CONTRASTS[b].p);
+let runHolm = 0;
+for (let rank = 0; rank < M; rank++) {
+  const c = ALL_CONTRASTS[idxOrder[rank]];
+  runHolm = Math.min(1.0, Math.max(runHolm, c.p * (M - rank)));
+  c.pHolm = runHolm;
+  c.pBonf = Math.min(1.0, c.p * M);
+}
+let runBH = 1.0;
+for (let rank = M - 1; rank >= 0; rank--) {
+  const c = ALL_CONTRASTS[idxOrder[rank]];
+  runBH = Math.min(runBH, Math.min(1.0, c.p * M / (rank + 1)));
+  c.qBH = runBH;
+}
+
+console.log(`\n=== SUMMARY TABLE (EXACT 2^${SEEDS_12.length} PERMUTATION TESTS + 10,000-BOOTSTRAP 95% CIs) ===`);
 for (const r of SUMMARY_ROWS) {
   console.log(`${r.id.padEnd(4)} | ${r.theorem.padEnd(42)} | ${r.metric.padEnd(48)} | ${r.effect} | p=${r.p} | d_z=${r.d}`);
 }
-console.log('=== ALL 12 PASS 21 NOBEL/ALIFE RIGOR THEOREMS PASSED 100%! ===');
+
+console.log(`\n=== ALL ${M} PAIRED CONTRASTS — EXACT FWER (HOLM-BONFERRONI, BONFERRONI) & BH-FDR AUDIT ===`);
+for (const c of ALL_CONTRASTS) {
+  console.log(
+    `${c.name.padEnd(68)} | diff=${c.meanDiff >= 0 ? '+' : ''}${c.meanDiff.toFixed(4)} [${c.ciLo.toFixed(4)}, ${c.ciHi.toFixed(4)}] | p=${c.p.toFixed(6)} | p_Holm=${c.pHolm.toFixed(6)} | p_Bonf=${c.pBonf.toFixed(6)} | q_BH=${c.qBH.toFixed(6)} | d_z=${c.dzLabel}`
+  );
+}
+const holmPass = ALL_CONTRASTS.filter((c) => c.pHolm < 0.05).length;
+const bonfPass = ALL_CONTRASTS.filter((c) => c.pBonf < 0.05).length;
+console.log(`FWER summary (alpha=0.05): Holm-Bonferroni ${holmPass}/${M} | Full Bonferroni ${bonfPass}/${M}`);
+
+if (process.env.JSON_OUT) {
+  fs.writeFileSync(
+    process.env.JSON_OUT,
+    JSON.stringify({ seeds: SEEDS_12, summary: SUMMARY_ROWS, contrasts: ALL_CONTRASTS, failures: SOFT_FAILURES }, null, 2)
+  );
+}
+
+assert.equal(SOFT_FAILURES.length, 0, `${SOFT_FAILURES.length} gate(s) failed:\n  - ${SOFT_FAILURES.join('\n  - ')}`);
+console.log(`=== ALL ${SUMMARY_ROWS.length} EXECUTED PASS 22 THEOREMS PASSED 100% ON SEEDS [${SEEDS_12.join(',')}]! ===`);

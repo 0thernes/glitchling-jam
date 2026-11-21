@@ -19,9 +19,68 @@ const GAUSS_CRIT_10 = new Float64Array([
   0.755415, 0.934589, 1.150349, 1.439531, 1.959964,
 ]);
 
-function bin4(v, scale = 1.0) {
-  const u = clamp(0.5 * (Math.tanh(v / scale) + 1.0), 0, 0.9999);
-  return (u * 4) | 0;
+function bin3Quantile(arr, len) {
+  const s = new Float64Array(len);
+  for (let i = 0; i < len; i++) s[i] = arr[i];
+  s.sort();
+  const q1 = s[Math.floor(len / 3)];
+  const q2 = s[Math.floor((2 * len) / 3)];
+  const out = new Int8Array(len);
+  for (let i = 0; i < len; i++) out[i] = arr[i] <= q1 ? 0 : (arr[i] <= q2 ? 1 : 2);
+  return out;
+}
+
+/** Exact discrete Schreiber (2000) Transfer Entropy T_{X -> Y} (bits) on 3-quantile symbolic trajectories (27 cells) */
+export function computeTE3Bits(xArr, yArr) {
+  const n = xArr.length;
+  if (n < 12) return 0;
+  const c = new Float64Array(27);
+  for (let t = 0; t < n - 1; t++) c[yArr[t + 1] * 9 + yArr[t] * 3 + xArr[t]] += 1;
+  const tot = n - 1;
+  const nYX = new Float64Array(9), nYpY = new Float64Array(9), nY = new Float64Array(3);
+  for (let yp = 0; yp < 3; yp++) {
+    for (let y = 0; y < 3; y++) {
+      let s = 0;
+      for (let x = 0; x < 3; x++) {
+        const v = c[yp * 9 + y * 3 + x];
+        nYX[y * 3 + x] += v;
+        s += v;
+      }
+      nYpY[yp * 3 + y] = s;
+      nY[y] += s;
+    }
+  }
+  let te = 0;
+  const invLn2 = 1.0 / Math.LN2;
+  for (let yp = 0; yp < 3; yp++) {
+    for (let y = 0; y < 3; y++) {
+      const cy = nY[y], cypy = nYpY[yp * 3 + y];
+      if (cy <= 0 || cypy <= 0) continue;
+      for (let x = 0; x < 3; x++) {
+        const v = c[yp * 9 + y * 3 + x], cyx = nYX[y * 3 + x];
+        if (v <= 0 || cyx <= 0) continue;
+        const ratio = (v * cy) / (cyx * cypy);
+        if (ratio > 0) te += (v / tot) * Math.log(ratio) * invLn2;
+      }
+    }
+  }
+  return Math.max(0, te);
+}
+
+/** Exact circularly time-shifted null surrogate TE (Theiler/Schreiber/Lizier): preserves exact marginals & autocorrelation */
+export function computeTE3CircNull(xArr, yArr, seed = 1, nShifts = 30) {
+  const n = xArr.length;
+  if (n < 110) return 0;
+  const r = mulberry(((seed >>> 0) || 1));
+  const xSh = new Int8Array(n);
+  const span = Math.max(1, n - 100);
+  let sum = 0;
+  for (let m = 0; m < nShifts; m++) {
+    const sh = 50 + Math.floor(r() * span);
+    for (let t = 0; t < n; t++) xSh[t] = xArr[(t + sh) % n];
+    sum += computeTE3Bits(xSh, yArr);
+  }
+  return sum / nShifts;
 }
 
 /** Exact discrete Schreiber (2000) Transfer Entropy T_{X -> Y} (in bits) from 4x4x4 joint transition table C[yNext*16 + yCur*4 + xCur] */
@@ -91,12 +150,13 @@ export class Metacognition {
     this.achGain = 1; // metacognitive precision/learning multiplier
     this.exploreTemp = 1; // exploration noise multiplier
 
-    // Rigorous Kuleshov 10-Bin Regression ECE + Prequential Temperature-Scaled Gaussian NLL (`T12`)
+    // Rigorous Kuleshov 10-Bin Regression ECE (per-dimension Gaussian residuals) + Prequential Temperature-Scaled NLL (`T12`)
     this.logVarTemp = 0.0;
     this.varTemp = 1.0;
     this.calibHits10 = new Float64Array(10);
     this.rawHits10 = new Float64Array(10);
     this.calibTrials = 0;
+    this.calibDimObs = 0;
     this.ece10Bin = 0.0;
     this.rawEce10Bin = 0.0;
     this.gaussianNLL = 0.0;
@@ -110,20 +170,24 @@ export class Metacognition {
     this.lyapunovMax = 0.0;
     this.avalancheSigma = 1.0;
 
-    // Online Schreiber (2000) Directed Sensorimotor Transfer Entropy Histograms (Laplace prior 0.02)
-    this.teCountsActEnv = new Float64Array(64).fill(0.02);
-    this.teCountsEnvSens = new Float64Array(64).fill(0.02);
-    this.teCountsBrainAct = new Float64Array(64).fill(0.02);
-    this.teCountsNull = new Float64Array(64).fill(0.02);
-    this._smPrev = null;
-    this._actLagRing = new Int8Array(37);
-    this._actLagPtr = 0;
-    this._actLagFilled = 0;
+    // Exact 3-Edge Schreiber (2000) Sensorimotor Transfer Entropy vs Matched 3-Edge Circular Time-Shift Surrogate (`T12c/d`)
+    this._teSeed = ((seed * 1299709 + 31) >>> 0) || 1;
+    this._teCap = 420;
+    this._teBufAct = new Float64Array(this._teCap);
+    this._teBufEnv = new Float64Array(this._teCap);
+    this._teBufSens = new Float64Array(this._teCap);
+    this._tePtr = 0;
+    this._teLen = 0;
+    this._teStepCount = 0;
     this.teActToEnv = 0.0;
     this.teEnvToSens = 0.0;
     this.teBrainToAct = 0.0;
-    this.teNullSurrogate = 0.0;
+    this.teNullActEnv = 0.0;
+    this.teNullEnvSens = 0.0;
+    this.teNullBrainAct = 0.0;
+    this.teNullSurrogate = 0.0; // exact matched 3-edge circular-shift null sum!
     this.sensorimotorLoopTE = 0.0;
+    this.teNetAboveNull = 0.0;
 
     // Weight-space & Tsotchke QGTL / Moonlab telemetry
     this.ws = {
@@ -145,7 +209,7 @@ export class Metacognition {
    * 10 Hz step: project neural feature vector -> Oja subspace update -> Order-3 Eshkol Taylor jet curvature & torsion
    * -> Kuleshov 10-bin ECE & proper Gaussian NLL -> Lyapunov & Avalanche criticality -> Schreiber Transfer Entropy.
    */
-  step(feat, wmErr, wmPredVar, familiar, progressEMA, bestAltG, currentG, lesion = false, smSample = null) {
+  step(feat, wmErr, wmPredVar, familiar, progressEMA, bestAltG, currentG, lesion = false, smSample = null, wmResid = null) {
     const n = Math.min(this.nFeat, feat.length);
     const x = new Float64Array(n);
     for (let i = 0; i < n; i++) {
@@ -196,36 +260,38 @@ export class Metacognition {
       this._prevCtxAct = ctxAct;
     }
 
-    // Online Schreiber (2000) Directed Sensorimotor Transfer Entropy (bits) + Lag-37 Time-Shuffled Null Surrogate
+    // Exact 3-Edge Schreiber (2000) Sensorimotor Transfer Entropy vs Matched 3-Edge Circular Time-Shift Surrogate
     if (smSample) {
-      const bEnv = bin4(smSample.env, 0.75);
-      const bSens = bin4(smSample.sens ?? y[0], 0.65);
-      const bAct = bin4(smSample.act, 0.45);
-      const lagAct = this._actLagFilled >= 37 ? this._actLagRing[this._actLagPtr] : bAct;
-      this._actLagRing[this._actLagPtr] = bAct;
-      this._actLagPtr = (this._actLagPtr + 1) % 37;
-      if (this._actLagFilled < 37) this._actLagFilled++;
-
-      if (this._smPrev) {
-        const p = this._smPrev;
-        // Mild exponential forgetting (0.996) keeps empirical conditional distributions stationary & responsive
-        for (let q = 0; q < 64; q++) {
-          this.teCountsActEnv[q] *= 0.996;
-          this.teCountsEnvSens[q] *= 0.996;
-          this.teCountsBrainAct[q] *= 0.996;
-          this.teCountsNull[q] *= 0.996;
+      this._teBufAct[this._tePtr] = smSample.act || 0;
+      this._teBufEnv[this._tePtr] = smSample.env || 0;
+      this._teBufSens[this._tePtr] = smSample.sens ?? y[0];
+      this._tePtr = (this._tePtr + 1) % this._teCap;
+      if (this._teLen < this._teCap) this._teLen++;
+      this._teStepCount++;
+      if (this._teLen >= 120 && (this._teStepCount % 10 === 0)) {
+        const L = this._teLen;
+        const start = this._teLen < this._teCap ? 0 : this._tePtr;
+        const actSeq = new Float64Array(L), envSeq = new Float64Array(L), sensSeq = new Float64Array(L);
+        for (let i = 0; i < L; i++) {
+          const idx = (start + i) % this._teCap;
+          actSeq[i] = this._teBufAct[idx];
+          envSeq[i] = this._teBufEnv[idx];
+          sensSeq[i] = this._teBufSens[idx];
         }
-        this.teCountsActEnv[bEnv * 16 + p.bEnv * 4 + p.bAct] += 1.0;
-        this.teCountsEnvSens[bSens * 16 + p.bSens * 4 + p.bEnv] += 1.0;
-        this.teCountsBrainAct[bAct * 16 + p.bAct * 4 + p.bSens] += 1.0;
-        this.teCountsNull[bEnv * 16 + p.bEnv * 4 + p.lagAct] += 1.0;
-        this.teActToEnv = computeTransferEntropyBits(this.teCountsActEnv);
-        this.teEnvToSens = computeTransferEntropyBits(this.teCountsEnvSens);
-        this.teBrainToAct = computeTransferEntropyBits(this.teCountsBrainAct);
-        this.teNullSurrogate = computeTransferEntropyBits(this.teCountsNull);
+        const bA = bin3Quantile(actSeq, L);
+        const bE = bin3Quantile(envSeq, L);
+        const bS = bin3Quantile(sensSeq, L);
+        this.teActToEnv = computeTE3Bits(bA, bE);
+        this.teEnvToSens = computeTE3Bits(bE, bS);
+        this.teBrainToAct = computeTE3Bits(bS, bA);
         this.sensorimotorLoopTE = this.teActToEnv + this.teEnvToSens + this.teBrainToAct;
+        const sd0 = this._teSeed;
+        this.teNullActEnv = computeTE3CircNull(bA, bE, sd0 + 1, 30);
+        this.teNullEnvSens = computeTE3CircNull(bE, bS, sd0 + 2, 30);
+        this.teNullBrainAct = computeTE3CircNull(bS, bA, sd0 + 3, 30);
+        this.teNullSurrogate = this.teNullActEnv + this.teNullEnvSens + this.teNullBrainAct;
+        this.teNetAboveNull = this.sensorimotorLoopTE - this.teNullSurrogate;
       }
-      this._smPrev = { bEnv, bSens, bAct, lagAct };
     }
 
     this.hist.push(y);
@@ -283,16 +349,34 @@ export class Metacognition {
       this.gaussianNLL = this._nllSum / this.calibTrials;
       this.rawGaussianNLL = this._rawNllSum / this.calibTrials;
 
-      const absE = Math.sqrt(e2);
       const sdCal = Math.sqrt(vCal), sdRaw = Math.sqrt(vRaw);
+      if (wmResid && wmResid.length > 0) {
+        // Exact per-dimension 1-D Gaussian central coverage P(|r_o| <= z_q * sd) = q across all NY residuals (Kuleshov 2018)
+        const nR = wmResid.length;
+        for (let o = 0; o < nR; o++) {
+          const absR = Math.abs(wmResid[o]);
+          for (let b = 0; b < 10; b++) {
+            const zCrit = GAUSS_CRIT_10[b];
+            if (absR <= zCrit * sdCal) this.calibHits10[b]++;
+            if (absR <= zCrit * sdRaw) this.rawHits10[b]++;
+          }
+        }
+        this.calibDimObs += nR;
+      } else {
+        const absE = Math.sqrt(e2);
+        for (let b = 0; b < 10; b++) {
+          const zCrit = GAUSS_CRIT_10[b];
+          if (absE <= zCrit * sdCal) this.calibHits10[b]++;
+          if (absE <= zCrit * sdRaw) this.rawHits10[b]++;
+        }
+        this.calibDimObs += 1;
+      }
       let eceSum = 0, rawEceSum = 0;
+      const denom = Math.max(1, this.calibDimObs);
       for (let b = 0; b < 10; b++) {
         const q = (b + 0.5) * 0.1;
-        const zCrit = GAUSS_CRIT_10[b];
-        if (absE <= zCrit * sdCal) this.calibHits10[b]++;
-        if (absE <= zCrit * sdRaw) this.rawHits10[b]++;
-        eceSum += Math.abs(this.calibHits10[b] / this.calibTrials - q);
-        rawEceSum += Math.abs(this.rawHits10[b] / this.calibTrials - q);
+        eceSum += Math.abs(this.calibHits10[b] / denom - q);
+        rawEceSum += Math.abs(this.rawHits10[b] / denom - q);
       }
       this.ece10Bin = eceSum * 0.1;
       this.rawEce10Bin = rawEceSum * 0.1;

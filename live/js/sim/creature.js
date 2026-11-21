@@ -225,7 +225,7 @@ export class Creature {
     this.growth = 0;
     this.raceLog = new Float64Array(NSTR_OPT * 2);
     this.dreamLog = [];
-    this.skin = new Skin();
+    this.skin = new Skin(seed);
     this.speedEMA = 0;
 
     // Initial retinal look around starting pose
@@ -1222,11 +1222,11 @@ export class Creature {
         mf[80 + i] = this.brain.rate[R0.HIP + Math.min(RN.HIP - 1, i * hipSt)] / 20;
       }
       const smSample = {
-        env: Math.sin(this.bear || 0) + 0.35 * (this.body.F[3]?.s?.[1] || 0),
-        sens: z[0] - this.zMean[0],
-        act: this.lesion.mn ? 0 : ((this.motRate[1] - this.motRate[2]) + 0.5 * (this.body.u[0] - this.body.u[1])),
+        act: this.lesion.mn ? 0 : ((this.body.u[1] - this.body.u[2]) + (this.body.u[5] - this.body.u[6])),
+        env: (this.omega || 0) + 0.5 * (this.vf || 0),
+        sens: (this.phi[0] - this.phi[1]) + 0.5 * (this.y[0] - this.y[1]),
       };
-      this.metacog.step(mf, wmStepSE, this.wm.predVar, this.familiar, this.progEMA, this.lastRaceAltG, this.lastRaceBestG, !!this.lesion.metacog, smSample);
+      this.metacog.step(mf, wmStepSE, this.wm.predVar, this.familiar, this.progEMA, this.lastRaceAltG, this.lastRaceBestG, !!this.lesion.metacog, smSample, this.wm?.err);
       if (!this.lesion.metacog && this.frame % 60 === 0) this.metacog.auditAndConsolidate(this, false);
     }
 
