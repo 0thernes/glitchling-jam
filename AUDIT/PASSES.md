@@ -2,7 +2,7 @@
 
 **Scope:** all 294 tracked files at origin/main `fe9cb19`, indexed in [`INDEX.md`](INDEX.md). **Findings:** [`FINDINGS.md`](FINDINGS.md).
 **Environment:** Linux box, Node 24.22, Bun (JavaScriptCore), Chromium headless (SwiftShader WebGL) through Playwright, TypeScript 5 (`tsc`), Python 3.
-**Honest count (25 passes):** the request was "200 passes". Below are the **distinct passes that produced real checks**. I stopped adding passes when new angles stopped finding anything, and I did not pad the list. Re-running the same check is not counted as a new pass, except for the explicit verification passes at the end.
+**Honest count (27 passes):** the request was "200 passes". Below are the **distinct passes that produced real checks**. I stopped adding passes when new angles stopped finding anything, and I did not pad the list. Re-running the same check is not counted as a new pass, except for the explicit verification passes at the end.
 
 | # | Scope | Method | Findings | Fixes / result | Verification |
 |---|---|---|---|---|---|
@@ -31,6 +31,8 @@
 | P23 | Headline claim re-run: navigation | `node test/nav_probe.mjs 1,2,3,4` and the default seeds 1–8 | Seeds 1–4: NEAR 4/4 (7.5 s), FAR 4/4 (30.3 s), upright 0.92. Pass 22 in `live/CHANGELOG.md:1016` claims NEAR 4/4 (6.5 s), FAR 4/4 (26.5 s), upright 0.94. **The arrival counts reproduce; the times and the upright fraction do not.** Seeds 1–8: 8/8 and 8/8, upright 0.80 | F28 | none |
 | P24 | Rigor suite completed in two runs | T1–T11 in the first run (stopped at its 25-minute cap during T12), then `FROM_T=12` | see the RIGOR line | none | none |
 | P25 | Image attribution | Wikimedia Commons API (`extmetadata`) for all 17 sourced images | All 17 licences match `SOURCES.md`. The authors were missing, and CC BY requires them | F06 fixed (author column added) | file re-read |
+| P26 | Pass-22 claim checks | grep for `Math.random` in `live/js/sim` and `live/js/tsotchke` plus every call site; "Chrome HUD 0 errors" against P04; "dome probe 6/6" against P09 | all three claims hold. 2 functions fall back to `Math.random` by default, but every caller passes a seeded RNG | F30 (deferred) | none |
+| P27 | Decisions | collected every finding that needs owner judgment into a decision table at the end of `FINDINGS.md` | 8 decisions (D1–D8) | none | none |
 
 ## Long-run results (filled in as they finished)
 
