@@ -1,0 +1,39 @@
+# AUDIT/PASSES.md: hardening passes, 2026-11-24
+
+**Scope:** all 294 tracked files at origin/main `fe9cb19`, indexed in [`INDEX.md`](INDEX.md). **Findings:** [`FINDINGS.md`](FINDINGS.md).
+**Environment:** Linux box, Node 24.22, Bun (JavaScriptCore), Chromium headless (SwiftShader WebGL) through Playwright, TypeScript 5 (`tsc`), Python 3.
+**Honest count:** the request was "200 passes". Below are the **distinct passes that produced real checks**. I stopped adding passes when new angles stopped finding anything, and I did not pad the list. Re-running the same check is not counted as a new pass, except for the explicit verification passes at the end.
+
+| # | Scope | Method | Findings | Fixes / result | Verification |
+|---|---|---|---|---|---|
+| P01 | Inventory | `git ls-tree -r -l` and a coverage map from probe imports, written up as `INDEX.md` | 42 code files have no automated check (all of `core/`, `glitchling.ts`, the Python helpers, the render scripts) | `INDEX.md` + `tools/index.py` | regenerated after the fixes |
+| P02 | Syntax | `node --check` on 74 first-party JS/MJS files; `bun build` on 34 TS files; `py_compile` on 3 Python files; parsing 12 JSON files and 1 JSONL file | none | none needed | now part of `npm test` |
+| P03 | Types | `tsc --noEmit` on `glitchling.ts` and `core/`, non-strict and `--strict` | non-strict: clean (the 6 TS2451 errors only appear when standalone scripts are compiled together). Strict: 8 possible-null errors, all in `core/` | F19 deferred (`core/` is the Creature #1 copy) | none |
+| P04 | Runtime | headless Chromium; 5 pages × phone 390×844 and desktop 1280×800; collected console errors, page errors, HTTP ≥ 400 and failed requests | **0 console errors and 0 failed requests on all 10 loads.** Only a WebGPU "No available adapters" warning, which is expected under SwiftShader. Horizontal overflow on `site/` (417 px) and `brain-viz/` (no viewport) | F11, F12 | P21 |
+| P05 | Links and assets | parsed every `href`, `src`, Markdown link and JS `import` against the tracked tree | 0 broken (2 false positives for `../`) | none needed | now part of `npm test` |
+| P06 | Docs point at real files | every `test/*.mjs` and `js/**/*.js` named in a doc | all exist. `scripts/glitchling-headless.ts`, cited for the "REAL brain" artefacts, is not in this repo | F21 | none |
+| P07 | Security | secret and private-key regexes; `eval`, `new Function` and `document.write`; every `innerHTML` sink; URL-parameter parsing; every `fetch` | no secrets; no eval; all 12 `innerHTML` sinks take internal constants or numbers only; unclamped URL parameters; 4 opt-in external fetches | F15, F16, F24 | `?leak=10000` is now clamped to 0.30 |
+| P08 | Privacy | emails, local paths, UUIDs | 34 + 7 + 3 hits of local paths and agent IDs in the handoff and notes docs | F20 (needs Alex) | none |
+| P09 | Probes | ran `dome_heptarch_probe` (91 s, **6/6 gates pass**), `headless_run` (60 s, 10.05 ms/frame, 42.4 units travelled), `physics_probe`, `symmetry_probe`, `memory_probe` (HDC corr 0.13–0.79; Hopfield top-1 41%, cosine 0.81–0.85 against a 0.69 cue baseline), `pc_probe` (learning-on arm: error 0.05 → 0.02 across all 4 seeds; the run hit its 600 s limit before the off arm) and `nobel_rigor_suite` (see the RIGOR line below) | probe printed `undefined` (F17); the suite is too slow for CI (F22) | F17 | none |
+| P10 | Reproducibility | re-ran the TypeScript reference sim `bun run glitchling.ts 2 2` in a clean temp dir | **`results/summary.csv` byte-identical (14 rows).** `results.json` differs only in the wall-clock `secs` fields. The activations JSON has the same frames and events, with only the key order changed | none needed | now part of `npm test` |
+| P11 | Docs numbers against data | recomputed every number in the site Results v2 table, `WRITEUP.md`, `HANDOFF_QUICKSTART.md` and the README from `results/summary.csv` | all match (the 0.05 differences come from rounding) | none needed | none |
+| P12 | Claims against code | built `MEGA` and `GIGA` and read `explicitS` and `procS`, timed 60 steps | **the synapse totals are nominal (set by formula)**: 30,554 and 28,131 explicit synapses. GIGA takes 1,076 ms per step | F01, F23 | panel, README and meta now say "nominal" |
+| P13 | Honesty language | swept every tracked file for conscious, sentient, AGI, alive, feelings, theorem, Nobel and breakthrough | no consciousness or AGI claims anywhere. Disclaimers are present on the README, play/, live/ honesty panel and dossier. "Theorem" and "Nobel" framing found | F02 | honesty guard added to `npm test` |
+| P14 | Determinism and RNG | same seed twice in fresh processes; ran the world shuffle under V8 and JSC for 200 seeds; best-site histogram over 400 seeds | same-seed runs are identical. **The shuffle depends on the engine (186/200 seeds differ) and is biased under V8** (play/ best-site χ² = 54.2, df 15, p ≈ 2×10⁻⁶ before; 12.0, p ≈ 0.68 after) | F03 (fixed in play/; live/ and core/ need Alex) | determinism check in `npm test` |
+| P15 | Accessibility | `lang`, viewport, `alt`, form labels, button names and canvas names on all 5 pages | 3 unlabelled inputs and 8 unnamed canvases on live/; brain-viz had no `lang`, viewport or description | F12, F13, F14 | P21 |
+| P16 | Licensing and provenance | root licence; vendored licences; image sources | no root LICENSE; 26 images without a source; CC BY attribution incomplete | F04, F05, F06 | needs Alex |
+| P17 | Repo professionalism | CI, tests, CHANGELOG, CONTRIBUTING, SECURITY, badges, `.gitignore` | none of these existed at the root except `.gitignore` | F07, F08 | CI added (see P22) |
+| P18 | Numerical stability | `live/` creature 120 sim-seconds × seeds 1–4 with a NaN/Inf scan every 10 s; `play/` 2 sim-days with all flaws and leak 0.30 | see the NAN line below; play/ stays finite and the creature stays alive | none needed | none |
+| P19 | Performance | ms per step at each scale | default M about 10.1–10.8 ms per 1/60-s step in Node (below real time on one core); MEGA 219 ms; GIGA 1,076 ms | logged in F01 | none |
+| P20 | Comments and labels against code | qubit counts in `qrng.js`; page titles against content | two stale comments say 14 qubits where the code has 16; brain-viz title said "SIMULATED" while showing real data | F26, F27 | fixed |
+| P21 | Re-verification after fixes | `npm test`; `AUDIT/tools/pages_check.mjs` on all 10 loads; screenshots inspected | **9/9 checks pass. 0 console errors and 0 failed requests. No horizontal overflow (site/ phone 390 = 390; brain-viz is a fixed 1000 px layout scaled to fit).** live/ and play/ screenshots look right | none | none |
+| P22 | Post-push | GitHub Actions run on the pushed commits; HTTP status of the 5 Pages URLs | see below | none | none |
+
+## Long-run results (filled in as they finished)
+
+- **RIGOR** (`nobel_rigor_suite.mjs`, seeds 1–12, Node, box CPU shared with other probes): T1–T6 printed PASS with the same statistics the README reports for those tests (for example T1 `p=0.000244, d_z=1.91`; T5 `Q_win=80.56%`). The run was capped by a 25-minute timeout, so T7–T15 and the Holm/Bonferroni summary were **not** re-verified in this audit.
+- **NAN** (120 s × 4 seeds): seeds 1–3 had no NaN or Inf and travelled 82–103 units, about 10.7 ms per step. Seed 4: see the end of the audit report.
+
+## How to continue
+
+Read `FINDINGS.md`. The open items are the decisions in its "needs Alex" rows. Re-run `npm test` and `AUDIT/tools/pages_check.mjs` after any change, then add a pass row here.
