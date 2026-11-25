@@ -1,6 +1,6 @@
 # AUDIT/INDEX.md: table of contents of every tracked file
 
-Generated from `git ls-tree -r -l HEAD` by `AUDIT/tools/index.py`. 306 tracked files, 189.9 MB.
+Generated from `git ls-tree -r -l HEAD` by `AUDIT/tools/index.py`. 280 tracked files, 182.4 MB.
 
 Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirect** = imported (transitively) by a directly covered module; **page** = exercised by the headless page check (`AUDIT/tools/pages_check.mjs`); **none** = no automated check.
 
@@ -20,7 +20,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 - [live/test](#live-test) (32 files)
 - [live/vendor](#live-vendor) (15 files)
 - [play](#play) (4 files)
-- [research](#research) (47 files)
+- [research](#research) (21 files)
 - [results](#results) (5 files)
 - [site](#site) (15 files)
 - [synthetic](#synthetic) (2 files)
@@ -38,12 +38,12 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 |---|---:|---|---|---|
 | `.gitignore` | 115 | - |  | n/a (data/asset/doc) |
 | `.nojekyll` | 0 | - |  | n/a (data/asset/doc) |
-| `BLUEPRINT.md` | 50,199 | Markdown | Glitchling v2 — BLUEPRINT | n/a (data/asset/doc) |
+| `BLUEPRINT.md` | 50,318 | Markdown | Glitchling v2 — BLUEPRINT | n/a (data/asset/doc) |
 | `BRAINS.md` | 41,386 | Markdown | BRAINS.md: a shared brain-design compendium for CQM, A-Life Creature #1 and Glitchling | n/a (data/asset/doc) |
 | `CHANGELOG.md` | 2,892 | Markdown | Changelog (repository level) | n/a (data/asset/doc) |
 | `CONTRIBUTING.md` | 2,142 | Markdown | Contributing to glitchling-jam | n/a (data/asset/doc) |
 | `GLITCHLING_MASTER_COMPENDIUM.md` | 16,595 | Markdown | GLITCHLING MASTER COMPENDIUM — Complete 29-PDF Synthesis (`1,932` Pages) for Glitchling, Creatures/Entities/Be | n/a (data/asset/doc) |
-| `HANDOFF_GEMINI_ARGON_ANTIGRAVITY.md` | 78,908 | Markdown | Glitchling handoff: Grok Bot → Gemini Argon 4 (Antigravity) | n/a (data/asset/doc) |
+| `HANDOFF_GEMINI_ARGON_ANTIGRAVITY.md` | 79,151 | Markdown | Glitchling handoff: Grok Bot → Gemini Argon 4 (Antigravity) | n/a (data/asset/doc) |
 | `HANDOFF_QUICKSTART.md` | 5,450 | Markdown | Glitchling: handoff QUICKSTART (for Gemini Argon 4 in Antigravity) | n/a (data/asset/doc) |
 | `LICENSE` | 3,363 | - |  | n/a (data/asset/doc) |
 | `NOTES.md` | 27,006 | Markdown | Glitchling: one-day jam coordination doc | n/a (data/asset/doc) |
@@ -60,8 +60,8 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `AUDIT/FINDINGS.md` | 15,057 | Markdown | AUDIT/FINDINGS.md | n/a (data/asset/doc) |
-| `AUDIT/INDEX.md` | 42,891 | Markdown | AUDIT/INDEX.md: table of contents of every tracked file | n/a (data/asset/doc) |
+| `AUDIT/FINDINGS.md` | 15,305 | Markdown | AUDIT/FINDINGS.md | n/a (data/asset/doc) |
+| `AUDIT/INDEX.md` | 42,944 | Markdown | AUDIT/INDEX.md: table of contents of every tracked file | n/a (data/asset/doc) |
 | `AUDIT/PASSES.md` | 10,222 | Markdown | AUDIT/PASSES.md: hardening passes, 2026-11-24 | n/a (data/asset/doc) |
 | `AUDIT/tools/index.py` | 3,818 | Python 3 | coverage: which test files import which module | none |
 | `AUDIT/tools/pages_check.mjs` | 1,960 | JavaScript (ESM, Node) | Headless page check used by the audit: loads every page at phone (390x844) and desktop (1280x800) sizes and re | none |
@@ -336,8 +336,8 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `research/IMAGE_DEEP_DIVE.md` | 39,404 | Markdown | IMAGE_DEEP_DIVE — every figure, read for Glitchling | n/a (data/asset/doc) |
-| `research/NEURO_FRONTIER.md` | 21,182 | Markdown | NEURO_FRONTIER — neuroscience frontier sweep, 2023–2026 (plus a few older anchors) | n/a (data/asset/doc) |
+| `research/IMAGE_DEEP_DIVE.md` | 40,113 | Markdown | IMAGE_DEEP_DIVE — every figure, read for Glitchling | n/a (data/asset/doc) |
+| `research/NEURO_FRONTIER.md` | 21,283 | Markdown | NEURO_FRONTIER — neuroscience frontier sweep, 2023–2026 (plus a few older anchors) | n/a (data/asset/doc) |
 | `research/img/01_fly_male_cns_neuron_positions.png` | 867,730 | PNG image |  | n/a (data/asset/doc) |
 | `research/img/02_human_brain_organoid.jpg` | 470,935 | JPEG image |  | n/a (data/asset/doc) |
 | `research/img/03_physarum_blob.jpg` | 607,224 | JPEG image |  | n/a (data/asset/doc) |
@@ -355,33 +355,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `research/img/15_hek293_fluo4_calcium.png` | 1,895,191 | PNG image |  | n/a (data/asset/doc) |
 | `research/img/16_celegans_can_neurons.png` | 475,561 | PNG image |  | n/a (data/asset/doc) |
 | `research/img/17_stretchable_mea.png` | 1,869,927 | PNG image |  | n/a (data/asset/doc) |
-| `research/img/SOURCES.md` | 3,921 | Markdown | Image sources (all from Wikimedia Commons, downloaded 2026-11-02 PHT) | n/a (data/asset/doc) |
-| `research/img/alex/ant_electronic_antennae_spike_coding.png` | 580,478 | PNG image |  | n/a (data/asset/doc) |
-| `research/img/alex/audiovisual_orientation_tuning.jpg` | 58,563 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/barrel_cortex_cell_density.jpg` | 75,929 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/bioluminescent_voltage_sensor.jpg` | 40,891 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/celegans_neuron_ID_atlas.jpg` | 57,056 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/celegans_neuron_position_variability.jpg` | 44,456 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/celegans_neuropeptide_connectome_overview.jpg` | 39,309 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/celegans_neuropeptide_cores.jpg` | 2,226,505 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/celegans_serotonin_NSM_correlation.png` | 44,894 | PNG image |  | n/a (data/asset/doc) |
-| `research/img/alex/celegans_whole_brain_stim_response.jpg` | 66,801 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/connectome_graph_stats_4species.jpg` | 44,827 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/cortex_layer_celltype_morphology.jpg` | 42,863 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/dendrite_bAP_receptive_field.jpg` | 40,833 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/dendrite_branch_scaling_mito.jpg` | 50,890 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/dendrite_growth_sim_vs_real.jpg` | 81,482 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/electrophys_panel.jpg` | 11,315 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/hesx1_rat_forebrain_mouse.jpg` | 251,139 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/microns_V1_cell_type_classifier.jpg` | 34,404 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/microns_cortex_render.webp` | 283,680 | WebP image |  | n/a (data/asset/doc) |
-| `research/img/alex/microns_proofreading.png` | 823,394 | PNG image |  | n/a (data/asset/doc) |
-| `research/img/alex/mouse_v1_audiovisual_prediction.png` | 122,049 | PNG image |  | n/a (data/asset/doc) |
-| `research/img/alex/multisensory_escape_TeA.jpg` | 49,438 | JPEG image |  | n/a (data/asset/doc) |
-| `research/img/alex/neuron_shapes_soma_axon_dendrite.png` | 102,309 | PNG image |  | n/a (data/asset/doc) |
-| `research/img/alex/neuron_types_uni_bi_multipolar.png` | 5,331 | PNG image |  | n/a (data/asset/doc) |
-| `research/img/alex/neuropeptide_network_motifs.png` | 46,530 | PNG image |  | n/a (data/asset/doc) |
-| `research/img/alex/rat_mouse_chimera_brain_atlas.jpg` | 2,357,716 | JPEG image |  | n/a (data/asset/doc) |
+| `research/img/SOURCES.md` | 3,938 | Markdown | Image sources (all from Wikimedia Commons, downloaded 2026-11-02 PHT) | n/a (data/asset/doc) |
 | `research/img/sources.tsv` | 2,682 | TSV |  | n/a (data/asset/doc) |
 
 ## results
