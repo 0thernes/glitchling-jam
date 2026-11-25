@@ -37,7 +37,7 @@ The play page runs in any modern browser (phone or desktop), with no build step,
 - `npm test` runs `tools/check.mjs`, which needs Node 22 or newer and Bun. It checks syntax, JSON, local links, secrets, eval use and the honesty guard, runs a 20-second `live/` creature, confirms the same seed gives the same run, and re-runs the reference sim twice with `BUN_JSC_useConcurrentJIT=0` to check its output is sane and deterministic (see F31). CI runs it on every push.
 - `npm run test:full` also runs the 90-second dome/HEPTARCH probe. `npm run rigor` runs the full statistical suite, which is slow (it takes hours on a laptop CPU).
 - The 2026-11-24 hardening audit is in [`AUDIT/`](AUDIT/): [`INDEX.md`](AUDIT/INDEX.md) (table of contents of every file), [`PASSES.md`](AUDIT/PASSES.md) (what was checked) and [`FINDINGS.md`](AUDIT/FINDINGS.md) (what was found, fixed or left open).
-- There is no `LICENSE` file yet, so all rights are reserved by default. Vendored libraries keep their own licences (`live/vendor/three/LICENSE` MIT, `live/vendor/p5/LICENSE` LGPL-2.1, `live/js/tsotchke/LICENSE-eshkol`).
+- **License:** [`LICENSE`](LICENSE) is the Cosmogonic License (non-commercial research and play), the same text as Alex's CQM project ([0thernes/CQM2](https://github.com/0thernes/CQM2)). Vendored third-party code keeps its own licence: `live/vendor/three/LICENSE` (MIT), `live/vendor/p5/LICENSE` (LGPL-2.1) and `live/js/tsotchke/LICENSE-eshkol`. Research images keep the licences listed in `research/img/SOURCES.md`.
 
 ## Run the reference sim locally
 
