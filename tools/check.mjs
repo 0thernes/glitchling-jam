@@ -106,17 +106,32 @@ run('live/ determinism: same seed gives identical 10 s trajectories', () => {
   return a.split(' ')[0];
 });
 
-run('Reference sim (bun glitchling.ts 2 2) reproduces results/summary.csv byte-for-byte', () => {
+run('Reference sim (bun glitchling.ts 2 2): sane output, deterministic with concurrent JIT off', () => {
+  // Audit finding F31: under Bun/JavaScriptCore the reference sim's output depends on JIT tier-up timing (CPU load), so the
+  // committed results/summary.csv is one realization and is NOT byte-reproducible in general. With concurrent JIT compilation
+  // disabled the run is deterministic, so that is what this check pins down. It also checks the structure of the output.
   const bun = spawnSync('bun', ['--version'], { encoding: 'utf8' });
   if (bun.status !== 0) return 'SKIPPED (bun not installed)';
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'glref-'));
-  fs.cpSync('glitchling.ts', path.join(tmp, 'glitchling.ts')); fs.cpSync('core', path.join(tmp, 'core'), { recursive: true });
-  const r = spawnSync('bun', ['run', 'glitchling.ts', '2', '2'], { cwd: tmp, encoding: 'utf8', timeout: 600000 });
-  if (r.status !== 0) throw new Error('bun run failed: ' + (r.stderr || '').slice(-400));
-  const want = fs.readFileSync('results/summary.csv', 'utf8'), got = fs.readFileSync(path.join(tmp, 'results/summary.csv'), 'utf8');
-  fs.rmSync(tmp, { recursive: true, force: true });
-  if (want !== got) throw new Error('summary.csv differs from the committed results');
-  return '14 rows identical';
+  const once = () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'glref-'));
+    fs.cpSync('glitchling.ts', path.join(tmp, 'glitchling.ts')); fs.cpSync('core', path.join(tmp, 'core'), { recursive: true });
+    const r = spawnSync('bun', ['run', 'glitchling.ts', '2', '2'], { cwd: tmp, encoding: 'utf8', timeout: 600000, env: { ...process.env, BUN_JSC_useConcurrentJIT: '0' } });
+    if (r.status !== 0) throw new Error('bun run failed: ' + (r.stderr || '').slice(-400));
+    const csv = fs.readFileSync(path.join(tmp, 'results/summary.csv'), 'utf8'); fs.rmSync(tmp, { recursive: true, force: true }); return csv;
+  };
+  const a = once(), b = once();
+  if (a !== b) throw new Error('two runs with BUN_JSC_useConcurrentJIT=0 differ');
+  const [head, ...rows] = a.trim().split('\n'); const H = head.split(',');
+  const col = (r, k) => r.split(',')[H.indexOf(k)];
+  if (rows.length !== 14) throw new Error(`expected 14 rows, got ${rows.length}`);
+  for (const r of rows) {
+    const c = col(r, 'condition'), j = +col(r, 'jolts');
+    if (col(r, 'alive') !== 'true' || +col(r, 'ticks') !== 2880) throw new Error('bad row: ' + r);
+    if (j !== (['misfire', 'all', 'all_mild'].includes(c) ? 48 : 0)) throw new Error('bad jolt count: ' + r);
+    const sr = +col(r, 'successRate'); if (!(sr >= 0 && sr <= 1)) throw new Error('successRate out of range: ' + r);
+  }
+  const same = a === fs.readFileSync('results/summary.csv', 'utf8');
+  return `14 rows sane, deterministic; ${same ? 'matches' : 'differs from'} the committed realization (expected, see F31)`;
 });
 
 if (process.env.FULL === '1') run('live/ dome + HEPTARCH probe (FULL=1)', () => { const o = node(['test/dome_heptarch_probe.mjs'], {}, 900000); if (!/ALL PASS 20 VERIFICATION GATES PASSED/.test(o)) throw new Error(o.slice(-500)); return 'all gates passed'; });

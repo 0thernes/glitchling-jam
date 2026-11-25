@@ -36,7 +36,7 @@ python3 plot.py                           #  (needs matplotlib) → results/glit
 <h3>Results v2 (2 sim-days, seeds 1–2, means)</h3>
 <aside class="soon" role="note" aria-labelledby="bvb"><h4 id="bvb" style="margin:.2rem 0">Build vs brief: aligned</h4>
 <p>The build's flaw defaults now match the brief (v2): senses rewired every 90 ticks, a 6% per tick leak, all 8 MOT motors reversed plus an action mirror, and a misfire every 60 ticks. The v1 “mild” build appears in the table as <em>all_mild</em> for comparison.</p></aside>
-<div class="tbl"><table> <caption class="note">Results v2. n=2, so this is a toy, not a finding. The broken bestSiteFrac columns (always 0) are left out. v1 raw data (<code>results_v1/</code>) was not published to this repo; the v1 build is reproduced in the table as <em>all_mild</em>.</caption>
+<div class="tbl"><table> <caption class="note">Results v2. n=2, so this is a toy, not a finding. These numbers are one realization: under Bun, re-running the same seeds gives different values depending on JIT timing (2026-11-24 audit, F31). In 11 re-runs, all-flaws forages were 7–32% above baseline. The broken bestSiteFrac columns (always 0) are left out. v1 raw data (<code>results_v1/</code>) was not published to this repo; the v1 build is reproduced in the table as <em>all_mild</em>.</caption>
 <thead><tr><th scope="col">condition</th><th scope="col">forages</th><th scope="col">rewards</th><th scope="col">success</th><th scope="col">mean glc</th><th scope="col">fat end</th><th scope="col">survived</th><th scope="col">success 1st→2nd half (s1, s2)</th></tr></thead>
 <tbody>
 <tr><td>baseline</td><td>174.5</td><td>63.0</td><td>0.350</td><td>3.73</td><td>364.7</td><td>2/2</td><td>.37→.51, .27→.28</td></tr>

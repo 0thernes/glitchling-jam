@@ -1,13 +1,14 @@
 # AUDIT/INDEX.md: table of contents of every tracked file
 
-Generated from `git ls-tree -r -l HEAD` by `AUDIT/tools/index.py`. 299 tracked files, 189.9 MB.
+Generated from `git ls-tree -r -l HEAD` by `AUDIT/tools/index.py`. 305 tracked files, 189.9 MB.
 
 Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirect** = imported (transitively) by a directly covered module; **page** = exercised by the headless page check (`AUDIT/tools/pages_check.mjs`); **none** = no automated check.
 
 ## Contents
 
 - [.github](#github) (1 files)
-- [(root)](#root) (17 files)
+- [(root)](#root) (18 files)
+- [AUDIT](#audit) (5 files)
 - [art](#art) (7 files)
 - [artifacts](#artifacts) (69 files)
 - [brain-viz](#brain-viz) (4 files)
@@ -39,6 +40,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `.nojekyll` | 0 | - |  | n/a (data/asset/doc) |
 | `BLUEPRINT.md` | 50,199 | Markdown | Glitchling v2 — BLUEPRINT | n/a (data/asset/doc) |
 | `BRAINS.md` | 41,386 | Markdown | BRAINS.md: a shared brain-design compendium for CQM, A-Life Creature #1 and Glitchling | n/a (data/asset/doc) |
+| `CHANGELOG.md` | 2,553 | Markdown | Changelog (repository level) | n/a (data/asset/doc) |
 | `CONTRIBUTING.md` | 2,142 | Markdown | Contributing to glitchling-jam | n/a (data/asset/doc) |
 | `GLITCHLING_MASTER_COMPENDIUM.md` | 16,595 | Markdown | GLITCHLING MASTER COMPENDIUM — Complete 29-PDF Synthesis (`1,932` Pages) for Glitchling, Creatures/Entities/Be | n/a (data/asset/doc) |
 | `HANDOFF_GEMINI_ARGON_ANTIGRAVITY.md` | 78,908 | Markdown | Glitchling handoff: Grok Bot → Gemini Argon 4 (Antigravity) | n/a (data/asset/doc) |
@@ -52,6 +54,16 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `index.html` | 5,311 | HTML | Page: Glitchling | page |
 | `package.json` | 468 | JSON |  | n/a (data/asset/doc) |
 | `plot.py` | 2,108 | Python 3 | cursed portrait: neuron activations of the all-flaws episode folded into a face-ish heatmap, with channel-shif | none |
+
+## AUDIT
+
+| File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
+|---|---:|---|---|---|
+| `AUDIT/FINDINGS.md` | 13,360 | Markdown | AUDIT/FINDINGS.md | n/a (data/asset/doc) |
+| `AUDIT/INDEX.md` | 42,049 | Markdown | AUDIT/INDEX.md: table of contents of every tracked file | n/a (data/asset/doc) |
+| `AUDIT/PASSES.md` | 9,345 | Markdown | AUDIT/PASSES.md: hardening passes, 2026-11-24 | n/a (data/asset/doc) |
+| `AUDIT/tools/index.py` | 3,818 | Python 3 | coverage: which test files import which module | none |
+| `AUDIT/tools/pages_check.mjs` | 1,960 | JavaScript (ESM, Node) | Headless page check used by the audit: loads every page at phone (390x844) and desktop (1280x800) sizes and re | none |
 
 ## art
 
@@ -342,7 +354,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `research/img/15_hek293_fluo4_calcium.png` | 1,895,191 | PNG image |  | n/a (data/asset/doc) |
 | `research/img/16_celegans_can_neurons.png` | 475,561 | PNG image |  | n/a (data/asset/doc) |
 | `research/img/17_stretchable_mea.png` | 1,869,927 | PNG image |  | n/a (data/asset/doc) |
-| `research/img/SOURCES.md` | 2,952 | Markdown | Image sources (all from Wikimedia Commons, downloaded 2026-11-02 PHT) | n/a (data/asset/doc) |
+| `research/img/SOURCES.md` | 3,921 | Markdown | Image sources (all from Wikimedia Commons, downloaded 2026-11-02 PHT) | n/a (data/asset/doc) |
 | `research/img/alex/ant_electronic_antennae_spike_coding.png` | 580,478 | PNG image |  | n/a (data/asset/doc) |
 | `research/img/alex/audiovisual_orientation_tuning.jpg` | 58,563 | JPEG image |  | n/a (data/asset/doc) |
 | `research/img/alex/barrel_cortex_cell_density.jpg` | 75,929 | JPEG image |  | n/a (data/asset/doc) |

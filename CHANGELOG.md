@@ -14,6 +14,7 @@ Findings are in [`AUDIT/FINDINGS.md`](AUDIT/FINDINGS.md) and the method is in [`
 - `AUDIT/tools/pages_check.mjs`: loads every page headless at phone and desktop sizes.
 
 ### Fixed
+- **Reproducibility, F31:** CI showed that the reference sim is not deterministic under Bun (it depends on JIT timing). `npm test` now checks it is deterministic with `BUN_JSC_useConcurrentJIT=0` and that its output is sane. README and site state that the committed results are one realization, with the measured spread across 11 re-runs.
 - **Honesty, F01:** the MEGA and GIGA synapse totals (16.78M, "1.13B") are now labelled nominal (set by formula) everywhere they are shown. Measured explicit synapses: 30,554 and 28,131.
 - **Honesty, F02:** added a plain-language note that the rigor-suite "theorems" are statistical tests on designed contrasts inside the simulation.
 - **play/, F03:** the world shuffle no longer depends on the browser's sort algorithm. Chrome and Safari used to build different worlds for 186 of 200 seeds.
