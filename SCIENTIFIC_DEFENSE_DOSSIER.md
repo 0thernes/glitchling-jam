@@ -4,7 +4,7 @@ This file lists every quantitative claim the `live/` simulation makes through Pa
 the lesion, surrogate, or null model that could falsify it, and the verbatim numbers measured across **independent
 replication cohorts** (up to $N = 36$ seeds). Nothing here is estimated by hand.
 
-It also states plainly **what kind of claim each theorem supports** (`[M]` mathematical identity check, `[D]` designed
+It also states plainly **what kind of claim each experiment supports** (`[M]` mathematical identity check, `[D]` designed
 mechanism tested by causal lesion/surrogate, or `[E]` emergent adaptive / learning / ecological outcome not written into
 any rule) and **every methodological bug found and fixed along the way**.
 
@@ -19,7 +19,7 @@ any rule) and **every methodological bug found and fixed along the way**.
 
 | item | Pass 22 protocol | why it matters |
 |---|---|---|
-| sample design | **Two independent 12-seed cohorts** (`Cohort A: 1..12`, `Cohort B: 13..24`, combined $N = 24$), PLUS a **third completely untouched locked replication cohort (`Cohort C: 25..36`)** for all new/modified Pass 22 theorems (`T12`–`T15`) | separates development from locked out-of-sample replication (`13..24` locked on unmodified Pass 21 commit `48eb260` for `T1`–`T11`; `25..36` locked on final Pass 22 code for `T12`–`T15`) |
+| sample design | **Two independent 12-seed cohorts** (`Cohort A: 1..12`, `Cohort B: 13..24`, combined $N = 24$), PLUS a **third completely untouched locked replication cohort (`Cohort C: 25..36`)** for all new/modified Pass 22 experiments (`T12`–`T15`) | separates development from locked out-of-sample replication (`13..24` locked on unmodified Pass 21 commit `48eb260` for `T1`–`T11`; `25..36` locked on final Pass 22 code for `T12`–`T15`) |
 | per-cohort test | exact one-sided paired sign-flip permutation test over all $2^{12} = 4,096$ sign patterns (Fisher 1935; Pitman 1937) | zero normality assumption; exact finite-sample $p$-value (floor $2^{-12} = 0.000244$) |
 | combined $N = 24$ test | exact Fisher combined test $\chi^2_4 = -2(\ln p_A + \ln p_B)$ over independent exact permutation $p$-values (`p_Fisher = (1 + x^2/2) exp(-x^2/2)`) | lowers the exact floor to $1.05 \times 10^{-6}$ ($3.55 \times 10^{-9}$ across 3 independent cohorts) |
 | family-wise error rate | exact **Holm–Bonferroni** step-down, **full Bonferroni** ($M \cdot p$), and **Benjamini–Hochberg FDR** across **all 26 paired contrasts** printed explicitly | zero hidden contrasts: **26/26 pass Holm–Bonferroni AND 26/26 pass full Bonferroni ($\alpha = 0.05$) in Cohort A AND in Cohort B**, and **26/26 pass full Bonferroni at $p_{\text{Bonf,24}} \le 1.93 \times 10^{-4}$** combined |
@@ -30,7 +30,7 @@ any rule) and **every methodological bug found and fixed along the way**.
 Four subtle vulnerabilities a hostile reviewer would have caught in Pass 21 (`48eb260`) were found by line-by-line code
 audit and fixed:
 1. **Unseen-seed replication (locked before any Pass 22 edits):** Running unmodified Pass 21 (`48eb260`) on unseen seeds
-   `13..24` passed **12/12 theorems**, **18/18 Holm–Bonferroni**, and **18/18 full Bonferroni** ($\alpha = 0.05$),
+   `13..24` passed **12/12 experiments**, **18/18 Holm–Bonferroni**, and **18/18 full Bonferroni** ($\alpha = 0.05$),
    including `T11` Bedau–Packard activity (`24.06 vs 8.09`, $p = 0.000244$) and `T12b` ECE ($p = 0.000732$).
 2. **`T12c` Transfer Entropy surrogate mismatch ([metacog.js](live/js/sim/metacog.js#L71)):** Pass 21 summed 3 directed
    TE channels (`Act→Env + Env→Sens + Brain→Act`) but compared them against only 1 lag-shuffled channel (`Act→Env`).
@@ -69,7 +69,7 @@ audit and fixed:
 
 ---
 
-## 3. Master 15-Theorem, 26-Contrast Defense Matrix (`T1`–`T15`, $N = 24$ Combined + Locked `25..36`)
+## 3. Master 15-Experiment, 26-Contrast Defense Matrix (`T1`–`T15`, $N = 24$ Combined + Locked `25..36`)
 
 ### Complete 26-Contrast FWER Table (Verbatim from `pass22_1_12.json` & `pass22_13_24.json`)
 
@@ -105,7 +105,7 @@ Cohort A (`1..12`), in Cohort B (`13..24`), and at $p_{\text{Bonf,24}} \le 1.93 
 | **T15a**: Social alarm predations prevented (Silent − Social) | [D] | 24/24 | +13.42 [12.21, 14.58] | 0.000244 | 0.000244 | $1.05\times10^{-6}$ | $2.73\times10^{-5}$ | 4.48 |
 | **T15b**: **3-trophic Ecology-of-Fear plant fruit cascade** (Social − Silent) | **[E]** | 24/24 | +0.1362 [0.1196, 0.1517] | 0.000244 | 0.000244 | $1.05\times10^{-6}$ | $2.73\times10^{-5}$ | 3.26 |
 
-### Locked Zero-Leakage Third Replication Cohort (`Cohort C: SEEDS = 25..36`) on All New/Updated Pass 22 Theorems (`T12`–`T15`)
+### Locked Zero-Leakage Third Replication Cohort (`Cohort C: SEEDS = 25..36`) on All New/Updated Pass 22 Experiments (`T12`–`T15`)
 Because development probes touched seeds `1, 2, 3, 13, 14, 15` while designing `T12`–`T15`, we ran a **completely
 untouched third 12-seed cohort (`SEEDS = 25..36`)** with zero code changes afterward:
 
@@ -118,7 +118,7 @@ untouched third 12-seed cohort (`SEEDS = 25..36`)** with zero code changes after
   - `T14a/b/c/d` `[E]` Ontogenetic Learning: `WM 0.1183 → 0.0296` ($d_z = 5.53$), `PC 0.0883 → 0.0323` ($d_z = 6.89$), `HDC r 0.848 < 0.927 < 0.969` ($d_z = 3.78 / 3.07$)
   - `T15a/b` `[E]` 3-Trophic Ecology-of-Fear Cascade: `predations 18.42 → 3.33` ($d_z = 8.23$), **`plant fruit 0.7954 → 0.9485` (`+0.1530 [0.1209, 0.1879]`, $d_z = 2.45$)**
 
-### Exact Governing Equations, Code Links & Theorem Notes
+### Exact Governing Equations, Code Links & Experiment Notes
 
 - **T1 · First law, second law, closed N/C mass ledger (`[M]+[D]`):** [world.js `auditEnergyClosure`](live/js/sim/world.js#L847), [world.js `auditMassClosure`](live/js/sim/world.js#L686). Kahan 11-pool closure `E_err = 2.21e-16`, `M_err = 2.62e-16` (`2.67e-16` in Cohort B), `min Σ̇ = +8.09e-4 kW/K` (`+8.17e-4`), zero N fixed at $\text{N}_2 = 0$.
 - **T2 · 7-site Adolphs–Renger FMO GKSL Lindblad vs zero-free-parameter adiabatic secular Pauli–Förster (`[M]`):** [world.js `solveFMOLindbladExact`](live/js/sim/world.js#L78), [world.js `solveFMOForsterExact`](live/js/sim/world.js#L135). Trace conservation `1.89e-15`. ENAQT bell curve: `Φ(−10 °C) = 0.3577 (F = 0.2606) < Φ(24 °C) = 0.8109 (F = 0.8056) > Φ(54 °C) = 0.6388 (F = 0.6389, correspondence gap 1.3e-5)`. Deterministic; demonstrates exact model physics (whether physiological FMO coherence is functionally relevant in vivo remains debated: Duan et al. 2017).
@@ -153,9 +153,9 @@ untouched third 12-seed cohort (`SEEDS = 25..36`)** with zero code changes after
 
 ```bash
 cd glitchling-jam/live
-node test/nobel_rigor_suite.mjs                                         # Cohort A: seeds 1..12 (T1-T15, 26 contrasts)
-SEEDS=13,14,15,16,17,18,19,20,21,22,23,24 node test/nobel_rigor_suite.mjs # Cohort B: seeds 13..24
-FROM_T=12 SEEDS=25,26,27,28,29,30,31,32,33,34,35,36 node test/nobel_rigor_suite.mjs # Cohort C: locked T12-T15
+node test/lesion_experiments.mjs                                         # Cohort A: seeds 1..12 (T1-T15, 26 contrasts)
+SEEDS=13,14,15,16,17,18,19,20,21,22,23,24 node test/lesion_experiments.mjs # Cohort B: seeds 13..24
+FROM_T=12 SEEDS=25,26,27,28,29,30,31,32,33,34,35,36 node test/lesion_experiments.mjs # Cohort C: locked T12-T15
 node test/dome_heptarch_probe.mjs                                       # 6 Dome/HEPTARCH gates (bit-identical)
 node test/nav_probe.mjs 1,2,3,4                                         # 3D navigation regression gate
 node test/dome_ui_check.mjs                                             # Headless Chrome WebGL2 + HUD audit

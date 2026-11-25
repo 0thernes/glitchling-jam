@@ -242,26 +242,26 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `live/js/sim/brain_worker.js` | 6,518 | JavaScript (ESM) | Off-main-thread Web Worker host for the spiking Brain (S / M / L / XL / XXL / MEGA / GIGA up to 14,156,048 neu | page |
 | `live/js/sim/cpg.js` | 3,040 | JavaScript (ESM) | Central pattern generator built from liquid time-constant (LTC) neurons (Hasani et al. 2021), integrated with  | indirect |
 | `live/js/sim/creature.js` | 85,986 | JavaScript (ESM) | Glitchling v2 "live" (pass 19 architecture): | direct (babble_probe.mjs, brain_probe.mjs, climb_probe.mjs, dome_hep) |
-| `live/js/sim/ecosystem.js` | 72,748 | JavaScript (ESM) | Open-Ended Multi-Agent & Multi-Species A-Life Biosphere (pass 19): | direct (nobel_rigor_suite.mjs) |
+| `live/js/sim/ecosystem.js` | 72,748 | JavaScript (ESM) | Open-Ended Multi-Agent & Multi-Species A-Life Biosphere (pass 19): | direct (lesion_experiments.mjs) |
 | `live/js/sim/fitness.js` | 6,695 | JavaScript (ESM) | Full motor + synergy + steering genome fitness, shared by offline CMA-ES (test/evolve_genome.mjs) and in-page  | direct (genome_eval.mjs) |
 | `live/js/sim/fluid.js` | 40,107 | JavaScript (ESM) | Coupled 1D Murray's-Law Branching Navier-Stokes Vascular Tree (36 nodes / 64 vessels) | indirect |
 | `live/js/sim/genome.js` | 28,736 | JavaScript (ESM) | Full developmental genome (pass 12 -> pass 15 unified innate-to-plastic connectome). | direct (evolve_genome.mjs, evolve_steer.mjs, genome_eval.mjs) |
-| `live/js/sim/heptarch.js` | 48,664 | JavaScript (ESM) | NESTOR v0.1 + HEPTARCH v0.2 Composite Sub-Brain Council, Raider 6-Phase Cold-Strike Automaton, | direct (dome_heptarch_probe.mjs, nobel_rigor_suite.mjs) |
+| `live/js/sim/heptarch.js` | 48,664 | JavaScript (ESM) | NESTOR v0.1 + HEPTARCH v0.2 Composite Sub-Brain Council, Raider 6-Phase Cold-Strike Automaton, | direct (dome_heptarch_probe.mjs, lesion_experiments.mjs) |
 | `live/js/sim/lineage_worker.js` | 544 | JavaScript (ESM) | Web Worker for the in-page lineage evolution: scores a full 108-gene Hox Evo-Devo genome on paired Common-Rand | page |
-| `live/js/sim/memory.js` | 65,388 | JavaScript (ESM) | Memory systems (pass 19 histological 32,768-neuron 14-population hippocampal-subicular loop + 6 GABAergic clas | direct (memory2_probe.mjs, memory_probe.mjs, nobel_rigor_suite.mjs) |
+| `live/js/sim/memory.js` | 65,388 | JavaScript (ESM) | Memory systems (pass 19 histological 32,768-neuron 14-population hippocampal-subicular loop + 6 GABAergic clas | direct (memory2_probe.mjs, memory_probe.mjs, lesion_experiments.mjs) |
 | `live/js/sim/metab.js` | 7,131 | JavaScript (ESM) | Metabolism, hormones, fluids and waste. One tick = one simulated minute. The pool structure and most rate laws | indirect |
 | `live/js/sim/metacog.js` | 23,046 | JavaScript (ESM) | Metacognition, Exact Taylor-Jet Frenet-Serret Thought Curvature & Torsion, and Weight-Space Geometry. | indirect |
 | `live/js/sim/mind.js` | 79,716 | JavaScript (ESM) | Learning & Symbolic-Neural Planning machinery beside the spiking substrate (upgraded in pass 19): | indirect |
 | `live/js/sim/nav.js` | 6,025 | JavaScript (ESM) | Navigation circuit (pass 13): head-direction ring attractor + path integration with grid-like phase codes. | indirect |
 | `live/js/sim/skin.js` | 4,461 | JavaScript (ESM) | Chromatophore skin: a 64 x 32 sheet of cells (u = along the body, v = around it) updated as an excitable mediu | direct (turing_probe.mjs) |
 | `live/js/sim/starter_genome.js` | 3,473 | JavaScript (ESM) | Shipped full 78-gene developmental starter genome (58 motor/CPG/turning/righting/synergy/gaze + 20 sense->MOT  | direct (evolve_genome.mjs, evolve_steer.mjs, genome_eval.mjs, nobel_) |
-| `live/js/sim/util.js` | 2,132 | JavaScript (ESM) | Small math helpers shared by the simulation (DOM-free so Node tests can import it). | direct (memory2_probe.mjs, memory_probe.mjs, nobel_rigor_suite.mjs) |
+| `live/js/sim/util.js` | 2,132 | JavaScript (ESM) | Small math helpers shared by the simulation (DOM-free so Node tests can import it). | direct (memory2_probe.mjs, memory_probe.mjs, lesion_experiments.mjs) |
 | `live/js/sim/vision.js` | 54,409 | JavaScript (ESM) | Primate-Acuity Log-Polar Foveated Binocular Visual Hierarchy (Dual 256x128 Retinas = 65,536 Photoreceptors / 1 | indirect |
 | `live/js/sim/webgpu_brain.js` | 9,942 | JavaScript (ESM) | WebGPU WGSL compute shader accelerator for large spiking sheets (L / XL / XXL / MEGA up to 1,048,576 neurons & | page |
-| `live/js/sim/world.js` | 64,548 | JavaScript (ESM) | The 3D A-Life Biosphere & Abiotic World (upgraded in pass 18): | direct (gait_probe.mjs, memory_probe.mjs, nobel_rigor_suite.mjs, phy) |
+| `live/js/sim/world.js` | 64,548 | JavaScript (ESM) | The 3D A-Life Biosphere & Abiotic World (upgraded in pass 18): | direct (gait_probe.mjs, memory_probe.mjs, lesion_experiments.mjs, phy) |
 | `live/js/tsotchke/LICENSE-eshkol` | 1,065 | - |  | n/a (data/asset/doc) |
-| `live/js/tsotchke/moonlab.js` | 23,979 | JavaScript (ESM) | Moonlab Tensor-Network, 32-Qubit (chi = 32) Vidal Canonical MPS Simulator, 5-Layer (512-D) Binary MERA & Jacob | direct (dome_heptarch_probe.mjs, nobel_rigor_suite.mjs) |
-| `live/js/tsotchke/qgtl.js` | 28,032 | JavaScript (ESM) | Quantum Geometric Tensor Library (QGTL) — JavaScript port of core metric/fidelity primitives from | direct (dome_heptarch_probe.mjs, nobel_rigor_suite.mjs) |
+| `live/js/tsotchke/moonlab.js` | 23,979 | JavaScript (ESM) | Moonlab Tensor-Network, 32-Qubit (chi = 32) Vidal Canonical MPS Simulator, 5-Layer (512-D) Binary MERA & Jacob | direct (dome_heptarch_probe.mjs, lesion_experiments.mjs) |
+| `live/js/tsotchke/qgtl.js` | 28,032 | JavaScript (ESM) | Quantum Geometric Tensor Library (QGTL) — JavaScript port of core metric/fidelity primitives from | direct (dome_heptarch_probe.mjs, lesion_experiments.mjs) |
 | `live/js/tsotchke/qrng.js` | 34,580 | JavaScript (ESM) | 16-Qubit (DIM = 65,536) WebAssembly-Accelerated Open-Quantum Lindblad / Kraus MCWF Simulator + Optional 18-Qub | indirect |
 | `live/js/tsotchke/taylor.js` | 9,880 | JavaScript (ESM) | Univariate truncated-Taylor ("jet") arithmetic to order K — a faithful JavaScript port of the recurrence table | indirect |
 | `live/js/tsotchke/wasm_quantum.js` | 15,248 | JavaScript (ESM) | Zero-build inline W3C WebAssembly f64 quantum statevector kernel (up to 16 qubits, DIM = 65,536) + | indirect |
@@ -291,7 +291,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `live/test/memory_probe.mjs` | 3,391 | JavaScript (ESM, Node) | Pass 3 memory probes. (a) HDC food map: store noisy outcomes at the 16 plants, check recall vs true reward pro | is a test/probe |
 | `live/test/nav_eval.mjs` | 1,769 | JavaScript (ESM, Node) | Navigation fitness of a full genome (used by evolve_steer.mjs). Per seed: a near goal (4-8 units) and a far go | is a test/probe |
 | `live/test/nav_probe.mjs` | 2,254 | JavaScript (ESM, Node) | Pass 13 navigation probe. Per seed: one NEAR goal (a feeding site 4-8 units from the head) and one FAR goal (> | is a test/probe |
-| `live/test/nobel_rigor_suite.mjs` | 52,335 | JavaScript (ESM, Node) | Pass 21 Hostile-Scrutiny Scientific Falsification & Statistical Rigor Suite (`nobel_rigor_suite.mjs`) | is a test/probe |
+| `live/test/lesion_experiments.mjs` | 52,335 | JavaScript (ESM, Node) | Pass 21 Hostile-Scrutiny Scientific Falsification & Statistical Rigor Suite (`lesion_experiments.mjs`) | is a test/probe |
 | `live/test/pc_probe.mjs` | 1,227 | JavaScript (ESM, Node) | Predictive-coding probe: mean squared body-sense prediction error in the first vs last 30 s of a 180 s run, le | is a test/probe |
 | `live/test/physics_probe.mjs` | 1,102 | JavaScript (ESM, Node) | physics sanity: does a lateral travelling wave (hand-written, TEST ONLY - never used by the creature) propel t | is a test/probe |
 | `live/test/righting_probe.mjs` | 1,620 | JavaScript (ESM, Node) | Flip the body onto its back (rotate all particles 180 deg about the body's long axis) and measure the time unt | is a test/probe |

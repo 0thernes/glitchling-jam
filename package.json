@@ -10,7 +10,7 @@
     "test:full": "FULL=1 node tools/check.mjs",
     "serve": "python3 -m http.server 8000",
     "sim": "bun run glitchling.ts 2 2",
-    "rigor": "cd live && node test/nobel_rigor_suite.mjs"
+    "lesion": "cd live && node test/lesion_experiments.mjs"
   },
   "license": "SEE LICENSE IN LICENSE"
 }

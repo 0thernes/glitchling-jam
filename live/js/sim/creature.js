@@ -1,5 +1,5 @@
 // Glitchling v2 "live" (pass 19 architecture):
-// Spiking 16-compartment discrete-Markov HH laminar brain (S=436..GIGA=14,156,048 neurons / 1.13B synapses) + LTC CPG + 122 sLTC motor neurons +
+// Spiking 16-compartment discrete-Markov HH laminar brain (S=436..GIGA=14,156,048 neurons; GIGA synapse total 1.13B is nominal, ~28k stored) + LTC CPG + 122 sLTC motor neurons +
 // 128-gene zygote-cleavage/gastrulation 5-clade (0L..10L + patagium + angler-lure) 336..360-tet anisotropic FEM soft body & 32 Henneman muscle fascicles +
 // 64-vessel Murray's-Law vascular tree + 24x8x8 D3Q19 LBM + 1,024 WCSPH Erythrocytes & chemotactic Leukocytes +
 // dual 256x128 foveated retinas (65,536 receptors / 196,608 cone+rod & 6 RGC mosaics) -> V1 -> V2 -> V4 -> 65,536-concept Ontology-grounded IT/PRh + EKF-SLAM +

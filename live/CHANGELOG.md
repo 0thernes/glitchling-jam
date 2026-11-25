@@ -870,7 +870,7 @@ Distills all 29 research PDFs (`1,932` pages) into [`../GLITCHLING_MASTER_COMPEN
   - Verified live 3D Geodesic Biodome, Monoliths, Sanctuaries, Anomaly Tori, `p5.js` `2-Dome+Multi` studio, `Dome` Lab tab (`#heptarch-bars`, `#domestats`, `#dome-storm`, `#dome-refuge`, `#dome-trauma`), and `Real?` honesty tab with **`consoleErrors: []`, `pageErrors: []`, `hasNaN: false`, `ClosureErr = 1.15e-16`**.
 
 
-## Pass 21 — 12-theorem falsification suite (N = 12 paired seeds), first-principles physics upgrades, Bedau–Packard evolutionary activity
+## Pass 21 — 12-experiment falsification suite (N = 12 paired seeds), first-principles physics upgrades, Bedau–Packard evolutionary activity
 
 This pass makes the Pass 20 claims testable. Each one gets a falsifying control (a lesion, a surrogate or a null model),
 12 paired seeds, an exact permutation test and an effect size. Full defence, file links and caveats:
@@ -906,7 +906,7 @@ This pass makes the Pass 20 claims testable. Each one gets a falsifying control 
    transfer entropy motor → sensory with a time-shuffled surrogate.
 5. **`qgtl.js`**: C₃ cospectral twin carriers (Tr L³ 14976 vs 15360), blind obelisk choice, and Poincaré-disk Möbius
    addition, distance, exp map and triangle defect.
-6. **`test/nobel_rigor_suite.mjs`** (new): exact 2^12 paired sign-flip permutation test, 10,000-resample bootstrap 95% CI,
+6. **`test/lesion_experiments.mjs`** (new): exact 2^12 paired sign-flip permutation test, 10,000-resample bootstrap 95% CI,
    and paired d_z.
    - **Statistics bug found and fixed.** With a NaN observed statistic, every comparison `s >= obs` is false, so the old
      code returned p = 0 and *passed*. `summarizePaired` and `exactPairedPermutationP` now assert that every input and
@@ -916,7 +916,7 @@ This pass makes the Pass 20 claims testable. Each one gets a falsifying control 
      the subsystems after construction.
 7. **`honesty.js`**: the classical-simulation vs physical wetware/QPU boundary text now covers every Pass 21 model.
 
-### Verification (`node test/nobel_rigor_suite.mjs`, one continuous run, Node v25.8.2)
+### Verification (`node test/lesion_experiments.mjs`, one continuous run, Node v25.8.2)
 
 **12/12 pass, no NaN.**
 
@@ -948,24 +948,24 @@ Honest reading:
   the effect is astronomically certain.
 - Of the 18 contrasts, **T12b (ECE) does not survive Bonferroni correction** (threshold 0.0028). It passes only its own
   p < 0.01 threshold.
-- Ten of the twelve theorems check correct mathematics or designed-in mechanisms against lesions. Only T11 (and part of
+- Ten of the twelve experiments check correct mathematics or designed-in mechanisms against lesions. Only T11 (and part of
   T12) test outcomes that no rule writes down. T11 shows selection beats drift. It is not evidence of open-ended
   evolution.
 - Seeds 1–12 were also used while tuning. A held-out replication on new seeds is the next step.
 - All "quantum" results are classical FP64 simulations. Nothing physically quantum happens in the creature.
 
 
-## Pass 22 — Locked Out-of-Sample Replication (`13..24` & `25..36`), Methodological Bug Fixes (`T2`, `T12b/c`, `skin.js`) & 3 New Emergent A-Life Theorems (`T13`–`T15`, 26 Paired Contrasts)
+## Pass 22 — Locked Out-of-Sample Replication (`13..24` & `25..36`), Methodological Bug Fixes (`T2`, `T12b/c`, `skin.js`) & 3 New Emergent A-Life Experiments (`T13`–`T15`, 26 Paired Contrasts)
 
 Closes every methodological critique identified in Pass 21, executes locked zero-leakage out-of-sample replications on
 unseen seeds, fixes two real statistical/information-theoretic defects found during code review, removes the final
-`Math.random()` call from `live/js/sim/`, and adds three genuine emergent A-Life & learning theorems (`T13`–`T15`).
+`Math.random()` call from `live/js/sim/`, and adds three genuine emergent A-Life & learning experiments (`T13`–`T15`).
 Full write-up and 26-contrast combined $N = 24$ audit: [`../SCIENTIFIC_DEFENSE_DOSSIER.md`](../SCIENTIFIC_DEFENSE_DOSSIER.md).
 
 ### What changed
 
 1. **Locked out-of-sample replication of Pass 21 (`48eb260`) on unseen seeds `13..24` (zero edits to `live/js/`):**
-   - **12/12 theorems passed**, **18/18 Holm–Bonferroni FWER**, and **18/18 full Bonferroni FWER ($\alpha = 0.05$)**,
+   - **12/12 experiments passed**, **18/18 Holm–Bonferroni FWER**, and **18/18 full Bonferroni FWER ($\alpha = 0.05$)**,
      including `T11` Bedau–Packard activity (`24.06 vs 8.09`, `p = 0.000244`, `d_z = 1.24`) and `T12b` ECE (`p = 0.000732`).
 2. **Methodological & physics fixes (`js/sim/metacog.js`, `js/sim/creature.js`, `js/sim/world.js`, `js/sim/heptarch.js`, `js/sim/skin.js`, `js/honesty.js`):**
    - **`T12c` Transfer Entropy symmetry fix (`metacog.js`, `creature.js`):** Pass 21 summed 3 directed TE edges but
@@ -984,7 +984,7 @@ Full write-up and 26-contrast combined $N = 24$ audit: [`../SCIENTIFIC_DEFENSE_D
      2000) with an effective rotating-wave Lorentzian Larmor RF spin-flip rate (cf. Hore & Mouritsen 2016).
    - **100% seeded simulation determinism (`skin.js`, `creature.js`):** Seeded `Skin(seed)` with `mulberry32`, leaving
      **0 `Math.random()` runtime calls** anywhere inside `live/js/sim/`.
-3. **3 new Emergent A-Life & learning theorems in `test/nobel_rigor_suite.mjs` (now 15 theorems, 26 paired contrasts, full Holm/Bonferroni/BH-FDR table, `SEEDS=` / `FROM_T=` / `TO_T=` / `JSON_OUT=`):**
+3. **3 new Emergent A-Life & learning experiments in `test/lesion_experiments.mjs` (now 15 experiments, 26 paired contrasts, full Holm/Bonferroni/BH-FDR table, `SEEDS=` / `FROM_T=` / `TO_T=` / `JSON_OUT=`):**
    - **`T13` (`[E]` Multi-Generation Divergent Natural Selection):** Warm (`seasonPhase = 0.25`) vs Cool (`0.75`) domes
      from identical Gen-0 populations with zero hardcoded target gene shift inherited `thermOpt` in opposite directions
      over ~6 diploid generations, exceeding the matched Neutral Shadow.
@@ -995,7 +995,7 @@ Full write-up and 26-contrast combined $N = 24$ audit: [`../SCIENTIFIC_DEFENSE_D
      cuts predations (~4×) and—with zero code linking alarms to plant growth—increases standing plant fruit biomass via
      non-consumptive prey sheltering (TMII > DMII; Schmitz et al. 1997).
 
-### Verification (`node test/nobel_rigor_suite.mjs`, Node v25.8.2)
+### Verification (`node test/lesion_experiments.mjs`, Node v25.8.2)
 
 - **Cohort A (`SEEDS=1..12`):** **26/26 Holm–Bonferroni AND 26/26 full Bonferroni ($\alpha = 0.05$)**; 0 NaNs.
 - **Cohort B (`SEEDS=13..24`):** **26/26 Holm–Bonferroni AND 26/26 full Bonferroni ($\alpha = 0.05$)**; 0 NaNs.

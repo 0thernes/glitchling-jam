@@ -20,4 +20,4 @@ This repo is a public jam log and a live GitHub Pages site (https://0thernes.git
 
 ## Layout and checks
 
-See [`AUDIT/INDEX.md`](AUDIT/INDEX.md) for a table of contents of every file. Long-running probes live in `live/test/` (see `live/README.md`). The full statistical suite runs with `npm run rigor` and is too slow for CI.
+See [`AUDIT/INDEX.md`](AUDIT/INDEX.md) for a table of contents of every file. Long-running probes live in `live/test/` (see `live/README.md`). The full statistical suite runs with `npm run lesion` and is too slow for CI.

@@ -1,6 +1,6 @@
-// Pass 21 Hostile-Scrutiny Scientific Falsification & Statistical Rigor Suite (`nobel_rigor_suite.mjs`)
+// Pass 21 Lesion-Experiment Suite (statistical tests of designed lesion / surrogate contrasts) (`lesion_experiments.mjs`)
 // Verifies 12 falsifiable mathematical, physical, quantum-biological, bioelectric, information-theoretic,
-// game-theoretic, and Artificial Life theorems across N = 12 independent seeds with:
+// game-theoretic, and Artificial Life experiments across N = 12 independent seeds with:
 //   - Exact 2^N finite-sample nonparametric paired sign-flip permutation p-values (Fisher 1935; Pitman 1937)
 //   - 10,000-resample Efron percentile Bootstrap 95% Confidence Intervals
 //   - Standardized paired effect sizes (Cohen's d_z)
@@ -148,11 +148,11 @@ function summarizePaired(name, xArr, yArr, direction = 'greater') {
 
 const SUMMARY_ROWS = [];
 console.log('=========================================================================================');
-console.log(`=== PASS 22: 15-THEOREM FALSIFICATION & EMERGENT A-LIFE SUITE (N=${SEEDS_12.length}, SEEDS=[${SEEDS_12.join(',')}]) ===`);
+console.log(`=== PASS 22: 15-EXPERIMENT FALSIFICATION & EMERGENT A-LIFE SUITE (N=${SEEDS_12.length}, SEEDS=[${SEEDS_12.join(',')}]) ===`);
 console.log('=========================================================================================');
 
 // =========================================================================================
-// THEOREM 1: First Law, Landsberg-Clausius Second Law & Closed N/C Biogeochemical Mass Ledger
+// EXPERIMENT 1: First Law, Landsberg-Clausius Second Law & Closed N/C Biogeochemical Mass Ledger
 // =========================================================================================
 if (runT(1)) {
   const solarIntact = [], solarScrubbed = [];
@@ -190,7 +190,7 @@ if (runT(1)) {
 
   SUMMARY_ROWS.push({
     id: 'T1',
-    theorem: '1st/2nd Law + Closed N/C Mass',
+    experiment: '1st/2nd Law + Closed N/C Mass',
     metric: `E_err=${maxEnergyErr.toExponential(2)}, M_err=${maxMassErr.toExponential(2)}, minSig=+${minSigObs.toExponential(2)}`,
     effect: `dSolar=+${st.meanDiff.toFixed(3)} kJ [${st.ciLo.toFixed(3)}, ${st.ciHi.toFixed(3)}]`,
     p: st.p.toFixed(6),
@@ -200,7 +200,7 @@ if (runT(1)) {
 }
 
 // =========================================================================================
-// THEOREM 2: Published 7-Site Adolphs-Renger FMO GKSL Lindblad Master Eq vs Classical Förster
+// EXPERIMENT 2: Published 7-Site Adolphs-Renger FMO GKSL Lindblad Master Eq vs Classical Förster
 // =========================================================================================
 if (runT(2)) {
   let maxNormErr = 0;
@@ -225,7 +225,7 @@ if (runT(2)) {
 
   SUMMARY_ROWS.push({
     id: 'T2',
-    theorem: '7-Site Adolphs-Renger FMO GKSL',
+    experiment: '7-Site Adolphs-Renger FMO GKSL',
     metric: `|Phi_sink+Phi_loss-1|=${maxNormErr.toExponential(2)}, 54C_gap=${zenoGap.toFixed(4)}`,
     effect: `Cryo=${cryo.enaqtEff.toFixed(3)}>${cryo.forsterEff.toFixed(3)} | 24C=${room.enaqtEff.toFixed(3)}>${room.forsterEff.toFixed(3)} | 54C=${zeno.enaqtEff.toFixed(3)}`,
     p: 'exact',
@@ -235,7 +235,7 @@ if (runT(2)) {
 }
 
 // =========================================================================================
-// THEOREM 3: 8x8 Cryptochrome-4 Liouville-Haberkorn + Inclination Parity + Ritz Larmor RF (N=12)
+// EXPERIMENT 3: 8x8 Cryptochrome-4 Liouville-Haberkorn + Inclination Parity + Ritz Larmor RF (N=12)
 // =========================================================================================
 if (runT(3)) {
   const rng = mulberry(314159);
@@ -323,7 +323,7 @@ if (runT(3)) {
 
   SUMMARY_ROWS.push({
     id: 'T3',
-    theorem: '8x8 Cry4 Haberkorn + Ritz Larmor RF',
+    experiment: '8x8 Cry4 Haberkorn + Ritz Larmor RF',
     metric: `parityErr=${maxParityErr.toExponential(2)}, dPhi(res/off)=${cRes.toFixed(3)}/${cOff.toFixed(3)}`,
     effect: `Lesion:+${stLes.meanDiff.toFixed(3)} rad; ResRF:+${stRF.meanDiff.toFixed(3)} rad [${stRF.ciLo.toFixed(3)}, ${stRF.ciHi.toFixed(3)}]`,
     p: stRF.p.toFixed(6),
@@ -333,7 +333,7 @@ if (runT(3)) {
 }
 
 // =========================================================================================
-// THEOREM 4: 4-Qubit C3 Cospectral Twins (14,976 vs 15,360) + KCBS / CEGA-18 / Hoggar / MPS M2
+// EXPERIMENT 4: 4-Qubit C3 Cospectral Twins (14,976 vs 15,360) + KCBS / CEGA-18 / Hoggar / MPS M2
 // =========================================================================================
 if (runT(4)) {
   const ctx = evalContextualitySuites(0, 0);
@@ -374,7 +374,7 @@ if (runT(4)) {
 
   SUMMARY_ROWS.push({
     id: 'T4',
-    theorem: '4Q C3 Cospectral Twins + Contextuality',
+    experiment: '4Q C3 Cospectral Twins + Contextuality',
     metric: `eigDiff=${twins.carrierEigMaxDiff.toExponential(2)}, Tr(L^3)=14976 vs 15360`,
     effect: `QGT=${(st.meanX * 100).toFixed(1)}% vs Spec=${(st.meanY * 100).toFixed(1)}% [+${(st.meanDiff * 100).toFixed(1)}%]`,
     p: st.p.toFixed(6),
@@ -384,7 +384,7 @@ if (runT(4)) {
 }
 
 // =========================================================================================
-// THEOREM 5: 4x4 Two-Qubit Density Matrix CHSH Non-Local Game & Zero Superluminal Signaling (N=12)
+// EXPERIMENT 5: 4x4 Two-Qubit Density Matrix CHSH Non-Local Game & Zero Superluminal Signaling (N=12)
 // =========================================================================================
 if (runT(5)) {
   const qWin = [], lhvWin = [], qEmpS = [];
@@ -421,7 +421,7 @@ if (runT(5)) {
 
   SUMMARY_ROWS.push({
     id: 'T5',
-    theorem: '4x4 Density-Matrix CHSH & No-Signaling',
+    experiment: '4x4 Density-Matrix CHSH & No-Signaling',
     metric: `exactBias=${maxExactMargBias.toExponential(1)}, empS=${mean(qEmpS).toFixed(3)}>2`,
     effect: `Win: Q=${(stBell.meanX * 100).toFixed(2)}% vs LHV=${(stBell.meanY * 100).toFixed(2)}% (>75% Bell)`,
     p: stBell.p.toFixed(6),
@@ -431,7 +431,7 @@ if (runT(5)) {
 }
 
 // =========================================================================================
-// THEOREM 6: Exact Ungar K = -1 Poincaré-Disk Riemannian Geometry & Xylos Geodesic Motion
+// EXPERIMENT 6: Exact Ungar K = -1 Poincaré-Disk Riemannian Geometry & Xylos Geodesic Motion
 // =========================================================================================
 if (runT(6)) {
   const rng = mulberry(271828);
@@ -480,7 +480,7 @@ if (runT(6)) {
 
   SUMMARY_ROWS.push({
     id: 'T6',
-    theorem: 'Poincaré Disk K=-1 Hyperbolic Geometry',
+    experiment: 'Poincaré Disk K=-1 Hyperbolic Geometry',
     metric: `isometryErr=${maxIsoErr.toExponential(2)}, max|w|=${maxXylosNorm.toFixed(3)}<1`,
     effect: `Gauss-Bonnet minDefect=+${minDefect.toFixed(4)} rad > 0`,
     p: 'exact',
@@ -490,7 +490,7 @@ if (runT(6)) {
 }
 
 // =========================================================================================
-// THEOREM 7: NESTOR 23-Rung Stochastic Rounding Unbiasedness, Nullspace Escape & Pareto Frugality (N=12)
+// EXPERIMENT 7: NESTOR 23-Rung Stochastic Rounding Unbiasedness, Nullspace Escape & Pareto Frugality (N=12)
 // =========================================================================================
 if (runT(7)) {
   const rng = mulberry(161803);
@@ -558,7 +558,7 @@ if (runT(7)) {
 
   SUMMARY_ROWS.push({
     id: 'T7',
-    theorem: 'NESTOR 23-Rung SR + Nullspace + Pareto',
+    experiment: 'NESTOR 23-Rung SR + Nullspace + Pareto',
     metric: `maxBias=${maxBias.toFixed(4)}, ortho=${hc.lastNullspaceOrtho.toExponential(1)}`,
     effect: `dNLL(low-adap)=+${stQual.meanDiff.toFixed(3)}; ATP=${frugRatio.toFixed(1)}x frugal`,
     p: stQual.p.toFixed(6),
@@ -568,7 +568,7 @@ if (runT(7)) {
 }
 
 // =========================================================================================
-// THEOREM 8: Levin Target-Free Bistable Bioelectric Syncytium & Cryptic Pattern Memory (N=12)
+// EXPERIMENT 8: Levin Target-Free Bistable Bioelectric Syncytium & Cryptic Pattern Memory (N=12)
 // =========================================================================================
 if (runT(8)) {
   const regIntact = [], regLesion = [], morphCanon = [], morphCryptic = [];
@@ -614,7 +614,7 @@ if (runT(8)) {
 
   SUMMARY_ROWS.push({
     id: 'T8',
-    theorem: 'Levin Bistable Bioelectric & Cryptic Memory',
+    experiment: 'Levin Bistable Bioelectric & Cryptic Memory',
     metric: `0/128 genes altered; regen=${stReg.meanX.toFixed(3)} vs ${stReg.meanY.toFixed(3)}`,
     effect: `Morph switch: ${stMem.meanY.toFixed(3)} -> ${stMem.meanX.toFixed(3)} (+${stMem.meanDiff.toFixed(3)})`,
     p: stMem.p.toFixed(6),
@@ -624,7 +624,7 @@ if (runT(8)) {
 }
 
 // =========================================================================================
-// THEOREM 9: Spatial RS[15,11,d=5] GF(16) Bio-Acoustic Burst-Noise ECC Survival Advantage (N=12)
+// EXPERIMENT 9: Spatial RS[15,11,d=5] GF(16) Bio-Acoustic Burst-Noise ECC Survival Advantage (N=12)
 // =========================================================================================
 if (runT(9)) {
   const predOff = [], predOn = [], evasOn = [];
@@ -654,7 +654,7 @@ if (runT(9)) {
 
   SUMMARY_ROWS.push({
     id: 'T9',
-    theorem: 'Spatial RS[15,11] GF(16) Acoustic ECC',
+    experiment: 'Spatial RS[15,11] GF(16) Acoustic ECC',
     metric: `meanEarlyEvasions=${mean(evasOn).toFixed(2)}`,
     effect: `Predations: raw=${stECC.meanX.toFixed(2)} -> ECC=${stECC.meanY.toFixed(2)} (-${stECC.meanDiff.toFixed(2)})`,
     p: stECC.p.toFixed(6),
@@ -664,7 +664,7 @@ if (runT(9)) {
 }
 
 // =========================================================================================
-// THEOREM 10: Press-Dyson Memory-1 IPD Titans & Level-2 Bayesian Costly-Signaling Shoggoths (N=12)
+// EXPERIMENT 10: Press-Dyson Memory-1 IPD Titans & Level-2 Bayesian Costly-Signaling Shoggoths (N=12)
 // =========================================================================================
 if (runT(10)) {
   const coopPay = [], defPay = [], shogBayes = [], shogNaive = [];
@@ -713,7 +713,7 @@ if (runT(10)) {
 
   SUMMARY_ROWS.push({
     id: 'T10',
-    theorem: 'Press-Dyson IPD Titans + Bayesian Shoggoths',
+    experiment: 'Press-Dyson IPD Titans + Bayesian Shoggoths',
     metric: `Titan(Coop-Def)=+${stTitan.meanDiff.toFixed(2)} (p=${stTitan.p.toFixed(4)})`,
     effect: `Shoggoth net: Bayes=${stShog.meanX.toFixed(2)} vs Naive=${stShog.meanY.toFixed(2)} (+${stShog.meanDiff.toFixed(2)})`,
     p: stShog.p.toFixed(6),
@@ -723,7 +723,7 @@ if (runT(10)) {
 }
 
 // =========================================================================================
-// THEOREM 11: Bedau-Packard Cumulative Evolutionary Activity vs Neutral Drift Shadow Model (N=12)
+// EXPERIMENT 11: Bedau-Packard Cumulative Evolutionary Activity vs Neutral Drift Shadow Model (N=12)
 // =========================================================================================
 if (runT(11)) {
   const actAdaptive = [], actNeutral = [];
@@ -744,7 +744,7 @@ if (runT(11)) {
 
   SUMMARY_ROWS.push({
     id: 'T11',
-    theorem: 'Bedau-Packard Evolutionary Activity',
+    experiment: 'Bedau-Packard Evolutionary Activity',
     metric: `Adaptive=${stBedau.meanX.toFixed(2)} vs Neutral=${stBedau.meanY.toFixed(2)}`,
     effect: `dActivity=+${stBedau.meanDiff.toFixed(2)} [${stBedau.ciLo.toFixed(2)}, ${stBedau.ciHi.toFixed(2)}]`,
     p: stBedau.p.toFixed(6),
@@ -754,7 +754,7 @@ if (runT(11)) {
 }
 
 // =========================================================================================
-// THEOREM 12: Prequential Proper NLL, Per-Dim Kuleshov 10-Bin ECE & Matched 3-Edge Schreiber TE (N=12)
+// EXPERIMENT 12: Prequential Proper NLL, Per-Dim Kuleshov 10-Bin ECE & Matched 3-Edge Schreiber TE (N=12)
 // =========================================================================================
 if (runT(12)) {
   const rawNLL = [], calNLL = [], rawECE = [], calECE = [], teActive = [], teNull = [], teParalyzed = [];
@@ -803,7 +803,7 @@ if (runT(12)) {
 
   SUMMARY_ROWS.push({
     id: 'T12',
-    theorem: 'Proper NLL + Per-Dim ECE + 3-Edge TE',
+    experiment: 'Proper NLL + Per-Dim ECE + 3-Edge TE',
     metric: `NLL:${stNLL.meanX.toFixed(3)}->${stNLL.meanY.toFixed(3)}, ECE:${stECE.meanX.toFixed(3)}->${stECE.meanY.toFixed(3)}`,
     effect: `TE_3=${stTEPar.meanX.toFixed(3)} vs null3=${mean(teNull).toFixed(3)} / mnLes=${stTEPar.meanY.toFixed(3)}`,
     p: stTENull.p.toFixed(6),
@@ -813,7 +813,7 @@ if (runT(12)) {
 }
 
 // =========================================================================================
-// THEOREM 13 [EMERGENT]: Multi-Generation Divergent Natural Selection (Warm vs Cool Biome, Zero Target)
+// EXPERIMENT 13 [EMERGENT]: Multi-Generation Divergent Natural Selection (Warm vs Cool Biome, Zero Target)
 // =========================================================================================
 if (runT(13)) {
   const divAdaptive = [], divNeutral = [], warmMeans = [], coolMeans = [];
@@ -848,7 +848,7 @@ if (runT(13)) {
   const sShad = `${stDivShad.meanY >= 0 ? '+' : ''}${stDivShad.meanY.toFixed(3)}`;
   SUMMARY_ROWS.push({
     id: 'T13',
-    theorem: '[E] Divergent Natural Selection (Warm/Cool)',
+    experiment: '[E] Divergent Natural Selection (Warm/Cool)',
     metric: `Warm=${mean(warmMeans).toFixed(3)} vs Cool=${mean(coolMeans).toFixed(3)} (${meanMaxGen.toFixed(1)} gens)`,
     effect: `dTherm: Adap=+${stDivShad.meanX.toFixed(3)} vs Shad=${sShad}`,
     p: stDivShad.p.toFixed(6),
@@ -858,7 +858,7 @@ if (runT(13)) {
 }
 
 // =========================================================================================
-// THEOREM 14 [EMERGENT]: Ontogenetic Unsupervised Learning (WM + PC) & Wiener HDC Generalization
+// EXPERIMENT 14 [EMERGENT]: Ontogenetic Unsupervised Learning (WM + PC) & Wiener HDC Generalization
 // =========================================================================================
 if (runT(14)) {
   const wmFrozen = [], wmLearned = [], pcFrozen = [], pcLearned = [];
@@ -943,7 +943,7 @@ if (runT(14)) {
 
   SUMMARY_ROWS.push({
     id: 'T14',
-    theorem: '[E] Ontogenetic Learning (WM+PC+Wiener HDC)',
+    experiment: '[E] Ontogenetic Learning (WM+PC+Wiener HDC)',
     metric: `WM:${stWM.meanX.toFixed(3)}->${stWM.meanY.toFixed(3)}, PC:${stPC.meanX.toFixed(3)}->${stPC.meanY.toFixed(3)}`,
     effect: `HDC r: ${mean(hdcSup).toFixed(3)}<${stWien.meanY.toFixed(3)}<${stWien.meanX.toFixed(3)}`,
     p: stWien.p.toFixed(6),
@@ -953,7 +953,7 @@ if (runT(14)) {
 }
 
 // =========================================================================================
-// THEOREM 15 [EMERGENT]: 3-Trophic-Level Ecology-of-Fear Plant Biomass Cascade (TMII > DMII)
+// EXPERIMENT 15 [EMERGENT]: 3-Trophic-Level Ecology-of-Fear Plant Biomass Cascade (TMII > DMII)
 // =========================================================================================
 if (runT(15)) {
   const predSilent = [], predSocial = [], fruitSocial = [], fruitSilent = [];
@@ -989,7 +989,7 @@ if (runT(15)) {
 
   SUMMARY_ROWS.push({
     id: 'T15',
-    theorem: '[E] 3-Trophic Ecology-of-Fear Cascade',
+    experiment: '[E] 3-Trophic Ecology-of-Fear Cascade',
     metric: `Predations: ${stPred.meanX.toFixed(2)} -> ${stPred.meanY.toFixed(2)}`,
     effect: `Plant fruit: ${stCasc.meanY.toFixed(3)} -> ${stCasc.meanX.toFixed(3)} (+${stCasc.meanDiff.toFixed(3)})`,
     p: stCasc.p.toFixed(6),
@@ -1017,7 +1017,7 @@ for (let rank = M - 1; rank >= 0; rank--) {
 
 console.log(`\n=== SUMMARY TABLE (EXACT 2^${SEEDS_12.length} PERMUTATION TESTS + 10,000-BOOTSTRAP 95% CIs) ===`);
 for (const r of SUMMARY_ROWS) {
-  console.log(`${r.id.padEnd(4)} | ${r.theorem.padEnd(42)} | ${r.metric.padEnd(48)} | ${r.effect} | p=${r.p} | d_z=${r.d}`);
+  console.log(`${r.id.padEnd(4)} | ${r.experiment.padEnd(42)} | ${r.metric.padEnd(48)} | ${r.effect} | p=${r.p} | d_z=${r.d}`);
 }
 
 console.log(`\n=== ALL ${M} PAIRED CONTRASTS — EXACT FWER (HOLM-BONFERRONI, BONFERRONI) & BH-FDR AUDIT ===`);
@@ -1038,4 +1038,4 @@ if (process.env.JSON_OUT) {
 }
 
 assert.equal(SOFT_FAILURES.length, 0, `${SOFT_FAILURES.length} gate(s) failed:\n  - ${SOFT_FAILURES.join('\n  - ')}`);
-console.log(`=== ALL ${SUMMARY_ROWS.length} EXECUTED PASS 22 THEOREMS PASSED 100% ON SEEDS [${SEEDS_12.join(',')}]! ===`);
+console.log(`=== ALL ${SUMMARY_ROWS.length} EXECUTED PASS 22 EXPERIMENTS PASSED 100% ON SEEDS [${SEEDS_12.join(',')}]! ===`);

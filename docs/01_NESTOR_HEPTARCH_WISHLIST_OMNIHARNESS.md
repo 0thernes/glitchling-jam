@@ -23,7 +23,7 @@ Precision is budgeted like ATP and wiring volume: spending `FP32` on a binary si
 | **`1–3`** | **(1) Analog conductance · (2) Spike-timing event code · (3) Stochastic bitstream** | Sparse CSR axonal spike events, `Cryptochrome-4` spin yield, `Thermocore` p-bit Ising flips |
 | **`4–6`** | **(4) Binary `{-1,+1}` · (5) Ternary `{-1,0,+1}` (`b1.58`) · (6) `INT2/INT3` post-DSD** | Fast reflex `Spindle` shadow weights, collateral inhibition, post-DSD deduplicated micro-motifs |
 | **`7–9`** | **(7) `INT4 / NF4` · (8) `FP4 E2M1 / MXFP4 / NVFP4` · (9) `MXFP6`** | Segmental `CfC/sLTC` limb ganglia, `ChronoBlock-4` quantized tensor blocks (`FP8` scale/16 + `FP32` scale) |
-| **`10–13`** | **(10) `INT8 / Q8` · (11) `FP8 E4M3` · (12) `FP8 E5M2` · (13) `posit8 / LNS8`** | `GIGA` `14.16M`-neuron `1.13B`-synapse CSR wave sheets, S2S activation transport, log-gain neuromodulators |
+| **`10–13`** | **(10) `INT8 / Q8` · (11) `FP8 E4M3` · (12) `FP8 E5M2` · (13) `posit8 / LNS8`** | `GIGA` `14.16M`-neuron (`1.13B`-synapse nominal, ~28k stored) CSR wave sheets, S2S activation transport, log-gain neuromodulators |
 | **`14–17`** | **(14) `FP16` · (15) `BF16` · (16) `posit16 / LNS16` · (17) `TF32`** | `256×128` foveal `V1–V4` maps, `32×16` Flow-VAE world model, `HEPTARCH` council workspace |
 | **`18–19`** | **(18) `FP32` · (19) `posit32`** | 3D anisotropic Neo-Hookean FEM kinematics, `D3Q19` LBM hemodynamics, `RTRL` selective SSM master states |
 | **`20–21`** | **(20) `FP64` · (21) `FP128` (reference/chaos)** | `Ring-0` allostatic set-points, circadian phase, and the **11-Pool Kahan-Compensated Dome First-Law Ledger** |

@@ -688,7 +688,7 @@ buildLesions();
 
 // ---------------------------------------------------------------- legends
 $('regions').innerHTML = REGIONS.map(([n], i) => `<span><i style="background:hsl(${(i / REGIONS.length) * 360},90%,60%)"></i>${n}</span>`).join('');
-$('spk-label').textContent = `${NNEU.toLocaleString()} ${BRAIN_SCALE === 'GIGA' ? 'quantized 1.13B-syn mouse-cortex' : '16-comp Discrete-Markov'} neurons (brain ${BRAIN_SCALE})`;
+$('spk-label').textContent = `${NNEU.toLocaleString()} ${BRAIN_SCALE === 'GIGA' ? 'quantized (1.13B synapses nominal; ~28k stored)' : '16-comp Discrete-Markov'} neurons (brain ${BRAIN_SCALE})`;
 
 const surpHist = [], mseHist = [], mse5Hist = [], mse20Hist = [], mse60Hist = [], varHist = [];
 const kapHist = [], tauHist = [], calHist = [];
@@ -872,7 +872,7 @@ function drawPanel() {
   const htn = cr.htn;
   stats($('mindstats'), [
     ['sleep stage / clock', `${STAGES[cr.sleep.stage]} · ${cr.timeCompression}× (${CLOCK_MODES[cr.clockMode]?.label || cr.clockMode})`],
-    ['brain scale / backend', `${BRAIN_SCALE} (${b.backend}): ${b.N.toLocaleString()} neu, ${b.S.toLocaleString()} syn, ${(window.glitch.stats.stepMs ?? 0).toFixed(1)} ms/step`],
+    ['brain scale / backend', `${BRAIN_SCALE} (${b.backend}): ${b.N.toLocaleString()} neu, ${b.procS ? `${(b.explicitS ?? 0).toLocaleString()} stored syn (${b.S.toLocaleString()} nominal)` : `${b.S.toLocaleString()} syn`}, ${(window.glitch.stats.stepMs ?? 0).toFixed(1)} ms/step`],
     ['16-comp Discrete Binomial Markov', `NMDA ${Math.round(b.nmdaSpikes || 0)} · BAC ${Math.round(b.plateauBursts || 0)} · SK ${(b.skMean || 0).toFixed(3)} · σ_ch ${(b.channelNoiseMean || 0).toFixed(3)}`],
     ['256×128 (196k RGC) & 65,536 Ontology IT', `${cr.retina.activeLexeme || 'ENTITY'} · inv ${(cr.retina.itInvariance || 0).toFixed(3)} · seen ${cr.retina.itUniqueConceptsSeen || 1}/65,536 · SLAM ${cr.retina.seenCount}/19`],
     ['32,768-neu Hip–Sub (14 pop + SR + 6 GABA)', `DG 16,384 (1.2% + 512 neurogen) · Subic 1,024 · GABA 2,688 · SWRs ${stCircuit?.swrEvents || 0}`],
