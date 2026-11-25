@@ -27,7 +27,10 @@
       const r = (this.r = mulberry(this.seed)); this.gr = mulberry(this.seed * 9973 + 7); this.rw = mulberry(this.seed * 5167 + 23);
       this.t = 0; this.dead = false;
       // world
-      const cv = [0, 1, 2, 3].sort(() => r() - 0.5), sv = [0, 1, 2, 3].sort(() => r() - 0.5);
+      // Fisher-Yates with the seeded RNG. (The reference uses arr.sort(() => r() - 0.5), whose result depends on the JS engine's
+      // sort algorithm: V8 (Chrome) and JavaScriptCore (Safari, Bun) give different worlds for the same seed, and V8's is biased.)
+      const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const tmp = a[i]; a[i] = a[j]; a[j] = tmp; } return a; };
+      const cv = shuffle([0, 1, 2, 3]), sv = shuffle([0, 1, 2, 3]);
       this.pBase = new Float32Array(SITES); this.pTrue = new Float32Array(SITES); this.depl = new Float32Array(SITES); this.access = new Uint8Array(SITES); this.snack = new Float32Array(SITES);
       for (let k = 0; k < SITES; k++) this.pBase[k] = this.pTrue[k] = 0.05 + (0.25 * cv[k & 3]) / 3 + (0.25 * sv[k >> 2]) / 3;
       this.best = [...this.pBase].indexOf(Math.max(...this.pBase));

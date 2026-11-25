@@ -618,7 +618,7 @@ export class TsotchkeQRNG {
     return { ok: false, source: this.hwSource, reason: 'endpoints-unreachable' };
   }
 
-  /** One 14-qubit WASM-accelerated open-quantum circuit + Kraus/MCWF Lindblad layer + Richardson ZNE + Toeplitz Born readout */
+  /** One NQ = 16-qubit WASM-accelerated open-quantum circuit + Kraus/MCWF Lindblad layer + Richardson ZNE + Toeplitz Born readout */
   evolve() {
     const re = this.re, im = this.im;
     this.ctr = mix32(this.ctr + (++this.steps) * 0x9e3779b9);
@@ -633,7 +633,7 @@ export class TsotchkeQRNG {
     }
 
     if (this.wasm) {
-      // 1) Native WASM H^{⊗14} across DIM = 16,384 complex f64 amplitudes
+      // 1) Native WASM H^{⊗NQ} (NQ = 16) across DIM = 65,536 complex f64 amplitudes
       this.wasm.hadamardAll(NQ);
       // 2) Exact binary-expansion recurrence for Rz(theta_q) phases (14 cos/sin calls instead of 16,384!) + WASM phase & CNOT ring
       const pCos = this.wasm.phaseCos, pSin = this.wasm.phaseSin;

@@ -9,7 +9,8 @@ import { BioAudio } from './audio.js';
 const $ = (id) => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let seed = +(Q.get('seed') || 1) || 1;
+const cleanSeed = (v) => { const n = Math.floor(Math.abs(+v)); return Number.isFinite(n) && n >= 1 ? Math.min(n, 2147483647) : 1; }; // integer 1..2^31-1
+let seed = cleanSeed(Q.get('seed') || 1);
 $('seed').value = seed;
 let clockMode = CLOCK_MODES[Q.get('clock')] ? Q.get('clock') : 'realtime';
 let wmScale = ['std', 'large', 'xl', 'ultra', 'titan', 'omega'].includes(Q.get('wm')) ? Q.get('wm') : 'std';
@@ -549,7 +550,7 @@ $('sleepy').onclick = () => { cr.sleep.S = 1; };
 $('wake').onclick = () => { cr.sleep.forceWake = 30; cr.sleep.S = Math.min(cr.sleep.S, 0.3); };
 $('follow').onclick = () => { if (!view) return; view.follow = !view.follow; $('follow').textContent = 'Camera: ' + (view.follow ? 'follow' : 'free'); };
 $('reset').onclick = () => { seed = Math.floor(Math.random() * 99999) + 1; $('seed').value = seed; restart(); };
-$('seed').onchange = () => { seed = +$('seed').value || 1; restart(); };
+$('seed').onchange = () => { seed = cleanSeed($('seed').value); $('seed').value = seed; restart(); };
 
 if ($('dome-storm')) {
   $('dome-storm').onclick = () => {

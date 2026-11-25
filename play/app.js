@@ -10,12 +10,13 @@
 
   // ---------- state ----------
   const q = new URLSearchParams(location.search);
-  let seed = Math.max(1, parseInt(q.get("seed") || "1", 10) || 1);
+  const qnum = (k, lo, hi, dflt) => { const v = parseFloat(q.get(k)); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt; }; // clamp URL params to the slider ranges
+  let seed = Math.min(999999, Math.max(1, parseInt(q.get("seed") || "1", 10) || 1));
   const flaws = JSON.parse(JSON.stringify(DEFAULT_FLAWS));
   const fq = q.get("flaws"); if (fq) for (const f of fq.split(",")) if (flaws[f]) flaws[f].on = true;
-  if (q.get("scramble")) flaws.scramble.period = +q.get("scramble") || 90;
-  if (q.get("leak")) flaws.leaky.rate = (+q.get("leak") || 6) / 100;
-  if (q.get("misfire")) flaws.misfire.period = +q.get("misfire") || 60;
+  if (q.get("scramble")) flaws.scramble.period = qnum("scramble", 5, 600, 90);
+  if (q.get("leak")) flaws.leaky.rate = qnum("leak", 0, 30, 6) / 100;
+  if (q.get("misfire")) flaws.misfire.period = qnum("misfire", 5, 600, 60);
   let sim, running = true, tps = 20, acc = 0, lastTs = 0, frame = 0, evSeen = 0, pops = [], trail = [], shake = 0;
   const H = { n: 720, glc: [], rew: [], suc: [], fat: [] }; let rewWin = [];
 
