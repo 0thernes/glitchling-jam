@@ -2,7 +2,7 @@
 
 **Scope:** all 294 tracked files at origin/main `fe9cb19`, indexed in [`INDEX.md`](INDEX.md). **Findings:** [`FINDINGS.md`](FINDINGS.md).
 **Environment:** Linux box, Node 24.22, Bun (JavaScriptCore), Chromium headless (SwiftShader WebGL) through Playwright, TypeScript 5 (`tsc`), Python 3.
-**Honest count:** the request was "200 passes". Below are the **distinct passes that produced real checks**. I stopped adding passes when new angles stopped finding anything, and I did not pad the list. Re-running the same check is not counted as a new pass, except for the explicit verification passes at the end.
+**Honest count (24 passes):** the request was "200 passes". Below are the **distinct passes that produced real checks**. I stopped adding passes when new angles stopped finding anything, and I did not pad the list. Re-running the same check is not counted as a new pass, except for the explicit verification passes at the end.
 
 | # | Scope | Method | Findings | Fixes / result | Verification |
 |---|---|---|---|---|---|
@@ -27,12 +27,14 @@
 | P19 | Performance | ms per step at each scale | default M about 10.1–10.8 ms per 1/60-s step in Node (below real time on one core); MEGA 219 ms; GIGA 1,076 ms | logged in F01 | none |
 | P20 | Comments and labels against code | qubit counts in `qrng.js`; page titles against content | two stale comments say 14 qubits where the code has 16; brain-viz title said "SIMULATED" while showing real data | F26, F27 | fixed |
 | P21 | Re-verification after fixes | `npm test`; `AUDIT/tools/pages_check.mjs` on all 10 loads; screenshots inspected | **9/9 checks pass. 0 console errors and 0 failed requests. No horizontal overflow (site/ phone 390 = 390; brain-viz is a fixed 1000 px layout scaled to fit).** live/ and play/ screenshots look right | none | none |
-| P22 | Post-push | GitHub Actions run on the pushed commits; HTTP status of the 5 Pages URLs | see below | none | none |
+| P22 | Post-push | GitHub Actions run 45520816419 on `f6487f0`; HTTP status of the 5 Pages URLs | **CI green, 9/9** (76 JS files and 13 JSON files on the full checkout). The 20-s creature distance on the GitHub runner, 13.1403, matches the box exactly, so the run is deterministic across machines. All 5 Pages URLs return HTTP 200 and serve the new build | none | none |
+| P23 | Headline claim re-run: navigation | `node test/nav_probe.mjs 1,2,3,4` and the default seeds 1–8 | Seeds 1–4: NEAR 4/4 (7.5 s), FAR 4/4 (30.3 s), upright 0.92. Pass 22 in `live/CHANGELOG.md:1016` claims NEAR 4/4 (6.5 s), FAR 4/4 (26.5 s), upright 0.94. **The arrival counts reproduce; the times and the upright fraction do not.** Seeds 1–8: 8/8 and 8/8, upright 0.80 | F28 | none |
+| P24 | Rigor suite completed in two runs | T1–T11 in the first run (stopped at its 25-minute cap during T12), then `FROM_T=12` | see the RIGOR line | none | none |
 
 ## Long-run results (filled in as they finished)
 
-- **RIGOR** (`nobel_rigor_suite.mjs`, seeds 1–12, Node, box CPU shared with other probes): T1–T6 printed PASS with the same statistics the README reports for those tests (for example T1 `p=0.000244, d_z=1.91`; T5 `Q_win=80.56%`). The run was capped by a 25-minute timeout, so T7–T15 and the Holm/Bonferroni summary were **not** re-verified in this audit.
-- **NAN** (120 s × 4 seeds): seeds 1–3 had no NaN or Inf and travelled 82–103 units, about 10.7 ms per step. Seed 4: see the end of the audit report.
+- **RIGOR** (`nobel_rigor_suite.mjs`, seeds 1–12, Node 24): **T1–T13 PASS** on re-run. For example: T1 `p=0.000244, d_z=1.91`; T5 `Q_win=80.56%`; T11 `Adaptive 31.41 > Shadow 13.18, p=0.0022`; T12 `ECE d_z 3.09, TE_3 d_z 3.06`; T13 `Warm 0.647 > Cool 0.335, d_z 2.01`. The README's cohort-C T13 figure (0.632/0.331) comes from seeds 25–36, so it isn't directly comparable. T14–T15 and the final Holm/Bonferroni table: see the end of the audit report. The p-values that sit at the floor of 0.000244 (= 1/2¹²) are the smallest an exact 12-seed sign-flip test can produce, so they show direction consistency across seeds, not extreme significance.
+- **NAN** (120 s × 4 seeds): **no NaN or Inf on any seed.** The creature travelled 82–103 units and ate 2–6 times, at 10.6–10.8 ms per step.
 
 ## How to continue
 
