@@ -53,6 +53,8 @@ Line numbers refer to the tree before the audit commits (origin/main `fe9cb19`).
 
 | F31 | blindspot | `glitchling.ts` + `core/` under Bun; `results/summary.csv`; `site/index.html` Results v2; `WRITEUP.md` | high | The reference sim's output depends on JavaScriptCore JIT timing: the same seeds give different results under different CPU load (6 distinct outputs in 11 runs). The published Results v2 is one realization. Its headline ("~25% more foraging, success 0.35 → 0.30") ranges from +7% to +32% in forages, and the success difference flipped sign once. The P10 "byte-identical" result was luck. **This probably affects Creature #1 runs under Bun too**, because `core/` is its organism. | **partly fixed**: the CI check now pins determinism with `BUN_JSC_useConcurrentJIT=0` and checks structure, and README and site carry the caveat with the measured ranges. Re-generating the results and rewording `WRITEUP.md` is **needs Alex** (D9). |
 
+| F32 | issue | `.github/workflows/ci.yml` | low | The checkout and setup-node actions at v4 run on the deprecated Node 20 runtime (CI warning). | **fixed** (v5) |
+
 ## Decisions that need Alex
 
 | ID | Decision | Options | Audit recommendation |

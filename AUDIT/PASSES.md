@@ -2,7 +2,7 @@
 
 **Scope:** all 294 tracked files at origin/main `fe9cb19`, indexed in [`INDEX.md`](INDEX.md). **Findings:** [`FINDINGS.md`](FINDINGS.md).
 **Environment:** Linux box, Node 24.22, Bun (JavaScriptCore), Chromium headless (SwiftShader WebGL) through Playwright, TypeScript 5 (`tsc`), Python 3.
-**Honest count (28 passes):** the request was "200 passes". Below are the **distinct passes that produced real checks**. I stopped adding passes when new angles stopped finding anything, and I did not pad the list. Re-running the same check is not counted as a new pass, except for the explicit verification passes at the end.
+**Honest count (29 passes):** the request was "200 passes". Below are the **distinct passes that produced real checks**. I stopped adding passes when new angles stopped finding anything, and I did not pad the list. Re-running the same check is not counted as a new pass, except for the explicit verification passes at the end.
 
 | # | Scope | Method | Findings | Fixes / result | Verification |
 |---|---|---|---|---|---|
@@ -34,6 +34,7 @@
 | P26 | Pass-22 claim checks | grep for `Math.random` in `live/js/sim` and `live/js/tsotchke` plus every call site; "Chrome HUD 0 errors" against P04; "dome probe 6/6" against P09 | all three claims hold. 2 functions fall back to `Math.random` by default, but every caller passes a seeded RNG | F30 (deferred) | none |
 | P27 | Decisions | collected every finding that needs owner judgment into a decision table at the end of `FINDINGS.md` | 8 decisions (D1–D8) | none | none |
 | P28 | Reproducibility under load (prompted by a red CI run, 45524162006) | 3 concurrent re-runs; 11 realizations at different loads; runs with `BUN_JSC_useConcurrentJIT=0`, `useFTLJIT=0` and `useJIT=0`; a micro-test of Math functions cold against hot | **The reference sim is not deterministic under JavaScriptCore.** 11 runs gave 6 distinct `summary.csv` files. Concurrent JIT off: 3/3 identical (but a different realization). FTL off: still varies. JIT off: yet another realization. Math functions are tier-consistent in the micro-test, so the exact operation is not pinned down. All-vs-baseline: forages +7% to +32%, success −0.10 to +0.01 | F31 (high); check changed; README and site caveat; D9 | `npm test` 9/9 locally |
+| P29 | CI hygiene | read the CI run 45525372807 annotations | `actions/checkout@v4` and `setup-node@v4` target Node 20, which is deprecated on runners | bumped to `@v5` (release tags confirmed to exist) | next CI run |
 
 ## Long-run results (filled in as they finished)
 
