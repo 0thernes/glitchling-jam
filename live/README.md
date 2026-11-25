@@ -5,6 +5,8 @@ A 3D soft-bodied creature and multi-clade A-Life biosphere simulated in the brow
 **Open it:** https://0thernes.github.io/glitchling-jam/live/ (phone or desktop, touch or mouse).
 The simpler 2D version is at [`../play/`](../play/).
 
+> **Audit notes (2026-11-24, see [`../AUDIT/`](../AUDIT/)).** (1) The synapse totals reported for `MEGA` (16,777,216) and `GIGA` (1,132,483,840 "1.13B") are **nominal**: they are set by formula (2^24 and 80 × neurons), not counted. Measured explicitly stored synapses are 30,554 (MEGA) and 28,131 (GIGA), plus 8 lazily allocated Int8 cluster weights per neuron on GIGA (113,248,384 bytes). GIGA steps at about 1.1 s of CPU per 1/60-s sim step in Node. (2) The "theorems" in `test/nobel_rigor_suite.mjs` are **pre-specified statistical tests** (exact paired permutation tests, bootstrap CIs, Holm/Bonferroni) on designed lesion or surrogate contrasts in this simulation, plus some numerical identity checks. They are not mathematical theorems and they are not evidence about biological organisms. (3) Every number below was written by the agent that made the pass; the audit re-ran a subset (listed in `AUDIT/PASSES.md`), not all of them.
+
 This is a **browser simulation**. All numbers on the page are computed live by the code in `js/sim/`. It makes no
 claim of awareness, feelings, sentience or consciousness.
 

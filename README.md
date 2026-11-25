@@ -1,5 +1,10 @@
 # Glitchling
 
+[![CI](https://github.com/0thernes/glitchling-jam/actions/workflows/ci.yml/badge.svg)](https://github.com/0thernes/glitchling-jam/actions/workflows/ci.yml)
+[![GitHub Pages](https://img.shields.io/badge/live-GitHub%20Pages-6b21a8)](https://0thernes.github.io/glitchling-jam/)
+[![No build step](https://img.shields.io/badge/build-none%20(static%20site)-informational)](#run-the-reference-sim-locally)
+[![Honesty](https://img.shields.io/badge/claims-no%20consciousness%20%2F%20no%20AGI-critical)](#real-vs-simulated-please-read)
+
 A deliberately broken baby clone of Alex Donahue's A-Life **Creature #1**, built in a one-day jam (Nov 1, 2026). It has four engineered flaws you can switch on and off:
 
 - **scramble**: senses read through a random permutation plus noise, re-shuffled every 90 ticks
@@ -21,16 +26,23 @@ The play page runs in any modern browser (phone or desktop), with no build step,
 
 - **`play/` is a simplified JavaScript port** written for exploring the flaws interactively. It is **not** the TypeScript reference run, and its numbers will not match the published results.
   - *Kept from the reference:* 16 sites (4 colours × 4 shapes) with the same reward formula, depletion and the days 1–3 half-access pattern; 1 tick = 1 sim-minute; the 272-neuron layout in the same 14 regions with the reference's region-to-region connection probabilities; the four flaws applied the way `glitchling.ts` applies them; seeded mulberry32 RNG with a separate flaw stream.
-  - *Simplified or invented:* rate-unit neurons instead of the spiking substrate; a 3-pool toy metabolism; a noisy value race instead of the striatal spike race and expected-free-energy terms; the walking body, 2D map and click-to-drop food; MOT as an 8-way heading code.
+  - *Simplified or invented:* rate-unit neurons instead of the spiking substrate; a 3-pool toy metabolism; a noisy value race instead of the striatal spike race and expected-free-energy terms; the walking body, 2D map and click-to-drop food; MOT as an 8-way heading code. Since 2026-11-24 the world shuffle uses a seeded Fisher–Yates, so every browser builds the same world for a seed. That world differs from the reference run's world for the same seed number.
 - **The results tables, plots and brain-viz playback come from the TypeScript sim** (`glitchling.ts` subclassing `core/organism.ts`, a copy of the Creature #1 organism). n = 2 seeds per condition, so they are a toy, not a finding.
 - Some renders in the showcase are driven by **synthetic** data; they are labelled SYNTHETIC on the page.
 - No claims of consciousness, sentience or feelings are made for Glitchling or Creature #1.
+
+## Checks and audit
+
+- `npm test` runs `tools/check.mjs`, which needs Node 22 or newer and Bun. It checks syntax, JSON, local links, secrets, eval use and the honesty guard, runs a 20-second `live/` creature, confirms the same seed gives the same run, and re-runs the reference sim to confirm it reproduces `results/summary.csv` byte for byte. CI runs it on every push.
+- `npm run test:full` also runs the 90-second dome/HEPTARCH probe. `npm run rigor` runs the full statistical suite, which is slow (it takes hours on a laptop CPU).
+- The 2026-11-24 hardening audit is in [`AUDIT/`](AUDIT/): [`INDEX.md`](AUDIT/INDEX.md) (table of contents of every file), [`PASSES.md`](AUDIT/PASSES.md) (what was checked) and [`FINDINGS.md`](AUDIT/FINDINGS.md) (what was found, fixed or left open).
+- There is no `LICENSE` file yet, so all rights are reserved by default. Vendored libraries keep their own licences (`live/vendor/three/LICENSE` MIT, `live/vendor/p5/LICENSE` LGPL-2.1, `live/js/tsotchke/LICENSE-eshkol`).
 
 ## Run the reference sim locally
 
 ```bash
 bun run glitchling.ts 2 2     # days=2, seeds=2 -> results/results.json, results/summary.csv
-python plot.py                # -> results/glitchling.png, results/cursed_portrait.png
+python3 plot.py               # -> results/glitchling.png, results/cursed_portrait.png (needs matplotlib)
 ```
 
 ## Layout
@@ -43,6 +55,6 @@ python plot.py                # -> results/glitchling.png, results/cursed_portra
 | `site/` | One-day jam showcase page |
 | `brain-viz/` | Real activation playback viewer |
 | `glitchling.ts`, `core/` | TypeScript reference sim |
-| `results/`, `results_v1/` | Sim outputs |
+| `results/` | Sim outputs (Results v2; the v1 run in `results_v1/` was never published here, and the v1 flaw settings are re-run as `all_mild`) |
 | `art/`, `artifacts/`, `research/` | Art, renders, research notes and reference images |
 | `NOTES.md`, `BLUEPRINT.md`, `BRAINS.md`, `WRITEUP.md` | Jam notes and design docs |
