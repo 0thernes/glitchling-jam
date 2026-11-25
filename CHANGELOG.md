@@ -22,4 +22,6 @@ Findings are in [`AUDIT/FINDINGS.md`](AUDIT/FINDINGS.md) and the method is in [`
 - **brain-viz/, F12 and F26:** viewport, `lang`, description, canvas label, and a title that no longer says "SIMULATED" while it plays real data.
 - **Accessibility, F13 and F14:** labels for the 3 flaw-parameter inputs and the 8 panel canvases on `/live/`.
 - **Docs, F09, F10 and F27:** removed references to an unpublished `results_v1/`, replaced a private box path in the public run instructions, and corrected stale 14-qubit comments.
+- **Attribution, F06:** `research/img/SOURCES.md` now credits the author of each of the 17 Commons images. All licences were re-checked against Commons.
+- **Verification records:** CI is green (9/9). The rigor suite T1–T13 passes on re-run. `nav_probe` arrival counts reproduce, but its times do not (F28). No NaN in 4 × 120-s runs. The 8 owner decisions are listed in `AUDIT/FINDINGS.md` (D1–D8).
 - **Probe, F17:** `live/test/symmetry_probe.mjs` defaults to `wave` instead of printing `undefined`.
