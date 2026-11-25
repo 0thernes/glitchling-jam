@@ -1,6 +1,6 @@
 # AUDIT/INDEX.md: table of contents of every tracked file
 
-Generated from `git ls-tree -r -l HEAD` by `AUDIT/tools/index.py`. 280 tracked files, 182.4 MB.
+Generated from `git ls-tree -r -l HEAD` by `AUDIT/tools/index.py`. 281 tracked files, 182.7 MB.
 
 Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirect** = imported (transitively) by a directly covered module; **page** = exercised by the headless page check (`AUDIT/tools/pages_check.mjs`); **none** = no automated check.
 
@@ -24,7 +24,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 - [results](#results) (5 files)
 - [site](#site) (15 files)
 - [synthetic](#synthetic) (2 files)
-- [tools](#tools) (1 files)
+- [tools](#tools) (2 files)
 
 ## .github
 
@@ -40,29 +40,29 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `.nojekyll` | 0 | - |  | n/a (data/asset/doc) |
 | `BLUEPRINT.md` | 50,318 | Markdown | Glitchling v2 — BLUEPRINT | n/a (data/asset/doc) |
 | `BRAINS.md` | 41,386 | Markdown | BRAINS.md: a shared brain-design compendium for CQM, A-Life Creature #1 and Glitchling | n/a (data/asset/doc) |
-| `CHANGELOG.md` | 2,892 | Markdown | Changelog (repository level) | n/a (data/asset/doc) |
-| `CONTRIBUTING.md` | 2,142 | Markdown | Contributing to glitchling-jam | n/a (data/asset/doc) |
+| `CHANGELOG.md` | 5,161 | Markdown | Changelog (repository level) | n/a (data/asset/doc) |
+| `CONTRIBUTING.md` | 2,143 | Markdown | Contributing to glitchling-jam | n/a (data/asset/doc) |
 | `GLITCHLING_MASTER_COMPENDIUM.md` | 16,595 | Markdown | GLITCHLING MASTER COMPENDIUM — Complete 29-PDF Synthesis (`1,932` Pages) for Glitchling, Creatures/Entities/Be | n/a (data/asset/doc) |
 | `HANDOFF_GEMINI_ARGON_ANTIGRAVITY.md` | 79,151 | Markdown | Glitchling handoff: Grok Bot → Gemini Argon 4 (Antigravity) | n/a (data/asset/doc) |
-| `HANDOFF_QUICKSTART.md` | 5,450 | Markdown | Glitchling: handoff QUICKSTART (for Gemini Argon 4 in Antigravity) | n/a (data/asset/doc) |
+| `HANDOFF_QUICKSTART.md` | 5,846 | Markdown | Glitchling: handoff QUICKSTART (for Gemini Argon 4 in Antigravity) | n/a (data/asset/doc) |
 | `LICENSE` | 3,363 | - |  | n/a (data/asset/doc) |
 | `NOTES.md` | 27,006 | Markdown | Glitchling: one-day jam coordination doc | n/a (data/asset/doc) |
-| `README.md` | 9,228 | Markdown | Glitchling | n/a (data/asset/doc) |
-| `SCIENTIFIC_DEFENSE_DOSSIER.md` | 25,343 | Markdown | Glitchling v2 · Scientific Defense Dossier (Pass 22) | n/a (data/asset/doc) |
+| `README.md` | 9,709 | Markdown | Glitchling | n/a (data/asset/doc) |
+| `SCIENTIFIC_DEFENSE_DOSSIER.md` | 25,364 | Markdown | Glitchling v2 · Scientific Defense Dossier (Pass 22) | n/a (data/asset/doc) |
 | `SECURITY.md` | 829 | Markdown | Security policy | n/a (data/asset/doc) |
-| `WRITEUP.md` | 992 | Markdown | Glitchling | n/a (data/asset/doc) |
-| `glitchling.ts` | 8,216 | TypeScript (Bun) | Glitchling: a deliberately broken baby clone of Creature #1 (copied core in ./core, unmodified except import p | none |
-| `index.html` | 5,311 | HTML | Page: Glitchling | page |
-| `package.json` | 507 | JSON |  | n/a (data/asset/doc) |
+| `WRITEUP.md` | 1,323 | Markdown | Glitchling | n/a (data/asset/doc) |
+| `glitchling.ts` | 8,475 | TypeScript (Bun) | Glitchling: a deliberately broken baby clone of Creature #1 (copied core in ./core, unmodified except import p | none |
+| `index.html` | 5,387 | HTML | Page: Glitchling | page |
+| `package.json` | 509 | JSON |  | n/a (data/asset/doc) |
 | `plot.py` | 2,108 | Python 3 | cursed portrait: neuron activations of the all-flaws episode folded into a face-ish heatmap, with channel-shif | none |
 
 ## AUDIT
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `AUDIT/FINDINGS.md` | 15,305 | Markdown | AUDIT/FINDINGS.md | n/a (data/asset/doc) |
-| `AUDIT/INDEX.md` | 42,944 | Markdown | AUDIT/INDEX.md: table of contents of every tracked file | n/a (data/asset/doc) |
-| `AUDIT/PASSES.md` | 10,222 | Markdown | AUDIT/PASSES.md: hardening passes, 2026-11-24 | n/a (data/asset/doc) |
+| `AUDIT/FINDINGS.md` | 17,526 | Markdown | AUDIT/FINDINGS.md | n/a (data/asset/doc) |
+| `AUDIT/INDEX.md` | 40,197 | Markdown | AUDIT/INDEX.md: table of contents of every tracked file | n/a (data/asset/doc) |
+| `AUDIT/PASSES.md` | 11,982 | Markdown | AUDIT/PASSES.md: hardening passes, 2026-11-24 | n/a (data/asset/doc) |
 | `AUDIT/tools/index.py` | 3,818 | Python 3 | coverage: which test files import which module | none |
 | `AUDIT/tools/pages_check.mjs` | 1,960 | JavaScript (ESM, Node) | Headless page check used by the audit: loads every page at phone (390x844) and desktop (1280x800) sizes and re | none |
 
@@ -211,7 +211,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `docs/01_NESTOR_HEPTARCH_WISHLIST_OMNIHARNESS.md` | 17,534 | Markdown | Volume 1 — NESTOR v0.1, Future Wishlist v0.2, Embodied Omni-Harness & HEPTARCH v0.2 | n/a (data/asset/doc) |
+| `docs/01_NESTOR_HEPTARCH_WISHLIST_OMNIHARNESS.md` | 17,557 | Markdown | Volume 1 — NESTOR v0.1, Future Wishlist v0.2, Embodied Omni-Harness & HEPTARCH v0.2 | n/a (data/asset/doc) |
 | `docs/02_FRONTIER_LINEAGE25_SUBSTRATES_GLITCHES.md` | 13,672 | Markdown | Volume 2 — 2026 Frontier Sweep, 25-Species Lineage Ledger, Post-Quantum Substrates & Reality-Glitch Dome Laws | n/a (data/asset/doc) |
 | `docs/03_ALIFE_V3_BLUEPRINT_CREATURE1_100PASSES.md` | 13,963 | Markdown | Volume 3 — Clean-Slate A-Life v3.0, Creature Blueprint & Asmodensius 100-Pass Dossier | n/a (data/asset/doc) |
 | `docs/04_QUANTUM_2050_HYPERION_CONTEXTUALITY_KS.md` | 13,677 | Markdown | Volume 4 — Quantum 2050, HYPERION-OMEGA, Quantum Biology & Kochen–Specker / Hoggar Contextuality | n/a (data/asset/doc) |
@@ -221,9 +221,9 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `live/CHANGELOG.md` | 121,737 | Markdown | Glitchling v2 · live — change log | n/a (data/asset/doc) |
-| `live/README.md` | 29,446 | Markdown | Glitchling v2 · live | n/a (data/asset/doc) |
-| `live/index.html` | 18,326 | HTML | Page: Glitchling v2 · Live 3D A-Life Bio-Observatory | page |
+| `live/CHANGELOG.md` | 123,900 | Markdown | Glitchling v2 · live — change log | n/a (data/asset/doc) |
+| `live/README.md` | 30,061 | Markdown | Glitchling v2 · live | n/a (data/asset/doc) |
+| `live/index.html` | 18,380 | HTML | Page: Glitchling v2 · Live 3D A-Life Bio-Observatory | page |
 | `live/package.json` | 33 | JSON |  | n/a (data/asset/doc) |
 | `live/style.css` | 13,710 | CSS |  | n/a (data/asset/doc) |
 
@@ -231,9 +231,9 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `live/js/app.js` | 59,332 | JavaScript (ESM) | ---------------------------------------------------------------- O(1) region lookup & overflow-safe raster buc | page |
+| `live/js/app.js` | 59,450 | JavaScript (ESM) | ---------------------------------------------------------------- O(1) region lookup & overflow-safe raster buc | page |
 | `live/js/audio.js` | 9,108 | JavaScript (ESM) | Procedural WebAudio Bio-Acoustic Syrinx & Biosphere Soundscape (pass 17) | page |
-| `live/js/honesty.js` | 20,251 | JavaScript (ESM) | The real-vs-simplified lists shown on the page and in the README. Keep these accurate when the code changes. | page |
+| `live/js/honesty.js` | 20,315 | JavaScript (ESM) | The real-vs-simplified lists shown on the page and in the README. Keep these accurate when the code changes. | page |
 | `live/js/lineage.js` | 16,057 | JavaScript (ESM) | In-page 128-gene Zygote-Cleavage + Gastrulation + Hox-GRN Evo-Devo body + brain co-evolution (upgraded in pass | page |
 | `live/js/p5_layer.js` | 28,465 | JavaScript (ESM) | p5.js Procedural Living Biomaterial Textures & Interactive A-Life Telemetry Studio (pass 18) | page |
 | `live/js/render.js` | 151,605 | JavaScript (ESM) | Next-Gen Three.js + p5.js HDR16F / PMREM Sky IBL / 4K UHD Bio-Observatory Renderer (Pass 19) | page |
@@ -241,24 +241,24 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `live/js/sim/brain.js` | 83,554 | JavaScript (ESM) | Spiking substrate (pass 19: 16-compartment branched dendritic cable arbours + exact discrete integer Gillespie | indirect |
 | `live/js/sim/brain_worker.js` | 6,518 | JavaScript (ESM) | Off-main-thread Web Worker host for the spiking Brain (S / M / L / XL / XXL / MEGA / GIGA up to 14,156,048 neu | page |
 | `live/js/sim/cpg.js` | 3,040 | JavaScript (ESM) | Central pattern generator built from liquid time-constant (LTC) neurons (Hasani et al. 2021), integrated with  | indirect |
-| `live/js/sim/creature.js` | 85,986 | JavaScript (ESM) | Glitchling v2 "live" (pass 19 architecture): | direct (babble_probe.mjs, brain_probe.mjs, climb_probe.mjs, dome_hep) |
+| `live/js/sim/creature.js` | 86,019 | JavaScript (ESM) | Glitchling v2 "live" (pass 19 architecture): | direct (babble_probe.mjs, brain_probe.mjs, climb_probe.mjs, dome_hep) |
 | `live/js/sim/ecosystem.js` | 72,748 | JavaScript (ESM) | Open-Ended Multi-Agent & Multi-Species A-Life Biosphere (pass 19): | direct (lesion_experiments.mjs) |
 | `live/js/sim/fitness.js` | 6,695 | JavaScript (ESM) | Full motor + synergy + steering genome fitness, shared by offline CMA-ES (test/evolve_genome.mjs) and in-page  | direct (genome_eval.mjs) |
 | `live/js/sim/fluid.js` | 40,107 | JavaScript (ESM) | Coupled 1D Murray's-Law Branching Navier-Stokes Vascular Tree (36 nodes / 64 vessels) | indirect |
 | `live/js/sim/genome.js` | 28,736 | JavaScript (ESM) | Full developmental genome (pass 12 -> pass 15 unified innate-to-plastic connectome). | direct (evolve_genome.mjs, evolve_steer.mjs, genome_eval.mjs) |
 | `live/js/sim/heptarch.js` | 48,664 | JavaScript (ESM) | NESTOR v0.1 + HEPTARCH v0.2 Composite Sub-Brain Council, Raider 6-Phase Cold-Strike Automaton, | direct (dome_heptarch_probe.mjs, lesion_experiments.mjs) |
 | `live/js/sim/lineage_worker.js` | 544 | JavaScript (ESM) | Web Worker for the in-page lineage evolution: scores a full 108-gene Hox Evo-Devo genome on paired Common-Rand | page |
-| `live/js/sim/memory.js` | 65,388 | JavaScript (ESM) | Memory systems (pass 19 histological 32,768-neuron 14-population hippocampal-subicular loop + 6 GABAergic clas | direct (memory2_probe.mjs, memory_probe.mjs, lesion_experiments.mjs) |
+| `live/js/sim/memory.js` | 65,388 | JavaScript (ESM) | Memory systems (pass 19 histological 32,768-neuron 14-population hippocampal-subicular loop + 6 GABAergic clas | direct (lesion_experiments.mjs, memory2_probe.mjs, memory_probe.mjs) |
 | `live/js/sim/metab.js` | 7,131 | JavaScript (ESM) | Metabolism, hormones, fluids and waste. One tick = one simulated minute. The pool structure and most rate laws | indirect |
 | `live/js/sim/metacog.js` | 23,046 | JavaScript (ESM) | Metacognition, Exact Taylor-Jet Frenet-Serret Thought Curvature & Torsion, and Weight-Space Geometry. | indirect |
 | `live/js/sim/mind.js` | 79,716 | JavaScript (ESM) | Learning & Symbolic-Neural Planning machinery beside the spiking substrate (upgraded in pass 19): | indirect |
 | `live/js/sim/nav.js` | 6,025 | JavaScript (ESM) | Navigation circuit (pass 13): head-direction ring attractor + path integration with grid-like phase codes. | indirect |
 | `live/js/sim/skin.js` | 4,461 | JavaScript (ESM) | Chromatophore skin: a 64 x 32 sheet of cells (u = along the body, v = around it) updated as an excitable mediu | direct (turing_probe.mjs) |
-| `live/js/sim/starter_genome.js` | 3,473 | JavaScript (ESM) | Shipped full 78-gene developmental starter genome (58 motor/CPG/turning/righting/synergy/gaze + 20 sense->MOT  | direct (evolve_genome.mjs, evolve_steer.mjs, genome_eval.mjs, nobel_) |
-| `live/js/sim/util.js` | 2,132 | JavaScript (ESM) | Small math helpers shared by the simulation (DOM-free so Node tests can import it). | direct (memory2_probe.mjs, memory_probe.mjs, lesion_experiments.mjs) |
+| `live/js/sim/starter_genome.js` | 3,473 | JavaScript (ESM) | Shipped full 78-gene developmental starter genome (58 motor/CPG/turning/righting/synergy/gaze + 20 sense->MOT  | direct (evolve_genome.mjs, evolve_steer.mjs, genome_eval.mjs, lesion) |
+| `live/js/sim/util.js` | 2,132 | JavaScript (ESM) | Small math helpers shared by the simulation (DOM-free so Node tests can import it). | direct (lesion_experiments.mjs, memory2_probe.mjs, memory_probe.mjs) |
 | `live/js/sim/vision.js` | 54,409 | JavaScript (ESM) | Primate-Acuity Log-Polar Foveated Binocular Visual Hierarchy (Dual 256x128 Retinas = 65,536 Photoreceptors / 1 | indirect |
 | `live/js/sim/webgpu_brain.js` | 9,942 | JavaScript (ESM) | WebGPU WGSL compute shader accelerator for large spiking sheets (L / XL / XXL / MEGA up to 1,048,576 neurons & | page |
-| `live/js/sim/world.js` | 64,548 | JavaScript (ESM) | The 3D A-Life Biosphere & Abiotic World (upgraded in pass 18): | direct (gait_probe.mjs, memory_probe.mjs, lesion_experiments.mjs, phy) |
+| `live/js/sim/world.js` | 64,937 | JavaScript (ESM) | The 3D A-Life Biosphere & Abiotic World (upgraded in pass 18): | direct (gait_probe.mjs, lesion_experiments.mjs, memory_probe.mjs, ph) |
 | `live/js/tsotchke/LICENSE-eshkol` | 1,065 | - |  | n/a (data/asset/doc) |
 | `live/js/tsotchke/moonlab.js` | 23,979 | JavaScript (ESM) | Moonlab Tensor-Network, 32-Qubit (chi = 32) Vidal Canonical MPS Simulator, 5-Layer (512-D) Binary MERA & Jacob | direct (dome_heptarch_probe.mjs, lesion_experiments.mjs) |
 | `live/js/tsotchke/qgtl.js` | 28,032 | JavaScript (ESM) | Quantum Geometric Tensor Library (QGTL) — JavaScript port of core metric/fidelity primitives from | direct (dome_heptarch_probe.mjs, lesion_experiments.mjs) |
@@ -285,13 +285,13 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `live/test/genome_eval.mjs` | 750 | JavaScript (ESM, Node) | Fitness of a motor genome (used by evolve_genome.mjs; also runnable alone: node test/genome_eval.mjs hand/star | is a test/probe |
 | `live/test/growth_probe.mjs` | 1,329 | JavaScript (ESM, Node) | Morphological growth probe: 8 simulated minutes; final limb lengths vs each limb's use, and girth under clampe | is a test/probe |
 | `live/test/headless_run.mjs` | 995 | JavaScript (ESM, Node) |  | is a test/probe |
+| `live/test/lesion_experiments.mjs` | 52,455 | JavaScript (ESM, Node) | Pass 21 Lesion-Experiment Suite (statistical tests of designed lesion / surrogate contrasts) (`lesion_experime | is a test/probe |
 | `live/test/lineage_check.mjs` | 2,232 | JavaScript (ESM, Node) | Headless check of the in-page lineage evolution: opens the lab tab, runs the evolution, waits for generations, | is a test/probe |
 | `live/test/measure.mjs` | 1,306 | JavaScript (ESM, Node) | Pass metrics: per seed, 90 simulated seconds per condition. distance = path length of the body centre; fed = s | is a test/probe |
 | `live/test/memory2_probe.mjs` | 4,154 | JavaScript (ESM, Node) | Pass 11 memory probe: learned/grown memories vs the pass-3 fixed ones. | is a test/probe |
 | `live/test/memory_probe.mjs` | 3,391 | JavaScript (ESM, Node) | Pass 3 memory probes. (a) HDC food map: store noisy outcomes at the 16 plants, check recall vs true reward pro | is a test/probe |
 | `live/test/nav_eval.mjs` | 1,769 | JavaScript (ESM, Node) | Navigation fitness of a full genome (used by evolve_steer.mjs). Per seed: a near goal (4-8 units) and a far go | is a test/probe |
 | `live/test/nav_probe.mjs` | 2,254 | JavaScript (ESM, Node) | Pass 13 navigation probe. Per seed: one NEAR goal (a feeding site 4-8 units from the head) and one FAR goal (> | is a test/probe |
-| `live/test/lesion_experiments.mjs` | 52,335 | JavaScript (ESM, Node) | Pass 21 Hostile-Scrutiny Scientific Falsification & Statistical Rigor Suite (`lesion_experiments.mjs`) | is a test/probe |
 | `live/test/pc_probe.mjs` | 1,227 | JavaScript (ESM, Node) | Predictive-coding probe: mean squared body-sense prediction error in the first vs last 30 s of a 180 s run, le | is a test/probe |
 | `live/test/physics_probe.mjs` | 1,102 | JavaScript (ESM, Node) | physics sanity: does a lateral travelling wave (hand-written, TEST ONLY - never used by the creature) propel t | is a test/probe |
 | `live/test/righting_probe.mjs` | 1,620 | JavaScript (ESM, Node) | Flip the body onto its back (rotate all particles 180 deg about the body's long axis) and measure the time unt | is a test/probe |
@@ -328,7 +328,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
 | `play/app.js` | 25,236 | JavaScript (ESM) | Glitchling play UI. Model lives in sim.js (window.GL). No dependencies, no network. */ | page |
-| `play/index.html` | 9,687 | HTML | Page: Play Glitchling: live browser sim | page |
+| `play/index.html` | 9,689 | HTML | Page: Play Glitchling: live browser sim | page |
 | `play/sim.js` | 16,862 | JavaScript (ESM) | Glitchling browser port (SIMPLIFIED). Not the TypeScript reference (glitchling.ts + core/organism.ts). | page |
 | `play/style.css` | 7,677 | CSS |  | n/a (data/asset/doc) |
 
@@ -364,15 +364,15 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 |---|---:|---|---|---|
 | `results/activations_allflaws_seed1.json` | 309,217 | JSON |  | n/a (data/asset/doc) |
 | `results/cursed_portrait.png` | 34,085 | PNG image |  | n/a (data/asset/doc) |
-| `results/glitchling.png` | 149,767 | PNG image |  | n/a (data/asset/doc) |
-| `results/results.json` | 25,929 | JSON |  | n/a (data/asset/doc) |
-| `results/summary.csv` | 1,116 | CSV |  | n/a (data/asset/doc) |
+| `results/glitchling.png` | 133,141 | PNG image |  | n/a (data/asset/doc) |
+| `results/results.json` | 384,602 | JSON |  | n/a (data/asset/doc) |
+| `results/summary.csv` | 14,950 | CSV |  | n/a (data/asset/doc) |
 
 ## site
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `site/index.html` | 21,684 | HTML | Page: Glitchling: one-day art jam showcase | page |
+| `site/index.html` | 23,539 | HTML | Page: Glitchling: one-day art jam showcase | page |
 | `site/live-demo-art.png` | 390,136 | PNG image |  | n/a (data/asset/doc) |
 | `site/live-demo-brain.png` | 153,399 | PNG image |  | n/a (data/asset/doc) |
 | `site/live-demo-clip.png` | 685,845 | PNG image |  | n/a (data/asset/doc) |
@@ -399,4 +399,5 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `tools/check.mjs` | 9,336 | JavaScript (ESM, Node) | Repository health check, run by `npm test` and by CI (.github/workflows/ci.yml). | none |
+| `tools/check.mjs` | 9,826 | JavaScript (ESM, Node) | Repository health check, run by `npm test` and by CI (.github/workflows/ci.yml). | none |
+| `tools/results_stats.mjs` | 5,542 | JavaScript (ESM, Node) | Summary statistics for results/summary.csv (audit F31/D9). No dependencies. | none |
