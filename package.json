@@ -1,0 +1,15 @@
+{
+  "name": "glitchling-jam",
+  "private": true,
+  "description": "Glitchling: a deliberately broken baby clone of A-Life Creature #1 (static site + Node/Bun sims). No build step.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node tools/check.mjs",
+    "test:full": "FULL=1 node tools/check.mjs",
+    "serve": "python3 -m http.server 8000",
+    "sim": "bun run glitchling.ts 2 2",
+    "rigor": "cd live && node test/nobel_rigor_suite.mjs"
+  }
+}
