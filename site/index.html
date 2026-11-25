@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Glitchling: one-day art jam showcase</title><link rel="stylesheet" href="style.css"></head>
+<title>Glitchling: one-day art jam showcase</title><meta name="description" content="Glitchling one-day art jam showcase: a deliberately broken baby clone of A-Life Creature #1, with results from the TypeScript reference sim (n = 2 seeds, a toy, not a finding)."><link rel="stylesheet" href="style.css"></head>
 <body><a class="skip" href="#main">Skip to content</a>
 <header><h1>Glitchling</h1><p>A one-day jam (Sun Nov 1, 2026): a deliberately broken baby clone of Creature #1.</p>
 <p><a class="badge" href="../play/">▶ Play the live browser sim</a> <span class="note">(simplified JS port, not the TypeScript run)</span></p></header>
@@ -30,13 +30,13 @@
 <p><em>“A deliberately broken baby clone of Creature #1. Four engineered flaws: scrambled senses, leaky memory, backwards motors, misfiring mutations. 2 sim-days, 2 seeds per condition.”</em> <strong>It's broken, it's hungry, and it's still alive.</strong></p>
 <p class="note">Merged from the sim's own results page, <a href="../index.html">index.html</a> (the original is still there). Its two images are the same as the ones below, so they appear only once. Its table had the v1 numbers and has been replaced by Results v2.</p>
 <h3>Run it</h3>
-<pre><code>cd /workspace/glitchling-jam
+<pre><code>git clone https://github.com/0thernes/glitchling-jam &amp;&amp; cd glitchling-jam
 nice -n 19 bun run glitchling.ts 2 2      # days=2, seeds=2 → results/results.json, results/summary.csv, results/activations_allflaws_seed1.json
-.venv/bin/python plot.py                  # → results/glitchling.png, results/cursed_portrait.png</code></pre>
+python3 plot.py                           #  (needs matplotlib) → results/glitchling.png, results/cursed_portrait.png</code></pre>
 <h3>Results v2 (2 sim-days, seeds 1–2, means)</h3>
 <aside class="soon" role="note" aria-labelledby="bvb"><h4 id="bvb" style="margin:.2rem 0">Build vs brief: aligned</h4>
 <p>The build's flaw defaults now match the brief (v2): senses rewired every 90 ticks, a 6% per tick leak, all 8 MOT motors reversed plus an action mirror, and a misfire every 60 ticks. The v1 “mild” build appears in the table as <em>all_mild</em> for comparison.</p></aside>
-<div class="tbl"><table> <caption class="note">Results v2. n=2, so this is a toy, not a finding. The broken bestSiteFrac columns (always 0) are left out. v1 data is kept in <code>results_v1/</code>.</caption>
+<div class="tbl"><table> <caption class="note">Results v2. n=2, so this is a toy, not a finding. The broken bestSiteFrac columns (always 0) are left out. v1 raw data (<code>results_v1/</code>) was not published to this repo; the v1 build is reproduced in the table as <em>all_mild</em>.</caption>
 <thead><tr><th scope="col">condition</th><th scope="col">forages</th><th scope="col">rewards</th><th scope="col">success</th><th scope="col">mean glc</th><th scope="col">fat end</th><th scope="col">survived</th><th scope="col">success 1st→2nd half (s1, s2)</th></tr></thead>
 <tbody>
 <tr><td>baseline</td><td>174.5</td><td>63.0</td><td>0.350</td><td>3.73</td><td>364.7</td><td>2/2</td><td>.37→.51, .27→.28</td></tr>

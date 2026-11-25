@@ -17,3 +17,4 @@ video{max-width:100%;height:auto;display:block;border-radius:6px;background:#111
 .media{display:grid;gap:1rem;margin:1rem 0}
 .synth{display:inline-block;background:#b91c1c;color:#fff;border-radius:4px;padding:0 .4rem;font-size:.8rem;font-weight:700;letter-spacing:.04em}
 .real{display:inline-block;background:#166534;color:#fff;border-radius:4px;padding:0 .4rem;font-size:.8rem;font-weight:700}
+section,p,li,figcaption,caption,blockquote{overflow-wrap:anywhere}

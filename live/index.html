@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark"><meta name="theme-color" content="#05070f">
 <title>Glitchling v2 · Live 3D A-Life Bio-Observatory</title>
-<meta name="description" content="Glitchling v2: an open-ended 3D soft-bodied A-Life biosphere with 16-compartment discrete Markov spiking neurons (up to 14.16M neurons &amp; 1.13B synapses in GIGA), 32,768-neuron hippocampal-subicular circuit + Successor Representation, 256x128 / 196k-RGC fovea &amp; 65,536 grounded semantic ontology concepts, 29.06M-param Omega 32x16 Flow-VAE + 300s symbolic HTN-MCTS planner, 128-gene Zygote blastula &amp; 5-clade (0L/4L/6L/8L/10L + Patagium + Angler Esca) Evo-Devo, 64-vessel Murray vascular tree + 1,024 RBC/WBC + 256 micro-fauna + 8.4M microbes, and 16Q WASM / 18Q WebGPU + Transmon DRAG/PEC/ZNE + 32Q MPS + 512-D MERA.">
+<meta name="description" content="Glitchling v2: an open-ended 3D soft-bodied A-Life biosphere with 16-compartment discrete Markov spiking neurons (up to 14.16M neurons in GIGA; synapse totals at MEGA/GIGA are nominal), 32,768-neuron hippocampal-subicular circuit + Successor Representation, 256x128 / 196k-RGC fovea &amp; 65,536 grounded semantic ontology concepts, 29.06M-param Omega 32x16 Flow-VAE + 300s symbolic HTN-MCTS planner, 128-gene Zygote blastula &amp; 5-clade (0L/4L/6L/8L/10L + Patagium + Angler Esca) Evo-Devo, 64-vessel Murray vascular tree + 1,024 RBC/WBC + 256 micro-fauna + 8.4M microbes, and 16Q WASM / 18Q WebGPU + Transmon DRAG/PEC/ZNE + 32Q MPS + 512-D MERA.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%2338e8ff'/%3E%3Ccircle cx='5.8' cy='6.8' r='1.5' fill='%2305070f'/%3E%3Ccircle cx='10.4' cy='6.2' r='1.2' fill='%2305070f'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 <script src="vendor/p5/p5.min.js"></script>
@@ -37,15 +37,15 @@
   </div>
   <section data-pane="brain">
     <div class="row"><b>Spikes</b> <small id="spk-label">3,268 16-comp Discrete-Markov neurons, rows by region</small></div>
-    <canvas id="raster" width="360" height="213"></canvas>
+    <canvas id="raster" role="img" aria-label="Spike raster of the brain by region" width="360" height="213"></canvas>
     <div id="regions" class="legend"></div>
     <div class="grid2"><div><b>Neuromodulators</b><div id="nm"></div></div><div><b>MOT (8)</b><div id="mot"></div></div></div>
-    <div class="row"><b>256×128 Fovea &amp; 65,536 Ontology IT</b> <small>196k RGC · V1→V2→V4→65k DAG lexemes · SLAM</small></div><canvas id="retina" width="360" height="58"></canvas>
-    <div class="row"><b>Striatal race (21)</b> <small>16 sites · 3 pools · snack · explore/bask (D1 / D2)</small></div><canvas id="race" width="360" height="70"></canvas>
-    <div class="row"><b>LTC pattern generator</b> <small>24 liquid neurons + 5-clade Zygote/Hox phase</small></div><canvas id="cpg" width="360" height="60"></canvas>
-    <div class="row"><b>Selective SSM (RTRL)</b> <small>32 modes |h|, Δ (online diagonal RTRL)</small></div><canvas id="ssm" width="360" height="40"></canvas>
-    <div class="row"><b>32×16 Flow-VAE + +300s HTN WM</b> <small>+0.1s / +2s BPTT / +60s / +300s HTN-MCTS + 32×16 Flow</small></div><canvas id="wm" width="360" height="50"></canvas>
-    <div class="row"><b>Thought curvature, 32Q MPS &amp; MERA</b> <small>Eshkol κ(t), τ(t), 32Q χ=32 MPS &amp; 512-D MERA</small></div><canvas id="metacog" width="360" height="44"></canvas>
+    <div class="row"><b>256×128 Fovea &amp; 65,536 Ontology IT</b> <small>196k RGC · V1→V2→V4→65k DAG lexemes · SLAM</small></div><canvas id="retina" role="img" aria-label="Retina and visual pathway activity" width="360" height="58"></canvas>
+    <div class="row"><b>Striatal race (21)</b> <small>16 sites · 3 pools · snack · explore/bask (D1 / D2)</small></div><canvas id="race" role="img" aria-label="Striatal action-selection race" width="360" height="70"></canvas>
+    <div class="row"><b>LTC pattern generator</b> <small>24 liquid neurons + 5-clade Zygote/Hox phase</small></div><canvas id="cpg" role="img" aria-label="LTC pattern-generator activity" width="360" height="60"></canvas>
+    <div class="row"><b>Selective SSM (RTRL)</b> <small>32 modes |h|, Δ (online diagonal RTRL)</small></div><canvas id="ssm" role="img" aria-label="Selective state-space model mode magnitudes" width="360" height="40"></canvas>
+    <div class="row"><b>32×16 Flow-VAE + +300s HTN WM</b> <small>+0.1s / +2s BPTT / +60s / +300s HTN-MCTS + 32×16 Flow</small></div><canvas id="wm" role="img" aria-label="World-model prediction panel" width="360" height="50"></canvas>
+    <div class="row"><b>Thought curvature, 32Q MPS &amp; MERA</b> <small>Eshkol κ(t), τ(t), 32Q χ=32 MPS &amp; 512-D MERA</small></div><canvas id="metacog" role="img" aria-label="Thought-curvature and metacognition traces" width="360" height="44"></canvas>
     <div id="mindstats" class="stats"></div>
   </section>
   <section data-pane="dome" hidden>
@@ -59,7 +59,7 @@
     </div>
     <div id="domestats" class="stats"></div>
   </section>
-  <section data-pane="body" hidden><div id="bodystats" class="stats"></div><canvas id="meta" width="360" height="90"></canvas></section>
+  <section data-pane="body" hidden><div id="bodystats" class="stats"></div><canvas id="meta" role="img" aria-label="Body and metabolism time series" width="360" height="90"></canvas></section>
   <section data-pane="eco" hidden>
     <p class="small">Open-ended multi-trophic A-Life biosphere: up to <b>48 embodied conspecific Glitchlings</b> radiate across <b>5 heritable clades (0L Serpent, 4L Tetrapod, 6L Hexapod, 8L Octopod, 10L Decapod + Patagium wings + Angler Esca)</b> via <b>128-gene Zygote cleavage &amp; gastrulation</b>, undergo sympatric speciation, incubate 3D eggs, couple to <b>256 discrete 3D micro-fauna</b> + a <b>&gt;8.4M saprotrophic soil microbe &amp; phytoplankton continuum</b> + <code>32×32</code> mycelia, and evade the patrolling Shadow-Leviathan.</p>
     <div class="clade-wrap">
@@ -85,10 +85,10 @@
   </section>
   <section data-pane="flaws" hidden>
     <p class="small">The four engineered flaws act on the neural pathways, as in the reference <code>glitchling.ts</code>.</p>
-    <label class="sw"><input type="checkbox" id="f-scramble"> <b>Scramble</b> senses: SENS neurons re-permuted every <input id="f-scramble-p" type="number" min="5" max="600" value="90"> min + noise</label>
-    <label class="sw"><input type="checkbox" id="f-leaky"> <b>Leaky</b> memory: values and plastic synapses decay <input id="f-leaky-r" type="number" min="0" max="0.5" step="0.01" value="0.06"> per min</label>
+    <label class="sw"><input type="checkbox" id="f-scramble"> <b>Scramble</b> senses: SENS neurons re-permuted every <input id="f-scramble-p" type="number" aria-label="Scramble period in sim-minutes" min="5" max="600" value="90"> min + noise</label>
+    <label class="sw"><input type="checkbox" id="f-leaky"> <b>Leaky</b> memory: values and plastic synapses decay <input id="f-leaky-r" type="number" aria-label="Leak rate per sim-minute" min="0" max="0.5" step="0.01" value="0.06"> per min</label>
     <label class="sw"><input type="checkbox" id="f-backwards"> <b>Backwards</b> motors: 8 MOT neurons read in reverse; chosen site mirrored</label>
-    <label class="sw"><input type="checkbox" id="f-misfire"> <b>Misfire</b>: jolt 20 neurons + perturb synapses every <input id="f-misfire-p" type="number" min="5" max="600" value="60"> min</label>
+    <label class="sw"><input type="checkbox" id="f-misfire"> <b>Misfire</b>: jolt 20 neurons + perturb synapses every <input id="f-misfire-p" type="number" aria-label="Misfire period in sim-minutes" min="5" max="600" value="60"> min</label>
     <div class="btns"><button id="f-none">Healthy clone</button><button id="f-all">All flaws</button></div>
   </section>
   <section data-pane="world" hidden>
