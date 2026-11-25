@@ -159,7 +159,7 @@ Root: `/workspace/glitchling-jam/` (box) ≙ `Z:\[Vibe Coded (AI)]\CLAUDECODE\gl
 | `research/NEURO_FRONTIER.md` | 154 lines. 51 sourced findings from 2023–2026, each with a solidity tag; Top-10 surprising; 20 "missing ideas"; "Alex's finds"; and the "Worm and wiring batch". |
 | `research/IMAGE_DEEP_DIVE.md` | 482 lines. All **43 images** were viewed (26 of Alex's + 17 from Wikimedia), grouped into themes A–F, with a cross-image synthesis. Attributions for Alex's images are **UNVERIFIED**. |
 | `research/img/*.png/jpg` (17), `SOURCES.md`, `sources.tsv` | Wikimedia Commons images with licences. |
-| `research/img/alex/` (26 files) | Alex's own research screenshots (sources not identified): neuropeptide connectome, NSM serotonin, neuron position variability, MICrONS, dendrites, bioluminescent voltage sensor, ant e-antennae, audiovisual V1, TeA escape, chimeras, Hesx1, etc. |
+| `research/img/alex/` (26 files, **removed from the repo on 2026-11-24 because their sources and licences were never identified (audit F05)**) | Alex's own research screenshots (sources not identified): neuropeptide connectome, NSM serotonin, neuron position variability, MICrONS, dendrites, bioluminescent voltage sensor, ant e-antennae, audiovisual V1, TeA escape, chimeras, Hesx1, etc. |
 
 ### Showcase site
 | Path | What it is |
@@ -618,7 +618,7 @@ Corrections recorded there: sound mainly adds *gain*, and average tuning got sli
 - **Top 10 surprising:** kidney cells show the spacing effect; astrocytes hold multi-day memory traces; box jellyfish learn without a brain; stressed plants click ultrasonically; a one-parameter LIF on FlyWire predicts behaviour; gut flagellin is "sensed" by the brain; inner speech decodable (with a password); human cortex glia 2:1 with rare 50-synapse connections; glymphatic clearance disputed; Physarum memory is tube width.
 - **20 missing ideas** (not yet in BRAINS.md): see Appendix A.6.
 
-### 12.6 Alex's research images: `research/img/alex/` (26 files)
+### 12.6 Alex's research images: `research/img/alex/` (26 files, removed from the repo on 2026-11-24 because their sources and licences were never identified (audit F05); text notes below are kept)
 Alex collects these screenshots and often doesn't know what they show. He wants them interpreted and turned into Glitchling features. They are already turned into "Alex's finds" (NEURO_FRONTIER) and Gifts 1–16 (BLUEPRINT). **Sources are not identified**, and the attributions in IMAGE_DEEP_DIVE are **UNVERIFIED leads**. A good low-risk task is confirming the attributions with web search, without inventing anything.
 
 ---

@@ -1,13 +1,15 @@
 # IMAGE_DEEP_DIVE — every figure, read for Glitchling
 
 Written 2026-11-02 (PHT). I viewed all **43 images**: 26 in `img/alex/` and 17 in `img/` (see `img/SOURCES.md`).
+
+> **Note (2026-11-24):** the 26 `img/alex/` images were removed from the repo on 2026-11-24 because their sources and licences were never identified (audit F05). The notes below keep the observations and design ideas as text. The `alex/…` names are labels only and no longer link to files.
 **Source rule.** Wikimedia items cite their Commons page, and real paper links are reused only where they were already verified in `NEURO_FRONTIER.md`. For Alex's images I give the **likely** paper as an *unverified attribution* (author or lab, plus the journal if I remember it), with no link. Treat these as leads to confirm, not citations. "Unsure" means I could not place the figure.
 Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby). The flaws are **scramble**, **leak**, **backwards** and **misfire**. Anything "wireless" or magnetic is **SIMULATED** in-sim physics.
 
 ---
 ## Theme A — Chemical "wireless" & neuromodulation
 
-### A1 `alex/celegans_neuropeptide_connectome_overview.jpg`
+### A1 `alex/celegans_neuropeptide_connectome_overview.jpg` (image removed)
 - **Shows:** a graphical abstract. Top row: GPCR deorphanisation (51 GPCRs, 49 neuropeptide genes, 92 pairs), worm anatomy and scRNA-seq of 302 neurons. Middle: a dense network with nodes coloured by class (CAN, pharyngeal, motor, sensory, interneuron) and sized by connection count (up to about 400). Bottom: hub neurons (AVK, PVQ, RIG and others), with a plot of peptide degree against synaptic degree, three modules, autocrine loops (oxygen sensing, locomotion) and cascades (EGL-6, NLP-12, CKR-2, NPR-11, FLP-14, DMSR-5).
 - **Likely source:** Ripoll-Sánchez et al., *Neuron* 2023, "The neuropeptidergic connectome of C. elegans" (Schafer/Vértes labs). Unverified.
 - **Insight:** worms have a second, wireless network of peptide-receptor pairs layered over the wiring diagram. It is far denser than the synapse network, and its hubs are *not* the synaptic hubs.
@@ -17,7 +19,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - **peptide cascades:** peptide A excites the emitters of peptide B (`cascade[k]→k'`), and a misfire can trigger a cascade;
   - **autocrine loops:** `autoGain[n]`, where self-excitation makes a creature "stuck in a mood". Leak drains it.
 
-### A2 `alex/celegans_neuropeptide_cores.jpg`
+### A2 `alex/celegans_neuropeptide_cores.jpg` (image removed)
 - **Shows:**
   - (A) a t-SNE and (B) a PCA of neurons by peptide connectivity. Neurons fall into a **motor core**, a **hubs core**, a **sensory core** and the **periphery**, with markers for pharynx, sensory, inter and motor neurons.
   - (C) the sender × receiver matrix, with edge weight = number of linking peptide-receptor pairs (1–20).
@@ -31,7 +33,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - a **hub-lesion test:** removing the hub core should decouple sensory mood from motor mood (`corr(sensoryPep, motorPep)` drops);
   - under **scramble**, re-map receptors in the periphery only, so the cores stay stable and the edges glitch.
 
-### A3 `alex/neuropeptide_network_motifs.png`
+### A3 `alex/neuropeptide_network_motifs.png` (image removed)
 - **Shows:** four example peptide→GPCR networks. **Local** (CAPA-1→NMUR-1: one sender, many receivers), **Pervasive** (FLP-18→NPR-5: many↔many), **Broadcasting** (FLP-1→FRPR-7: one sender to about 50 receivers) and **Integrative** (FLP-9→EGL-6: many senders converge on a few receivers). A scatter splits the categories by #neurons expressing the peptide (y) against #expressing the receptor (x), with thresholds near 50. Panel B shows that one receptor (DMSR-1) takes part in local, pervasive and broadcasting motifs through different peptides.
 - **Likely source:** the Ripoll-Sánchez 2023 study (figure style matches). Unverified.
 - **Insight:** "wireless" isn't one thing. The emitter:receiver ratio sets whether a signal is a whisper, a shout or a vote.
@@ -41,7 +43,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - a misfire that mutates emitter counts can turn a local peptide into a broadcast one (a "rumour mutation");
   - the SIMULATED `field.ts` acts as a 5th motif ("inter-creature broadcast") with the same maths.
 
-### A4 `alex/celegans_serotonin_NSM_correlation.png`
+### A4 `alex/celegans_serotonin_NSM_correlation.png` (image removed)
 - **Shows:**
   - (A) a heat-map over about 100 neuron classes: pharyngeal/sensory/inter/motor type, expression of excitatory (red) or inhibitory (blue) 5-HT receptors (ser-1, ser-4, ser-5, ser-7, mod-1…) and their positive or negative correlation with NSM.
   - (B) pharyngeal neurons correlate positively with NSM; motor and interneurons correlate negatively.
@@ -59,7 +61,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
 ---
 ## Theme B — Wiring rules, graphs & variability
 
-### B1 `alex/celegans_neuron_position_variability.jpg`
+### B1 `alex/celegans_neuron_position_variability.jpg` (image removed)
 - **Shows:**
   - (A) pairwise positional variability (0–20 µm heat-map) across head ganglia (anterior pharyngeal bulb, anterior, dorsal, lateral, ventral, retrovesicular, posterior pharyngeal bulb), plus the % of datasets in which each neuron was identified and its mean variability (4–16 µm).
   - (B) same-ganglion pairs against different-ganglion pairs. Significance stars appear for some.
@@ -73,7 +75,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - **lineage-proximity rule:** cells born from the same parent cell in `develop.grow` start close (`lineageDist`);
   - **scramble as positional drift:** jitter `pos[n]` by σ instead of a random permutation, giving a biologically plausible glitch.
 
-### B2 `alex/connectome_graph_stats_4species.jpg`
+### B2 `alex/connectome_graph_stats_4species.jpg` (image removed)
 - **Shows:** a table and network drawings.
 
   | species | nodes | edges | density | modularity | clustering | path length | degree |
@@ -92,7 +94,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - **wiring-cost pressure:** `Σlen` penalty in `develop.grow`, to test whether modularity *emerges* (the real experiment);
   - a **misfire "sickness" score** = distance from the target stats.
 
-### B3 `alex/celegans_whole_brain_stim_response.jpg`
+### B3 `alex/celegans_whole_brain_stim_response.jpg` (image removed)
 - **Shows:**
   - (a) the rig: 2-photon targeted stimulation plus 1-photon calcium imaging on a spinning disk with tunable lenses;
   - (b) GCaMP6s plus other fluorophores, with GUR-3/PRDX-2 light-gating;
@@ -107,7 +109,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - **state-dependent F:** run the poke in fed vs starved conditions and report `ΔF`;
   - **backwards check:** poke MOT 216–223 and confirm the reversal shows as negative F.
 
-### B4 `alex/microns_proofreading.png`
+### B4 `alex/microns_proofreading.png` (image removed)
 - **Shows:**
   - (a) the MICrONS block (1.1 mm × 800 µm × 600 µm);
   - (b) excitatory and inhibitory neurons before and after proofreading. The axons are mostly *added* by proofreading;
@@ -122,7 +124,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - a **border zone** where `edgeZone` neurons lose a fraction of their dendrites;
   - a **"proofreading" behaviour** during sleep repairs phantom edges at an ATP cost. This is a new recovery pathway against misfire.
 
-### B5 `alex/microns_cortex_render.webp`
+### B5 `alex/microns_cortex_render.webp` (image removed)
 - **Shows:** a rainbow-coloured 3-D render of thousands of reconstructed neurons in a cortical block. The dense tangle shows pyramidal apical dendrites running vertically.
 - **Likely source:** MICrONS consortium imagery (https://www.nature.com/articles/s41586-025-08790-w, verified earlier). The exact render is unattributed.
 - **Insight:** real cortex is a near-solid tangle in which every cell touches thousands of others.
@@ -131,7 +133,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - a **render mode** that colours neurons by `cellId` hash, like Brainbow/MICrONS, but only from exported state;
   - a **density stat** `syn/neuron` exported to show scale honestly (ours is about 1e2, cortex is 1e3–1e4).
 
-### B6 `alex/microns_V1_cell_type_classifier.jpg`
+### B6 `alex/microns_V1_cell_type_classifier.jpg` (image removed)
 - **Shows:**
   - (A) a top view of the EM volume spanning V1, RL and AL;
   - (B) the neuron/fragment classifier (37,362 neurons);
@@ -148,7 +150,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - **soma-feature typing:** GL's `morph[n]` can be inferred from its simulated shape, so types are readable from render state;
   - **misfire biased to inhibitory cells** gives runaway bursts. This is a measurable epilepsy-like failure.
 
-### B7 `alex/cortex_layer_celltype_morphology.jpg`
+### B7 `alex/cortex_layer_celltype_morphology.jpg` (image removed)
 - **Shows:**
   - (A) 3-D renders of a barrel column with somata of 10 excitatory types (L2py, L3py, L4sp, L4ss, L4py, L5st, L5tt, L6cc, L6ct, L6inv);
   - (B) dendrite (red) and axon (black) length density against cortical depth for each type;
@@ -161,7 +163,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - **Peters' rule wiring:** synapse probability ∝ axon × dendrite overlap per layer, plus a specificity factor that misfire can corrupt;
   - **backwards** can swap axon and dendrite layers for flagged types.
 
-### B8 `alex/barrel_cortex_cell_density.jpg`
+### B8 `alex/barrel_cortex_cell_density.jpg` (image removed)
 - **Shows:**
   - (A) mouse whiskers mapping to barrels;
   - (B) 3-D barrel columns (E1–E4, D2, C2, B2, A1–A4; scale 500 µm);
@@ -181,7 +183,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
 ---
 ## Theme C — Single-neuron computation & growth
 
-### C1 `alex/dendrite_bAP_receptive_field.jpg`
+### C1 `alex/dendrite_bAP_receptive_field.jpg` (image removed)
 - **Shows:**
   - (a) a pyramidal neuron with synapses;
   - (b) backpropagating AP strength against distance from the soma, for length constants 25, 75 and 125 µm;
@@ -197,7 +199,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - **leak scaled by distance** (`leak·(1+d/λ)`), so distal memories fade first;
   - a **λ mutation via misfire**, where a short λ gives a "narrow-minded" creature.
 
-### C2 `alex/dendrite_branch_scaling_mito.jpg`
+### C2 `alex/dendrite_branch_scaling_mito.jpg` (image removed)
 - **Shows:**
   - (A) sister-branch radius scaling r² ~ L/D;
   - (B) mitochondrial enrichment rising toward the tips;
@@ -212,7 +214,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - **distal mitochondria** (`mitoTip[n]`): if metab.atp is low, distal synapses go silent first (graceful degradation);
   - **leak** lowers `mitoTip` over time, giving aging.
 
-### C3 `alex/dendrite_growth_sim_vs_real.jpg`
+### C3 `alex/dendrite_growth_sim_vs_real.jpg` (image removed)
 - **Shows:**
   - (A) simulated arbors at 24, 48, 72 and 120 h;
   - (B) a real neuron at 120 h (scale 50 µm; A-P and R-L axes);
@@ -226,19 +228,19 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - **misfire stunting:** a jolt during growth kills a growth cone, giving a visible lopsided arbor;
   - **self-avoidance** `avoid` parameter. With it off, arbors clump and coverage gaps make sensory blind spots.
 
-### C4 `alex/neuron_shapes_soma_axon_dendrite.png`
+### C4 `alex/neuron_shapes_soma_axon_dendrite.png` (image removed)
 - **Shows:** line drawings labelled A, B and C of neurons with soma, axon and dendrite. (A) pseudo-unipolar: soma off a stalk, with the axon continuous with the dendrite. (B) bipolar: soma mid-line. (C) multipolar: many dendrites, one axon.
 - **Likely source:** a textbook-style diagram. Unsure.
 - **Insight:** the soma's position along the line sets whether it is in the signal path at all. In unipolar cells the spike can bypass the soma.
 - **Frontier:** not frontier. This is a classic.
 - **GL features:** `morph[n]` (Gifts #10). Unipolar cells **bypass somatic integration**, so they are fast and immune to somatic leak. Multipolar cells get high fan-in.
 
-### C5 `alex/neuron_types_uni_bi_multipolar.png`
+### C5 `alex/neuron_types_uni_bi_multipolar.png` (image removed)
 - **Shows:** a simpler yellow textbook diagram titled "Types of Neurons" (unipolar, bipolar, multipolar).
 - **Likely source:** generic educational graphic. Unsure.
 - **Insight / GL:** same as C4. Use it for the in-game "neuron codex" art, but render from state.
 
-### C6 `alex/bioluminescent_voltage_sensor.jpg`
+### C6 `alex/bioluminescent_voltage_sensor.jpg` (image removed)
 - **Shows:**
   - (A) a cultured neuron expressing the sensor (scales 20 and 5 µm);
   - (B) ΔR/R₀ against voltage (about −2% to +6% from −120 to +80 mV; N = 4 cells);
@@ -252,7 +254,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - a **glow SNR** of 3% plus noise, so a predator must integrate. Hiding is real;
   - **backwards** flips the glow sign on reversed segments, which "lies" about state.
 
-### C7 `alex/electrophys_panel.jpg`
+### C7 `alex/electrophys_panel.jpg` (image removed)
 - **Shows:** a very low-resolution (187×269) multi-panel electrophysiology figure. It seems to show a surgery/timeline schematic, a histology inset, waveform clustering, spike rasters, firing-rate bar plots with significance marks, and F–I curves at the bottom. The text is unreadable.
 - **Likely source:** unsure. Not identifiable at this resolution.
 - **Insight:** none safely extractable. This needs a higher-resolution original.
@@ -261,7 +263,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
 ---
 ## Theme D — Senses, prediction & escape
 
-### D1 `alex/ant_electronic_antennae_spike_coding.png`
+### D1 `alex/ant_electronic_antennae_spike_coding.png` (image removed)
 - **Shows:**
   - (a) an ant with magneto-sensation and mechano-sensation;
   - (b) the ant antenna → sensory neurons, with SA spikes (sustained) against FA spikes (onset/offset);
@@ -275,7 +277,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - a **magnetic heading** from an in-world `B(x,y)` field (SIMULATED world physics);
   - **scramble** swaps SA↔FA, so the creature confuses "touching" with "just touched".
 
-### D2 `alex/mouse_v1_audiovisual_prediction.png`
+### D2 `alex/mouse_v1_audiovisual_prediction.png` (image removed)
 - **Shows:**
   - (a) a dome VR with a head-fixed mouse and speakers;
   - (b) a 5-day conditioning schedule: AaVa→water, AbVb→air puff, plus visual-only trials. On day 5, Ab paired with Va is the wrong cue;
@@ -288,7 +290,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
 - **Frontier:** where the prediction is computed (auditory cortex → V1 projections?) and whether it is general.
 - **GL features:** **AV prediction error** (Gifts #7), with `pred.v` learned over about 4 "days" of ticks. Scramble triggers wrong-cue PE, and PE magnitude can be a readout for `glitch.aware` (area 100).
 
-### D3 `alex/audiovisual_orientation_tuning.jpg`
+### D3 `alex/audiovisual_orientation_tuning.jpg` (image removed)
 - **Shows:**
   - (A, C) scatters of visual against audiovisual orientation/direction selectivity (OSI/DSI) for single and multi units;
   - (B, D) example polar tuning curves with shuffles;
@@ -304,7 +306,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - an **arousal confound control:** a test that holds `affect.aro` fixed to show the gain survives;
   - **leak** decays `gainXmod`.
 
-### D4 `alex/multisensory_escape_TeA.jpg`
+### D4 `alex/multisensory_escape_TeA.jpg` (image removed)
 - **Shows:**
   - (a) a mouse on a track with air puff (A), sound (S, 110 dB, 5 s) and light (L, 5 lux);
   - (b–i) speed heat-maps and traces. Sound gives the highest escape probability and shortest latency; peak speed is similar; duration is longest for air puff;
@@ -321,7 +323,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
 ---
 ## Theme E — Identity, development & chimeras
 
-### E1 `alex/celegans_neuron_ID_atlas.jpg`
+### E1 `alex/celegans_neuron_ID_atlas.jpg` (image removed)
 - **Shows:**
   - (A) a head schematic with tax-4-positive neurons in magenta (nerve ring, ventral ganglion), plus a fluorescence image of all neurons (red) and tax-4 neurons (cyan; scale 10 µm);
   - (B) the number of animals per reporter gene (tax-4p, gpc-1p, ins-1p…);
@@ -335,7 +337,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - an **ID-confidence stat**, so the poke tool must *infer* identities with noise like a real lab;
   - **misfire** bit-flips cause identity drift.
 
-### E2 `alex/rat_mouse_chimera_brain_atlas.jpg`
+### E2 `alex/rat_mouse_chimera_brain_atlas.jpg` (image removed)
 - **Shows:**
   - (A) rat PSCs (KsO red) injected into an E3.5 mouse blastocyst gives E18.5 rat-mouse chimeras;
   - (B) rat cells across OB, CP, SSCx, PCx, hippocampus and cerebellum (including Purkinje-like fans in CB);
@@ -351,7 +353,7 @@ Feature notes use GL variables from BLUEPRINT.md ("Gifts" = §Gifts for the baby
   - **donor peptide/receptor genes** come along, so grafts can bring new wireless channels;
   - **misfire germline** occasionally inserts a donor lineage.
 
-### E3 `alex/hesx1_rat_forebrain_mouse.jpg`
+### E3 `alex/hesx1_rat_forebrain_mouse.jpg` (image removed)
 - **Shows:**
   - (A) Cas9 + gRNA in a mouse zygote gives an Hesx1⁻/⁻ blastocyst; rat ESCs added give a forebrain-reconstituted chimera;
   - (B) pups at P0 and adults at 20 months;

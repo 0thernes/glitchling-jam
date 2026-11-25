@@ -1,13 +1,13 @@
 # AUDIT/INDEX.md: table of contents of every tracked file
 
-Generated from `git ls-tree -r -l HEAD` by `AUDIT/tools/index.py`. 305 tracked files, 189.9 MB.
+Generated from `git ls-tree -r -l HEAD` by `AUDIT/tools/index.py`. 306 tracked files, 189.9 MB.
 
 Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirect** = imported (transitively) by a directly covered module; **page** = exercised by the headless page check (`AUDIT/tools/pages_check.mjs`); **none** = no automated check.
 
 ## Contents
 
 - [.github](#github) (1 files)
-- [(root)](#root) (18 files)
+- [(root)](#root) (19 files)
 - [AUDIT](#audit) (5 files)
 - [art](#art) (7 files)
 - [artifacts](#artifacts) (69 files)
@@ -40,28 +40,29 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `.nojekyll` | 0 | - |  | n/a (data/asset/doc) |
 | `BLUEPRINT.md` | 50,199 | Markdown | Glitchling v2 — BLUEPRINT | n/a (data/asset/doc) |
 | `BRAINS.md` | 41,386 | Markdown | BRAINS.md: a shared brain-design compendium for CQM, A-Life Creature #1 and Glitchling | n/a (data/asset/doc) |
-| `CHANGELOG.md` | 2,553 | Markdown | Changelog (repository level) | n/a (data/asset/doc) |
+| `CHANGELOG.md` | 2,892 | Markdown | Changelog (repository level) | n/a (data/asset/doc) |
 | `CONTRIBUTING.md` | 2,142 | Markdown | Contributing to glitchling-jam | n/a (data/asset/doc) |
 | `GLITCHLING_MASTER_COMPENDIUM.md` | 16,595 | Markdown | GLITCHLING MASTER COMPENDIUM — Complete 29-PDF Synthesis (`1,932` Pages) for Glitchling, Creatures/Entities/Be | n/a (data/asset/doc) |
 | `HANDOFF_GEMINI_ARGON_ANTIGRAVITY.md` | 78,908 | Markdown | Glitchling handoff: Grok Bot → Gemini Argon 4 (Antigravity) | n/a (data/asset/doc) |
 | `HANDOFF_QUICKSTART.md` | 5,450 | Markdown | Glitchling: handoff QUICKSTART (for Gemini Argon 4 in Antigravity) | n/a (data/asset/doc) |
+| `LICENSE` | 3,363 | - |  | n/a (data/asset/doc) |
 | `NOTES.md` | 27,006 | Markdown | Glitchling: one-day jam coordination doc | n/a (data/asset/doc) |
-| `README.md` | 8,486 | Markdown | Glitchling | n/a (data/asset/doc) |
+| `README.md` | 9,228 | Markdown | Glitchling | n/a (data/asset/doc) |
 | `SCIENTIFIC_DEFENSE_DOSSIER.md` | 25,343 | Markdown | Glitchling v2 · Scientific Defense Dossier (Pass 22) | n/a (data/asset/doc) |
 | `SECURITY.md` | 829 | Markdown | Security policy | n/a (data/asset/doc) |
 | `WRITEUP.md` | 992 | Markdown | Glitchling | n/a (data/asset/doc) |
 | `glitchling.ts` | 8,216 | TypeScript (Bun) | Glitchling: a deliberately broken baby clone of Creature #1 (copied core in ./core, unmodified except import p | none |
 | `index.html` | 5,311 | HTML | Page: Glitchling | page |
-| `package.json` | 468 | JSON |  | n/a (data/asset/doc) |
+| `package.json` | 507 | JSON |  | n/a (data/asset/doc) |
 | `plot.py` | 2,108 | Python 3 | cursed portrait: neuron activations of the all-flaws episode folded into a face-ish heatmap, with channel-shif | none |
 
 ## AUDIT
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `AUDIT/FINDINGS.md` | 13,360 | Markdown | AUDIT/FINDINGS.md | n/a (data/asset/doc) |
-| `AUDIT/INDEX.md` | 42,049 | Markdown | AUDIT/INDEX.md: table of contents of every tracked file | n/a (data/asset/doc) |
-| `AUDIT/PASSES.md` | 9,345 | Markdown | AUDIT/PASSES.md: hardening passes, 2026-11-24 | n/a (data/asset/doc) |
+| `AUDIT/FINDINGS.md` | 15,057 | Markdown | AUDIT/FINDINGS.md | n/a (data/asset/doc) |
+| `AUDIT/INDEX.md` | 42,891 | Markdown | AUDIT/INDEX.md: table of contents of every tracked file | n/a (data/asset/doc) |
+| `AUDIT/PASSES.md` | 10,222 | Markdown | AUDIT/PASSES.md: hardening passes, 2026-11-24 | n/a (data/asset/doc) |
 | `AUDIT/tools/index.py` | 3,818 | Python 3 | coverage: which test files import which module | none |
 | `AUDIT/tools/pages_check.mjs` | 1,960 | JavaScript (ESM, Node) | Headless page check used by the audit: loads every page at phone (390x844) and desktop (1280x800) sizes and re | none |
 
@@ -397,7 +398,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `site/index.html` | 21,478 | HTML | Page: Glitchling: one-day art jam showcase | page |
+| `site/index.html` | 21,684 | HTML | Page: Glitchling: one-day art jam showcase | page |
 | `site/live-demo-art.png` | 390,136 | PNG image |  | n/a (data/asset/doc) |
 | `site/live-demo-brain.png` | 153,399 | PNG image |  | n/a (data/asset/doc) |
 | `site/live-demo-clip.png` | 685,845 | PNG image |  | n/a (data/asset/doc) |
@@ -424,4 +425,4 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `tools/check.mjs` | 8,092 | JavaScript (ESM, Node) | Repository health check, run by `npm test` and by CI (.github/workflows/ci.yml). | none |
+| `tools/check.mjs` | 9,336 | JavaScript (ESM, Node) | Repository health check, run by `npm test` and by CI (.github/workflows/ci.yml). | none |

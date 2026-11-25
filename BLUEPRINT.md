@@ -244,7 +244,7 @@ Glitchling's brain v2 path:
 The honest catch: spiking needs ms-scale substeps inside each 1-minute tick, which multiplies compute by 10–100×.
 
 ## Gifts for the baby (from Alex's images)
-Source notes: `research/NEURO_FRONTIER.md` → "Alex's finds" + "Worm and wiring batch"; figures in `research/img/alex/`. Biological basis is real where the note says so; "wireless"/magnetic payloads stay **SIMULATED** in-sim mechanics. Energy cost is in ATP units of `metab.atp` per tick (today's brain ≈ 1.0/tick baseline). Every gift ships with a **not-cosmetic test** in `tests/gifts.test.ts`: knock the feature out (or perturb it) and a behavioural/physiological number must move beyond seed noise (≥2σ over 4 seeds), else the gift is cut.
+Source notes: `research/NEURO_FRONTIER.md` → "Alex's finds" + "Worm and wiring batch"; the figures once in `research/img/alex/` were removed from the repo on 2026-11-24 because their sources and licences were never identified (audit F05). Biological basis is real where the note says so; "wireless"/magnetic payloads stay **SIMULATED** in-sim mechanics. Energy cost is in ATP units of `metab.atp` per tick (today's brain ≈ 1.0/tick baseline). Every gift ships with a **not-cosmetic test** in `tests/gifts.test.ts`: knock the feature out (or perturb it) and a behavioural/physiological number must move beyond seed noise (≥2σ over 4 seeds), else the gift is cut.
 
 Impact (I) and effort (E) on 1–5; rank = I×2 − E.
 

@@ -20,4 +20,4 @@
 | 16_celegans_can_neurons.png | C. elegans neurons | Richard Robinson | CC BY 2.5 | https://commons.wikimedia.org/wiki/File:Caenorhabditis_elegans_neurons_CANL_and_CANR_patterned_by_Wnt_-_journal.pbio.1001464.g001.png |
 | 17_stretchable_mea.png | Stretchable microelectrode array (BCI/biocomputing hardware) | Kwayyy | CC BY 4.0 | https://commons.wikimedia.org/wiki/File:Stretchable_Microelectrode_Array_(sMEA)_before_and_during_stretch.png |
 
-All licences listed above were re-checked against the Commons `LicenseShortName` field on 2026-11-24, and all match. CC BY and CC BY-SA require the author credit shown in the author column. The images in `alex/` are **not** covered by this file (see `AUDIT/FINDINGS.md` F05).
+All licences listed above were re-checked against the Commons `LicenseShortName` field on 2026-11-24, and all match. CC BY and CC BY-SA require the author credit shown in the author column. The 26 unsourced images that were in `alex/` were removed on 2026-11-24 (see `AUDIT/FINDINGS.md` F05).
