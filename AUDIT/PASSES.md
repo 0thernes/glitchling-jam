@@ -2,7 +2,7 @@
 
 **Scope:** all 294 tracked files at origin/main `fe9cb19`, indexed in [`INDEX.md`](INDEX.md). **Findings:** [`FINDINGS.md`](FINDINGS.md).
 **Environment:** Linux box, Node 24.22, Bun (JavaScriptCore), Chromium headless (SwiftShader WebGL) through Playwright, TypeScript 5 (`tsc`), Python 3.
-**Honest count (29 passes):** the request was "200 passes". Below are the **distinct passes that produced real checks**. I stopped adding passes when new angles stopped finding anything, and I did not pad the list. Re-running the same check is not counted as a new pass, except for the explicit verification passes at the end.
+**Honest count (35 passes):** the request was "200 passes". Below are the **distinct passes that produced real checks**. I stopped adding passes when new angles stopped finding anything, and I did not pad the list. Re-running the same check is not counted as a new pass, except for the explicit verification passes at the end.
 
 | # | Scope | Method | Findings | Fixes / result | Verification |
 |---|---|---|---|---|---|
@@ -35,6 +35,12 @@
 | P27 | Decisions | collected every finding that needs owner judgment into a decision table at the end of `FINDINGS.md` | 8 decisions (D1–D8) | none | none |
 | P28 | Reproducibility under load (prompted by a red CI run, 45524162006) | 3 concurrent re-runs; 11 realizations at different loads; runs with `BUN_JSC_useConcurrentJIT=0`, `useFTLJIT=0` and `useJIT=0`; a micro-test of Math functions cold against hot | **The reference sim is not deterministic under JavaScriptCore.** 11 runs gave 6 distinct `summary.csv` files. Concurrent JIT off: 3/3 identical (but a different realization). FTL off: still varies. JIT off: yet another realization. Math functions are tier-consistent in the micro-test, so the exact operation is not pinned down. All-vs-baseline: forages +7% to +32%, success −0.10 to +0.01 | F31 (high); check changed; README and site caveat; D9 | `npm test` 9/9 locally |
 | P29 | CI hygiene | read the CI run 45525372807 annotations | `actions/checkout@v4` and `setup-node@v4` target Node 20, which is deprecated on runners | bumped to `@v5` (release tags confirmed to exist) | next CI run |
+| P30 | Licence (D4) | compared `0thernes/CQM2/LICENSE` on GitHub with the local CQM2 copy (SHA-256) | identical; holder line already filled in | `LICENSE` added, byte-identical | SHA-256 match |
+| P31 | Unsourced images (D5) | grepped every reference to `research/img/alex/` | 26 files, 5 referencing docs | removed; references marked "(image removed)"; text kept | link check in `npm test` |
+| P32 | Names and headlines (D1, D2) | grepped "nobel", "theorem", "1.13B", "16.78M" across tracked files and UI strings | 35 labels in the suite; 9 doc/UI headline sites | renamed to `lesion_experiments.mjs`/"experiment"; UI shows nominal vs stored counts | `TO_T=1` smoke run; `node --check`; CI green on `ca2e496` |
+| P33 | Results v3 (D9) | `BUN_JSC_useConcurrentJIT=0 bun run glitchling.ts 2 30 500`, run twice at the same time; new `tools/results_stats.mjs` (t-intervals, d_z, sign-flip p) | byte-identical `summary.csv`; within-life "compensation" from v2 does not replicate | site, WRITEUP, README, quickstart rewritten; check compares seeds 500–501 | `cmp` of the two runs; `results.json` equal apart from wall-clock `secs` |
+| P34 | Repeatability scope (F31) | took in Alien Life 1-100's report on Asmodensius (node bundles, `identity_gate.sh` at `c72a4ec`, their F61) | the F31/D9 text overstated the impact on Creature #1 | F31/D9 corrected; warning note for Argon written on the laptop | note's SHA-256 matches on box and laptop |
+| P35 | live/ world shuffle (D3) | seeded Fisher–Yates in `live/js/sim/world.js`; headless_run, nav_probe 1–4, dome probe and the full lesion suite before and after, in parallel copies | all probes still pass; one lesion soft gate (T5) now fails | F33/D10 opened; numbers in `live/CHANGELOG.md` | `npm test` 9/9 |
 
 ## Long-run results (filled in as they finished)
 

@@ -193,7 +193,10 @@ export class World {
     this.gz = 0;
     this.g = 9.8;
 
-    const cv = [0, 1, 2, 3].sort(() => r() - 0.5), sv = [0, 1, 2, 3].sort(() => r() - 0.5);
+    // Seeded Fisher-Yates (audit F03). The old arr.sort(() => r() - 0.5) shuffle gave a different world per JS engine
+    // (V8 in Chrome/Node vs JavaScriptCore in Safari/Bun) for the same seed, and V8's result was biased. Same fix as play/sim.js.
+    const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const tmp = a[i]; a[i] = a[j]; a[j] = tmp; } return a; };
+    const cv = shuffle([0, 1, 2, 3]), sv = shuffle([0, 1, 2, 3]);
     this.plants = [];
     for (let k = 0; k < SITES; k++) {
       const gx = (k & 3) - 1.5, gz = (k >> 2) - 1.5;

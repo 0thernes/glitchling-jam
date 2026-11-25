@@ -1016,3 +1016,26 @@ Full write-up and 26-contrast combined $N = 24$ audit: [`../SCIENTIFIC_DEFENSE_D
   - `nav_probe.mjs 1,2,3,4`: **NEAR 4/4 (6.5 s), FAR 4/4 (26.5 s), upright 0.94**.
   - `dome_ui_check.mjs` (headless Chrome WebGL2): `consoleErrors: []`, `pageErrors: []`, `hasNaN: false`, HUD showing
     `ENAQT 80.8% > Förster 80.5%` and `NMDA 641 · BAC 543`.
+
+
+## Audit fix, 2026-11-24 — seeded Fisher–Yates world shuffle (audit F03, Alex's decision D3)
+
+`js/sim/world.js` used `[0,1,2,3].sort(() => r() - 0.5)` to shuffle site colour and shape values. The result depended on the
+JS engine: for 186 of 200 seeds, V8 (Chrome/Node) and JavaScriptCore (Safari) built different worlds, and V8's was biased.
+It is now a seeded Fisher–Yates shuffle, the same fix as `play/sim.js`. **Every seeded world changes**, and so does all
+downstream RNG use, so every number in the passes above was measured on the old worlds.
+
+Re-measured the same day on the same code before and after the fix (Node 24, box):
+
+| probe | before (old shuffle) | after (Fisher–Yates) |
+|---|---|---|
+| `npm test` creature check (20 s) / determinism check (10 s) | distance 13.1403 / 5.858 | distance 10.4101 / 4.186 |
+| `headless_run.mjs` (60 s, seed 3) | distance 42.36, entropy 3.93, eats 1 | distance 40.99, entropy 3.96, eats 2 |
+| `nav_probe.mjs 1,2,3,4` | NEAR 4/4 (7.5 s), FAR 4/4 (30.3 s), upright 0.92 (on back 1%), path integration 47% | NEAR 4/4 (11.3 s), FAR 4/4 (31.8 s), upright 0.96 (0%), path integration 36% |
+| `dome_heptarch_probe.mjs` | all 6 gates pass; Cry4 night error 0.0602 vs 0.6576 rad lesioned; CHSH 2.634 | all 6 gates pass; Cry4 night error 0.1609 vs 0.8936 rad lesioned; CHSH 2.112 |
+| `lesion_experiments.mjs` (N = 12) | 15/15 pass; Holm 26/26, Bonferroni 25/26 | 15 summary lines pass, Holm 26/26, Bonferroni 25/26, **but 1 soft gate fails**: T5 empirical finite-sample no-signaling max 0.1376 against a gate of 0.11 (before: 0.1026). The exact marginal bias is still 0. The suite exits non-zero. |
+
+Selected lesion-experiment shifts (before → after): T1 dSolar +1.394 → +1.211 kJ; T3 lesion diff +0.573 → +0.777 rad, RF
+contrast p 0.000244 → 0.002930; T9 ECC predations 0.92 → 0.83; T11 adaptive − shadow +18.23 → +23.22; T15 predations 17.67→4.17
+→ 17.50→3.17. The T5 gate was **not** retuned to make it pass: the 0.11 threshold sat just above the old realization, and
+changing it after seeing the data would be tuning to the result. That is left to Alex (audit F33).
