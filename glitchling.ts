@@ -1,5 +1,5 @@
 // Glitchling: a deliberately broken baby clone of Creature #1 (copied core in ./core, unmodified except import paths).
-// usage: nice bun run glitchling.ts [days=2] [seeds=2]   -> results/*.json, results/summary.csv, results/activations_allflaws_seed1.json
+// usage: BUN_JSC_useConcurrentJIT=0 nice bun run glitchling.ts [days=2] [seeds=2] [firstSeed=1]   -> results/*.json, results/summary.csv, results/activations_allflaws_seed1.json
 import { Organism, mulberry, SITES, REGIONS } from "./core/organism";
 const MOT0 = (() => { let o = 0; for (const [n, c] of REGIONS as any) { if (n === "MOT") return o; o += c; } return -1; })(); export const N_MOT = (REGIONS as any).find((r: any) => r[0] === "MOT")[1];
 import * as fs from "fs";
@@ -36,10 +36,10 @@ export class Glitchling extends (Organism as any) {
 }
 const CONDS: Record<string, Flaws> = { baseline: {}, scramble: { scramble: true }, leaky: { leaky: true }, backwards: { backwards: true }, misfire: { misfire: true }, all: { scramble: true, leaky: true, backwards: true, misfire: true }, all_mild: { scramble: true, leaky: true, backwards: true, misfire: true, mild: true } };
 if (import.meta.main) {
-  const days = +(process.argv[2] ?? 2), nSeeds = +(process.argv[3] ?? 2), BLOCK = 360; fs.mkdirSync("results", { recursive: true });
+  const days = +(process.argv[2] ?? 2), nSeeds = +(process.argv[3] ?? 2), seed0 = +(process.argv[4] ?? 1), BLOCK = 360; fs.mkdirSync("results", { recursive: true });
   const rows: string[] = ["condition,seed,alive,ticks,forages,rewards,successRate,glcMean,glcEnd,fatEnd,firstHalfSuccess,secondHalfSuccess,bestSiteFracFirst,bestSiteFracSecond,jolts"]; const all: any = {};
   for (const [name, fl] of Object.entries(CONDS)) { all[name] = [];
-    for (let s = 1; s <= nSeeds; s++) { const g: any = new Glitchling(s, fl); const LOG = name === "all" && s === 1; if (LOG) { g.logEvents = true; g.events = []; g.wiring(); g.rewire(); } const best = [...g.pTrue].indexOf(Math.max(...g.pTrue)); const blocks: any[] = []; let f0 = 0, r0 = 0, glcSum = 0, n = 0, bi = 0; const acts: any[] = []; const ch: number[] = [];
+    for (let s = seed0; s < seed0 + nSeeds; s++) { const g: any = new Glitchling(s, fl); const LOG = name === "all" && s === 1; if (LOG) { g.logEvents = true; g.events = []; g.wiring(); g.rewire(); } const best = [...g.pTrue].indexOf(Math.max(...g.pTrue)); const blocks: any[] = []; let f0 = 0, r0 = 0, glcSum = 0, n = 0, bi = 0; const acts: any[] = []; const ch: number[] = [];
       const t0 = Date.now();
       for (let t = 1; t <= 1440 * days && !g.dead; t++) { if (LOG && t === 1441) g.logEvents = false; const fb = g.foraged; g.step(); if (g.foraged > fb) ch.push(g.lastChoice); glcSum += g.blood.glc; n++;
         if (name === "all" && s === 1 && t % 10 === 0 && t <= 1440) acts.push({ t, glc: +g.blood.glc.toFixed(3), regions: Object.fromEntries(Object.entries(g.regionRate).map(([k, v]: any) => [k, +v.toFixed(4)])), rate: Array.from(g.rate as Float32Array, (x: number) => +x.toFixed(3)), wSite: Array.from(g.wSite as Float32Array, (x: number) => +x.toFixed(3)) });
@@ -50,5 +50,5 @@ if (import.meta.main) {
       console.log(rows[rows.length - 1], res.secs + "s");
       if (acts.length) fs.writeFileSync("results/activations_allflaws_seed1.json", JSON.stringify({ events: g.events.filter((e: any) => e.tick <= 1440), note: "Glitchling all-flaws seed 1, day 1, every 10 ticks: regionRate per region, rate per neuron (NNEU), perceived site values wSite", nNeurons: acts[0].rate.length, frames: acts }));
     } }
-  fs.writeFileSync("results/results.json", JSON.stringify({ days, nSeeds, flawParams: FLAW_PARAMS, conditions: all }, null, 1)); fs.writeFileSync("results/summary.csv", rows.join("\n") + "\n");
+  fs.writeFileSync("results/results.json", JSON.stringify({ days, nSeeds, seeds: [seed0, seed0 + nSeeds - 1], engine: "bun " + (globalThis as any).Bun?.version + (process.env.BUN_JSC_useConcurrentJIT === "0" ? ", BUN_JSC_useConcurrentJIT=0" : ""), flawParams: FLAW_PARAMS, conditions: all }, null, 1)); fs.writeFileSync("results/summary.csv", rows.join("\n") + "\n");
 }

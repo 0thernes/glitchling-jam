@@ -106,7 +106,7 @@ run('live/ determinism: same seed gives identical 10 s trajectories', () => {
   return a.split(' ')[0];
 });
 
-run('Reference sim (bun glitchling.ts 2 2): sane output, deterministic with concurrent JIT off', () => {
+run('Reference sim (bun glitchling.ts 2 2 500): sane, deterministic, matches committed v3 rows', () => {
   // Audit finding F31: under Bun/JavaScriptCore the reference sim's output depends on JIT tier-up timing (CPU load), so the
   // committed results/summary.csv is one realization and is NOT byte-reproducible in general. With concurrent JIT compilation
   // disabled the run is deterministic, so that is what this check pins down. It also checks the structure of the output.
@@ -115,7 +115,7 @@ run('Reference sim (bun glitchling.ts 2 2): sane output, deterministic with conc
   const once = () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'glref-'));
     fs.cpSync('glitchling.ts', path.join(tmp, 'glitchling.ts')); fs.cpSync('core', path.join(tmp, 'core'), { recursive: true });
-    const r = spawnSync('bun', ['run', 'glitchling.ts', '2', '2'], { cwd: tmp, encoding: 'utf8', timeout: 600000, env: { ...process.env, BUN_JSC_useConcurrentJIT: '0' } });
+    const r = spawnSync('bun', ['run', 'glitchling.ts', '2', '2', '500'], { cwd: tmp, encoding: 'utf8', timeout: 600000, env: { ...process.env, BUN_JSC_useConcurrentJIT: '0' } });
     if (r.status !== 0) throw new Error('bun run failed: ' + (r.stderr || '').slice(-400));
     const csv = fs.readFileSync(path.join(tmp, 'results/summary.csv'), 'utf8'); fs.rmSync(tmp, { recursive: true, force: true }); return csv;
   };
@@ -130,8 +130,11 @@ run('Reference sim (bun glitchling.ts 2 2): sane output, deterministic with conc
     if (j !== (['misfire', 'all', 'all_mild'].includes(c) ? 48 : 0)) throw new Error('bad jolt count: ' + r);
     const sr = +col(r, 'successRate'); if (!(sr >= 0 && sr <= 1)) throw new Error('successRate out of range: ' + r);
   }
-  const same = a === fs.readFileSync('results/summary.csv', 'utf8');
-  return `14 rows sane, deterministic; ${same ? 'matches' : 'differs from'} the committed realization (expected, see F31)`;
+  // Results v3 (seeds 500-529) was made in the same mode, so seeds 500-501 should match the committed rows exactly. A mismatch on
+  // another machine is reported but does not fail the check, because cross-machine JSC repeatability is not guaranteed (F31).
+  const committed = fs.readFileSync('results/summary.csv', 'utf8').trim().split('\n').slice(1).filter((r) => ['500', '501'].includes(col(r, 'seed')));
+  const same = committed.length === 14 && committed.every((r) => rows.includes(r));
+  return `14 rows sane, deterministic; ${same ? 'matches the committed v3 rows for seeds 500-501' : 'DIFFERS from the committed v3 rows for seeds 500-501 (cross-machine, see F31)'}`;
 });
 
 if (process.env.FULL === '1') run('live/ dome + HEPTARCH probe (FULL=1)', () => { const o = node(['test/dome_heptarch_probe.mjs'], {}, 900000); if (!/ALL PASS 20 VERIFICATION GATES PASSED/.test(o)) throw new Error(o.slice(-500)); return 'all gates passed'; });

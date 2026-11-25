@@ -24,7 +24,7 @@
 Commands:
 ```bash
 mkdir -p results_v2 && cp -n results/* results_v2/   # archive first: the run overwrites results/
-nice -n 19 bun run glitchling.ts 2 2                # 2 sim-days × 2 seeds × 7 conditions → results/
+BUN_JSC_useConcurrentJIT=0 nice -n 19 bun run glitchling.ts 2 30 500   # 2 sim-days × 30 seeds (500–529) × 7 conditions → results/ (repeatable mode, audit F31)
 .venv/bin/python plot.py                            # Windows: make a fresh venv with numpy + matplotlib
 python3 -m http.server 8765                         # from the jam ROOT → http://localhost:8765/site/ and /brain-viz/
 ```
@@ -38,11 +38,11 @@ Read in this order: NOTES.md (the log), glitchling.ts (54 dense lines), BLUEPRIN
 | brain-viz REAL playback (verbatim activations; its data.js has no events) | brain-viz SIMULATED toggle; the flaw overlays are annotations |
 | v2 and v3 4K heroes: REAL geometry plus REAL activations/events at tick 720 (body procedural, studio scene, not Mini World) | Tsotchke `art/glitchling_1..6.png`: **GENERATIVE** (model trained on 11 images; "QRNG" is a seeded classical simulation) |
 | AL headless real-brain log (1440 ticks, 189 forages, 41 rewards) | wireless / psychic / remote viewing: **SIMULATED** mechanics, PLANNED, not built |
-| `WRITEUP.md` (v2 numbers, n=2 caveat) | root `index.html`: real but **stale v1** numbers |
+| `WRITEUP.md` (v3 numbers, 30 seeds) | root `index.html`: real but **stale v1** numbers |
 
-**Results v2 headline:**
-- All flaws vs baseline: success 0.302 vs 0.350, forages 218.5 vs 174.5, rewards 66 vs 63, mean glucose 3.81 vs 3.73. 14/14 creatures alive.
-- **n = 2 seeds**, with about ±0.1 noise. `bestSiteFrac` is broken (always 0).
+**Results v3 headline (2026-11-24, replaces v2):**
+- All flaws vs baseline, 30 seeds, paired: success 0.299 vs 0.365 (Δ −0.066 [−0.090, −0.042]), forages 255.0 vs 209.3 (+22%, Δ +45.8 [34.5, 57.1], d_z 1.51), rewards 76.3 vs 74.5, mean glucose 4.03 vs 3.95. 210/210 creatures alive. Full table: `site/index.html` and `node tools/results_stats.mjs`.
+- v2 (n = 2, seeds 1–2) was one realization of a nondeterministic run (F31). Its "compensation within a life" hint did not replicate. `bestSiteFrac` is still broken (always 0).
 - The behavioural "backwards" effect is the 16-site mirror, not the MOT reversal.
 
 ## Top 10 next actions
@@ -50,7 +50,7 @@ Read in this order: NOTES.md (the log), glitchling.ts (54 dense lines), BLUEPRIN
 2. Reproduce v2 (`bun run glitchling.ts 2 2`) and diff `summary.csv` against the archive. Log any mismatch honestly.
 3. Fix `bestSiteFrac` in the harness only: `lastChoice` is reset to −1 inside `step()`, so use `g.choices[g.choices.length-1]`. Report both executed and intended variants.
 4. Add `--out <dir>` / `--conds` CLI options to glitchling.ts so new runs never clobber `results/`.
-5. Run ≥ 8 seeds (niced), paired by seed, with 95% CIs. Write "Results v3" into NOTES.md with caveats.
+5. ~~Run ≥ 8 seeds (niced), paired by seed, with 95% CIs.~~ Done 2026-11-24: Results v3 has 30 seeds (500–529), in the site table and `WRITEUP.md`.
 6. Ask Alex whether a **real-fields-only** `results/state_v2.jsonl` exporter is allowed during the hold. If yes, build it with no invented body, limb or field values.
 7. Regenerate `brain-viz/data.js` with `events[]` and make the viz show the real flaw events.
 8. Make the render scripts and the synthetic generator path-portable (they hardcode `/workspace/...`) so they run on the MSI.

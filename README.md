@@ -27,8 +27,8 @@ The play page runs in any modern browser (phone or desktop), with no build step,
 - **`play/` is a simplified JavaScript port** written for exploring the flaws interactively. It is **not** the TypeScript reference run, and its numbers will not match the published results.
   - *Kept from the reference:* 16 sites (4 colours × 4 shapes) with the same reward formula, depletion and the days 1–3 half-access pattern; 1 tick = 1 sim-minute; the 272-neuron layout in the same 14 regions with the reference's region-to-region connection probabilities; the four flaws applied the way `glitchling.ts` applies them; seeded mulberry32 RNG with a separate flaw stream.
   - *Simplified or invented:* rate-unit neurons instead of the spiking substrate; a 3-pool toy metabolism; a noisy value race instead of the striatal spike race and expected-free-energy terms; the walking body, 2D map and click-to-drop food; MOT as an 8-way heading code. Since 2026-11-24 the world shuffle uses a seeded Fisher–Yates, so every browser builds the same world for a seed. That world differs from the reference run's world for the same seed number.
-- **The results tables, plots and brain-viz playback come from the TypeScript sim** (`glitchling.ts` subclassing `core/organism.ts`, a copy of the Creature #1 organism). n = 2 seeds per condition, so they are a toy, not a finding.
-- **The committed results are one realization, not a bit-exact record (audit F31).** Under Bun/JavaScriptCore, the reference sim's output depends on JIT timing, so re-running the same seeds under different CPU load gives different numbers. Across 11 re-runs, "all flaws vs baseline" ranged from 7% to 32% more forages, and the success difference ranged from −0.10 to +0.01, with one sign flip. Treat the table as illustrative. `BUN_JSC_useConcurrentJIT=0 bun run glitchling.ts 2 2` gives a deterministic run.
+- **The results tables, plots and brain-viz playback come from the TypeScript sim** (`glitchling.ts` subclassing `core/organism.ts`, a copy of the Creature #1 organism). Results v3 (2026-11-24) uses 30 dev seeds per condition (500–529) and reports means, SDs, 95% CIs and paired effect sizes. It is still a toy model, so the numbers describe the model, not animals. With all flaws on: forages +22% [+16%, +27%], success 0.299 vs 0.365, rewards about the same, 30/30 alive.
+- **Repeatability (audit F31).** Under Bun/JavaScriptCore with default settings, the reference sim's output depends on JIT timing, so the same seeds give different numbers under different CPU load. Across 11 re-runs of the old 2-seed setup, "all flaws vs baseline" ranged from 7% to 32% more forages. Results v3 was therefore generated with `BUN_JSC_useConcurrentJIT=0`. Two simultaneous runs gave byte-identical output. Use `BUN_JSC_useConcurrentJIT=0 bun run glitchling.ts 2 30 500` to reproduce it.
 - Some renders in the showcase are driven by **synthetic** data; they are labelled SYNTHETIC on the page.
 - No claims of consciousness, sentience or feelings are made for Glitchling or Creature #1.
 
@@ -42,7 +42,8 @@ The play page runs in any modern browser (phone or desktop), with no build step,
 ## Run the reference sim locally
 
 ```bash
-bun run glitchling.ts 2 2     # days=2, seeds=2 -> results/results.json, results/summary.csv
+BUN_JSC_useConcurrentJIT=0 bun run glitchling.ts 2 30 500   # days=2, 30 seeds from 500 -> results/results.json, results/summary.csv
+node tools/results_stats.mjs  # means, SDs, 95% CIs, paired effect sizes
 python3 plot.py               # -> results/glitchling.png, results/cursed_portrait.png (needs matplotlib)
 ```
 
