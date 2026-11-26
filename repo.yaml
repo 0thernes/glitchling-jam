@@ -3,7 +3,7 @@
 
 standard: "1.2.0"
 name: "glitchling-jam"
-version: "2.2.0"
+version: "2.3.0"
 project_type: "research"
 owner: "Alexander Stephen Donahue (0thernes)"
 orcid: "0009-0006-8168-9648"
@@ -101,7 +101,7 @@ items:
   B19: { status: n/a, reason: "Single-threaded deterministic simulation cores (concurrent: false)" }
   B20: { status: done, evidence: "Kahan FP64 summation (<1e-14), NaN/Inf guards in check.mjs/quantizeNestorRung/lesion_experiments.mjs, and 120s x 4-seed NaN scan (P18)" }
   B21: { status: n/a, reason: "No long-running server/service (service: false)" }
-  B22: { status: done, evidence: "lean/GlitchlingProofs/ (59 audited Lean 4.35.0 decls, zero Mathlib) + leanchecker + Challenge/Solution comparator" }
+  B22: { status: done, evidence: "lean/GlitchlingProofs/ (72 audited Lean 4.35.0 decls incl. 6 NonVacuity & 6 AdversarialTests, zero Mathlib) + 6-kernel lake comparator --paranoid + live negative tamper CI" }
   B23: { status: n/a, reason: "Formal verification uses Lean 4.35.0 theorem proving (B22) rather than TLA+/Alloy model checking" }
   B24: { status: n/a, reason: "Formal verification uses Lean 4.35.0 (B22) rather than Dafny/F* verified languages" }
   B25: { status: n/a, reason: "Zero C/Rust code (native: false); Lean 4 kernel + leanchecker provides formal soundness" }

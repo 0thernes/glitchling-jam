@@ -2,6 +2,18 @@
 
 The detailed per-pass history of the live 3D sim is in [`live/CHANGELOG.md`](live/CHANGELOG.md). This file records repository-wide changes. Dates are US Pacific.
 
+## [2.3.0] - 2026-11-26: 6-Kernel Lean 4.35.0 Hardening (72 Decls), Live Negative Tamper CI, Crossref DOI Audit (F41) & DigiCert RFC 3161 Timestamp
+
+### Added
+- **Expanded Pure Lean 4.35.0 Formal Core (`72` audited declarations):** Added `lean/GlitchlingProofs/NonVacuity.lean` (`nv01`–`nv06` constructive inhabitants) and `lean/GlitchlingProofs/AdversarialTests.lean` (`at01`–`at06` false-variant refutations) plus `target_thm9_adversarial_and_nonvacuity` in `Challenge.lean` / `Solution.lean` / `comparator.json` (9 isolated comparator targets).
+- **Hard Required 6-Kernel Palomar CI & Live Negative Tamper Gate:** Promoted `lake comparator --config comparator.json --paranoid` (verified across all 6 independent kernels: `Lean paranoid`, `lean4lean`, `nanoda`, `con-leche`, `con-ron`, `Lean default`) to a mandatory CI gate and added `scripts/test_lean_negative.py --with-comparator` proving CI rejects `sorry`-tampered proofs.
+- **Live Crossref DOI & Retraction Audit (`scripts/audit_citations.py` -> `results/citation-audit.json`):** Automated HTTP 200, balanced-brace BibTeX title-token alignment, and 0-retraction checks for all 21 references (`18/18` live Crossref DOIs verified, `3` non-DOI proceedings/articles, `0` retractions).
+- **DigiCert RFC 3161 Cryptographic Timestamp (`scripts/timestamp_checksums.py` -> `data/timestamps/CHECKSUMS.sha256.tsr`) & `SUBMISSION_READINESS.md`:** Minted and verified an independent RFC 3161 TSA token over `CHECKSUMS.sha256`, paired with GitHub Release SLSA v4 build provenance attestations (`actions/attest-build-provenance@v2`).
+
+### Fixed
+- **F41 (Citation DOI error caught by live Crossref audit):** Replaced mismatched DOI `10.1142/6768` on `Ungar2008` in `paper/refs.bib` with its verified World Scientific 2008 DOI `10.1142/6625`.
+- **Windows CI Bun 8.3 short-path fix (`bf04b3c`):** Added `fs.realpathSync.native(...)` in `tools/check.mjs` for `windows-latest` (`RUNNER~1`) compatibility and tightened `reference/glitchling_oracle.py` NumPy 2.x `mypy` typing (`0` errors on Ubuntu/Windows/macOS).
+
 ## [2.2.0] - 2026-11-25: 3-Cycle Hardening, Lean 4.35.0 Formal Core, Python Oracle, Build Standard v1.2.0 & AMS-LaTeX Preprint
 
 ### Added

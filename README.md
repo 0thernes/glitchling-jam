@@ -79,7 +79,7 @@ Browser URL settings work out of the box, e.g. `play/?seed=7&flaws=backwards,scr
 
 ## Pure Lean 4.35.0 Formal Core & Verbatim `#print axioms` Audit
 
-All 59 exported declarations (`51` library theorems across `EnergyMassConservation`, `QuantumContextuality`, `CodingAndGovernance`, `HyperbolicAndFlaws` + `8` isolated comparator targets in `Solution.lean` matched against `Challenge.lean`) compile with **zero Mathlib**, **zero `sorry`**, **zero `native_decide`**, `autoImplicit = false`, pass `lake env leanchecker --fresh`, and depend strictly on `[propext, Classical.choice, Quot.sound]` (or zero axioms). Full 59-declaration output is saved in [`results/lean_axioms.txt`](results/lean_axioms.txt) and guarded against drift by `scripts/check_readme_axioms.py`:
+All 72 exported declarations (`63` library theorems across `EnergyMassConservation`, `QuantumContextuality`, `CodingAndGovernance`, `HyperbolicAndFlaws`, `NonVacuity` [6 witnesses], and `AdversarialTests` [6 false-variant refutations] + `9` isolated comparator targets in `Solution.lean` matched against `Challenge.lean`) compile with **zero Mathlib**, **zero `sorry`**, **zero `native_decide`**, `autoImplicit = false`, pass `lake env leanchecker --fresh`, **all 6 independent Lean kernels** (`Lean paranoid`, `lean4lean`, `nanoda`, `con-leche`, `con-ron`, `Lean default`) via `lake comparator --config comparator.json --paranoid` + live negative tamper rejection (`scripts/test_lean_negative.py`), and depend strictly on `[propext, Classical.choice, Quot.sound]` (or zero axioms). Full 72-declaration output is saved in [`results/lean_axioms.txt`](results/lean_axioms.txt) and guarded against drift by `scripts/check_readme_axioms.py`:
 
 <!-- LEAN_AXIOMS_START -->
 ```text
@@ -97,6 +97,11 @@ All 59 exported declarations (`51` library theorems across `EnergyMassConservati
 'Glitchling.nestor_sr_variance_bound' depends on axioms: [propext, Quot.sound]
 'Glitchling.poincare_mobius_norm_identity' depends on axioms: [propext, Quot.sound]
 'Glitchling.poincare_mobius_preserves_disk' depends on axioms: [propext, Quot.sound]
+'Glitchling.nv02_clausius_strict_pos_witness' does not depend on any axioms
+'Glitchling.nv06_poincare_interior_witness' does not depend on any axioms
+'Glitchling.at01_refute_unlogged_energy_creation' depends on axioms: [propext, Quot.sound]
+'Glitchling.at02_refute_cega18_noncontextual_nine' depends on axioms: [propext, Quot.sound]
+'Glitchling.at05_refute_poincare_boundary_escape' depends on axioms: [propext, Quot.sound]
 'Glitchling.ComparatorTarget.target_thm1_energy_mass_clausius' depends on axioms: [propext, Quot.sound]
 'Glitchling.ComparatorTarget.target_thm2_cega18_kochen_specker' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Glitchling.ComparatorTarget.target_thm3_chsh_and_nosignaling' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -105,6 +110,7 @@ All 59 exported declarations (`51` library theorems across `EnergyMassConservati
 'Glitchling.ComparatorTarget.target_thm6_nestor_stochastic_rounding' depends on axioms: [propext, Quot.sound]
 'Glitchling.ComparatorTarget.target_thm7_poincare_mobius_containment' depends on axioms: [propext, Quot.sound]
 'Glitchling.ComparatorTarget.target_thm8_flaws_and_nonvacuity' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Glitchling.ComparatorTarget.target_thm9_adversarial_and_nonvacuity' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
 <!-- LEAN_AXIOMS_END -->
 
@@ -123,7 +129,7 @@ All 59 exported declarations (`51` library theorems across `EnergyMassConservati
 
 | Path | What |
 |---|---|
-| [`lean/`](lean/) | Pure Lean `v4.35.0` formal core (0 Mathlib, 59 audited declarations, `Challenge`/`Solution` comparator) |
+| [`lean/`](lean/) | Pure Lean `v4.35.0` formal core (0 Mathlib, 72 audited declarations, 6-kernel `Challenge`/`Solution` comparator + `NonVacuity` & `AdversarialTests`) |
 | [`reference/`](reference/), [`tests/`](tests/) | Independent Python Kronecker/Fraction reference oracle (`glitchling_oracle.py`) + `pytest`/`hypothesis` suite |
 | [`paper/`](paper/), [`dist/`](dist/) | AMS-LaTeX scientific preprint (`main.tex`, `refs.bib`, `WHITE_PAPER.md`), vector figures, frozen PDF & arXiv tarball |
 | [`live/`](live/) | Glitchling v2 live 3D A-Life Bio-Observatory, Geodesic Biodome, HEPTARCH v0.2, NESTOR, & JS verification ladder (`live/test/`) |

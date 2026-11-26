@@ -49,8 +49,8 @@ def main() -> None:
         raise SystemExit(f"Missing {axioms_path}")
     raw = axioms_path.read_text(encoding="utf-8")
     entries = parse_axioms(raw)
-    if len(entries) < 59:
-        raise SystemExit(f"Expected >= 59 audited Lean declarations, got {len(entries)}")
+    if len(entries) < 72:
+        raise SystemExit(f"Expected >= 72 audited Lean declarations, got {len(entries)}")
 
     for name, axs in entries:
         bad = set(axs) - ALLOWED
@@ -67,8 +67,10 @@ def main() -> None:
         "'Glitchling.ComparatorTarget.target_thm1_energy_mass_clausius' depends on axioms: [propext, Quot.sound]",
         "'Glitchling.ComparatorTarget.target_thm4_gf16_and_rs15_11' depends on axioms: [propext, Quot.sound]",
         "'Glitchling.ComparatorTarget.target_thm7_poincare_mobius_containment' depends on axioms: [propext, Quot.sound]",
+        "'Glitchling.ComparatorTarget.target_thm9_adversarial_and_nonvacuity' depends on axioms: [propext, Classical.choice, Quot.sound]",
         "'Glitchling.cega18_kochen_specker_uncolorable' depends on axioms: [propext, Quot.sound]",
         "'Glitchling.poincare_mobius_preserves_disk' depends on axioms: [propext, Quot.sound]",
+        "'Glitchling.at02_refute_cega18_noncontextual_nine' depends on axioms: [propext, Quot.sound]",
     ]
     for snip in required_snippets:
         if snip not in block:

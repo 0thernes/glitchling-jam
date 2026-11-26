@@ -1,24 +1,24 @@
 # AUDIT/INDEX.md: table of contents of every tracked file
 
-Generated from `git ls-files` by `AUDIT/tools/index.py`. 380 tracked files, 161.1 MB.
+Generated from `git ls-files` by `AUDIT/tools/index.py`. 388 tracked files, 161.1 MB.
 
 Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirect** = imported (transitively) by a directly covered module; **page** = exercised by the headless page check (`AUDIT/tools/pages_check.mjs`); **none** = no automated check.
 
 ## Contents
 
 - [.cursor](#cursor) (1 files)
-- [(root)](#root) (48 files)
+- [(root)](#root) (49 files)
 - [.github](#github) (7 files)
 - [AUDIT](#audit) (5 files)
 - [art](#art) (7 files)
 - [artifacts](#artifacts) (69 files)
 - [brain-viz](#brain-viz) (4 files)
 - [core](#core) (33 files)
-- [data](#data) (4 files)
+- [data](#data) (5 files)
 - [dist](#dist) (2 files)
 - [docs](#docs) (25 files)
 - [examples](#examples) (4 files)
-- [lean](#lean) (14 files)
+- [lean](#lean) (16 files)
 - [live/](#live) (5 files)
 - [live/js](#live-js) (34 files)
 - [live/test](#live-test) (33 files)
@@ -27,8 +27,8 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 - [play](#play) (4 files)
 - [reference](#reference) (2 files)
 - [research](#research) (21 files)
-- [results](#results) (7 files)
-- [scripts](#scripts) (9 files)
+- [results](#results) (8 files)
+- [scripts](#scripts) (12 files)
 - [site](#site) (15 files)
 - [synthetic](#synthetic) (2 files)
 - [tests](#tests) (1 files)
@@ -53,8 +53,8 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `AUTHORS.md` | 1,269 | Markdown | Authors & Attribution | n/a (data/asset/doc) |
 | `BLUEPRINT.md` | 50,588 | Markdown | Glitchling v2 — BLUEPRINT | n/a (data/asset/doc) |
 | `BRAINS.md` | 41,386 | Markdown | BRAINS.md: a shared brain-design compendium for CQM, A-Life Creature #1 and Glitchling | n/a (data/asset/doc) |
-| `CHANGELOG.md` | 8,518 | Markdown | Changelog (repository level) | n/a (data/asset/doc) |
-| `CHECKSUMS.sha256` | 398 | SHA-256 manifest |  | n/a (data/asset/doc) |
+| `CHANGELOG.md` | 10,587 | Markdown | Changelog (repository level) | n/a (data/asset/doc) |
+| `CHECKSUMS.sha256` | 492 | SHA-256 manifest |  | n/a (data/asset/doc) |
 | `CITATION.bib` | 513 | BibTeX |  | n/a (data/asset/doc) |
 | `CITATION.cff` | 937 | CITATION.cff |  | n/a (data/asset/doc) |
 | `CLAIMS.md` | 10,460 | Markdown | Claims Ledger (`CLAIMS.md`) | n/a (data/asset/doc) |
@@ -70,11 +70,12 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `LIMITATIONS.md` | 5,081 | Markdown | Limitations, Epistemic Boundaries & Real-vs-Metaphor Table (`LIMITATIONS.md`) | n/a (data/asset/doc) |
 | `Makefile` | 683 | - |  | n/a (data/asset/doc) |
 | `NOTES.md` | 27,006 | Markdown | Glitchling: one-day jam coordination doc | n/a (data/asset/doc) |
-| `README.md` | 12,078 | Markdown | Glitchling (`v2.2.0`) | n/a (data/asset/doc) |
+| `README.md` | 12,999 | Markdown | Glitchling (`v2.2.0`) | n/a (data/asset/doc) |
 | `REPLICATION.md` | 4,141 | Markdown | Replication Protocol (`REPLICATION.md`) | n/a (data/asset/doc) |
 | `ROADMAP.md` | 2,093 | Markdown | Roadmap | n/a (data/asset/doc) |
 | `SCIENTIFIC_DEFENSE_DOSSIER.md` | 25,562 | Markdown | Glitchling v2 · Scientific Defense Dossier (Pass 22) | n/a (data/asset/doc) |
 | `SECURITY.md` | 837 | Markdown | Security policy | n/a (data/asset/doc) |
+| `SUBMISSION_READINESS.md` | 3,883 | Markdown | Submission & Archival Readiness Ledger — Glitchling (`v2.3.0`) | n/a (data/asset/doc) |
 | `SUPPORT.md` | 995 | Markdown | Support | n/a (data/asset/doc) |
 | `THIRD_PARTY_NOTICES.md` | 1,642 | Markdown | Third-Party Notices & Licensing Attribution | n/a (data/asset/doc) |
 | `UPGRADING.md` | 1,944 | Markdown | Upgrading Guide | n/a (data/asset/doc) |
@@ -91,7 +92,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `plot.py` | 2,108 | Python 3 | cursed portrait: neuron activations of the all-flaws episode folded into a face-ish heatmap, with channel-shif | none |
 | `pyproject.toml` | 505 | TOML |  | n/a (data/asset/doc) |
 | `repo-standard.schema.json` | 5,417 | JSON |  | n/a (data/asset/doc) |
-| `repo.yaml` | 10,922 | YAML |  | n/a (data/asset/doc) |
+| `repo.yaml` | 10,980 | YAML |  | n/a (data/asset/doc) |
 
 ## .github
 
@@ -101,16 +102,16 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `.github/ISSUE_TEMPLATE/config.yml` | 429 | YAML |  | n/a (data/asset/doc) |
 | `.github/ISSUE_TEMPLATE/feature.yml` | 626 | YAML |  | n/a (data/asset/doc) |
 | `.github/labels.tsv` | 686 | TSV |  | n/a (data/asset/doc) |
-| `.github/workflows/ci.yml` | 6,223 | YAML |  | n/a (data/asset/doc) |
+| `.github/workflows/ci.yml` | 7,014 | YAML |  | n/a (data/asset/doc) |
 | `.github/workflows/pages.yml` | 539 | YAML |  | n/a (data/asset/doc) |
-| `.github/workflows/release.yml` | 2,425 | YAML |  | n/a (data/asset/doc) |
+| `.github/workflows/release.yml` | 2,725 | YAML |  | n/a (data/asset/doc) |
 
 ## AUDIT
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
 | `AUDIT/FINDINGS.md` | 18,143 | Markdown | AUDIT/FINDINGS.md | n/a (data/asset/doc) |
-| `AUDIT/INDEX.md` | 40,540 | Markdown | AUDIT/INDEX.md: table of contents of every tracked file | n/a (data/asset/doc) |
+| `AUDIT/INDEX.md` | 52,116 | Markdown | AUDIT/INDEX.md: table of contents of every tracked file | n/a (data/asset/doc) |
 | `AUDIT/PASSES.md` | 12,034 | Markdown | AUDIT/PASSES.md: hardening passes, 2026-11-24 | n/a (data/asset/doc) |
 | `AUDIT/tools/index.py` | 4,235 | Python 3 | coverage: which test files import which module | none |
 | `AUDIT/tools/pages_check.mjs` | 1,979 | JavaScript (ESM, Node) | Headless page check used by the audit: loads every page at phone (390x844) and desktop (1280x800) sizes and re | none |
@@ -256,13 +257,14 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `data/areas.json` | 95,024 | JSON |  | n/a (data/asset/doc) |
 | `data/areas_table.md` | 24,088 | Markdown |  | n/a (data/asset/doc) |
 | `data/build_areas.py` | 22,982 | Python 3 | Generates data/areas.json + BLUEPRINT table rows. Spec: id/area/system/attr=var>couples;...  '*' prefix on var | none |
+| `data/timestamps/CHECKSUMS.sha256.tsr` | 6,008 | .tsr |  | n/a (data/asset/doc) |
 
 ## dist
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `dist/Donahue_2026_glitchling_alife_verification.pdf` | 300,425 | PDF document |  | n/a (data/asset/doc) |
-| `dist/arxiv_submission.tar.gz` | 133,338 | Gzip tarball |  | n/a (data/asset/doc) |
+| `dist/Donahue_2026_glitchling_alife_verification.pdf` | 301,396 | PDF document |  | n/a (data/asset/doc) |
+| `dist/arxiv_submission.tar.gz` | 133,660 | Gzip tarball |  | n/a (data/asset/doc) |
 
 ## docs
 
@@ -307,17 +309,19 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `lean/Challenge.lean` | 6,386 | Lean 4 |  | n/a (data/asset/doc) |
-| `lean/GlitchlingProofs.lean` | 377 | Lean 4 |  | n/a (data/asset/doc) |
+| `lean/Challenge.lean` | 7,388 | Lean 4 |  | n/a (data/asset/doc) |
+| `lean/GlitchlingProofs.lean` | 453 | Lean 4 |  | n/a (data/asset/doc) |
+| `lean/GlitchlingProofs/AdversarialTests.lean` | 3,335 | Lean 4 |  | n/a (data/asset/doc) |
 | `lean/GlitchlingProofs/CodingAndGovernance.lean` | 14,103 | Lean 4 |  | n/a (data/asset/doc) |
 | `lean/GlitchlingProofs/EnergyMassConservation.lean` | 9,244 | Lean 4 |  | n/a (data/asset/doc) |
 | `lean/GlitchlingProofs/HyperbolicAndFlaws.lean` | 19,626 | Lean 4 |  | n/a (data/asset/doc) |
+| `lean/GlitchlingProofs/NonVacuity.lean` | 4,289 | Lean 4 |  | n/a (data/asset/doc) |
 | `lean/GlitchlingProofs/QuantumContextuality.lean` | 9,427 | Lean 4 |  | n/a (data/asset/doc) |
 | `lean/GlitchlingProofs/Spec.lean` | 12,341 | Lean 4 |  | n/a (data/asset/doc) |
 | `lean/README.md` | 3,340 | Markdown | `lean/` — Pure Lean 4.35.0 Formal Verification Core (`GlitchlingProofs`) | n/a (data/asset/doc) |
-| `lean/Solution.lean` | 4,892 | Lean 4 |  | n/a (data/asset/doc) |
-| `lean/VerifyAxioms.lean` | 3,996 | Lean 4 |  | n/a (data/asset/doc) |
-| `lean/comparator.json` | 737 | JSON |  | n/a (data/asset/doc) |
+| `lean/Solution.lean` | 5,835 | Lean 4 |  | n/a (data/asset/doc) |
+| `lean/VerifyAxioms.lean` | 4,975 | Lean 4 |  | n/a (data/asset/doc) |
+| `lean/comparator.json` | 811 | JSON |  | n/a (data/asset/doc) |
 | `lean/lake-manifest.json` | 148 | JSON |  | n/a (data/asset/doc) |
 | `lean/lakefile.toml` | 263 | TOML |  | n/a (data/asset/doc) |
 | `lean/lean-toolchain` | 25 | - |  | n/a (data/asset/doc) |
@@ -438,7 +442,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `paper/fig_lesion_forest.pdf` | 43,662 | PDF document |  | n/a (data/asset/doc) |
 | `paper/fig_results_v3.pdf` | 31,438 | PDF document |  | n/a (data/asset/doc) |
 | `paper/fig_verification_pyramid.pdf` | 42,924 | PDF document |  | n/a (data/asset/doc) |
-| `paper/main.tex` | 44,054 | AMS-LaTeX |  | n/a (data/asset/doc) |
+| `paper/main.tex` | 45,193 | AMS-LaTeX |  | n/a (data/asset/doc) |
 | `paper/refs.bib` | 7,087 | BibTeX |  | n/a (data/asset/doc) |
 
 ## play
@@ -455,7 +459,7 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
 | `reference/__init__.py` | 60 | Python 3 | Reference mathematical oracle package for Glitchling.""" | none |
-| `reference/glitchling_oracle.py` | 18,360 | Python 3 | Independent textbook exact-arithmetic & linear-algebra reference oracle for Glitchling. | none |
+| `reference/glitchling_oracle.py` | 18,380 | Python 3 | Independent textbook exact-arithmetic & linear-algebra reference oracle for Glitchling. | none |
 
 ## research
 
@@ -488,9 +492,10 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
 | `results/activations_allflaws_seed1.json` | 309,217 | JSON |  | n/a (data/asset/doc) |
+| `results/citation-audit.json` | 10,110 | JSON |  | n/a (data/asset/doc) |
 | `results/cursed_portrait.png` | 34,085 | PNG image |  | n/a (data/asset/doc) |
 | `results/glitchling.png` | 133,141 | PNG image |  | n/a (data/asset/doc) |
-| `results/lean_axioms.txt` | 4,998 | .txt |  | n/a (data/asset/doc) |
+| `results/lean_axioms.txt` | 6,217 | .txt |  | n/a (data/asset/doc) |
 | `results/perf-benchmarks.json` | 2,303 | JSON |  | n/a (data/asset/doc) |
 | `results/results.json` | 384,602 | JSON |  | n/a (data/asset/doc) |
 | `results/summary.csv` | 14,950 | CSV |  | n/a (data/asset/doc) |
@@ -502,11 +507,14 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 | `scripts/Audit-Repo.ps1` | 17,158 | PowerShell |  | n/a (data/asset/doc) |
 | `scripts/audit-checks.tsv` | 8,356 | TSV |  | n/a (data/asset/doc) |
 | `scripts/audit-repo.sh` | 14,011 | Bash shell |  | n/a (data/asset/doc) |
+| `scripts/audit_citations.py` | 7,643 | Python 3 | Live Crossref DOI, title-match & retraction audit for paper/refs.bib -> results/citation-audit.json. | none |
 | `scripts/bench.mjs` | 3,578 | JavaScript (ESM, Node) | Glitchling v2.2.0 — Honest Warmed Micro-Benchmark Harness (B26, B27) | none |
 | `scripts/build_llms_full.py` | 1,161 | Python 3 | Generate offline llms-full.txt digest bundle for LLM/agent consumption (`Build Standard A32`).""" | none |
-| `scripts/check_readme_axioms.py` | 3,511 | Python 3 | Verify that README.md embeds the exact verbatim Lean 4 `#print axioms` summary from results/lean_axioms.txt."" | none |
+| `scripts/check_readme_axioms.py` | 3,753 | Python 3 | Verify that README.md embeds the exact verbatim Lean 4 `#print axioms` summary from results/lean_axioms.txt."" | none |
 | `scripts/generate_figures.py` | 13,506 | Python 3 | Generate publication-quality vector PDF figures for paper/main.tex from real measured data.""" | none |
-| `scripts/package_dist.py` | 6,028 | Python 3 | Compile paper/main.tex with Tectonic (zero-warning check), package dist/ PDF & arXiv tarball, | none |
+| `scripts/package_dist.py` | 6,067 | Python 3 | Compile paper/main.tex with Tectonic (zero-warning check), package dist/ PDF & arXiv tarball, | none |
+| `scripts/test_lean_negative.py` | 4,662 | Python 3 | Live negative-tamper Lean 4 verification test. | none |
+| `scripts/timestamp_checksums.py` | 4,146 | Python 3 | Mint and verify a standard RFC 3161 cryptographic timestamp (DigiCert TSA) on CHECKSUMS.sha256. | none |
 | `scripts/verify_exact.py` | 9,904 | Python 3 | End-to-end exact verification, differential JS-vs-Python oracle check, Lean static audit, | none |
 
 ## site
@@ -546,5 +554,5 @@ Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirec
 
 | File | Bytes | Language | Purpose (first heading/comment) | Test coverage |
 |---|---:|---|---|---|
-| `tools/check.mjs` | 10,362 | JavaScript (ESM, Node) | Repository health check, run by `npm test` and by CI (.github/workflows/ci.yml). | none |
+| `tools/check.mjs` | 10,652 | JavaScript (ESM, Node) | Repository health check, run by `npm test` and by CI (.github/workflows/ci.yml). | none |
 | `tools/results_stats.mjs` | 5,579 | JavaScript (ESM, Node) | Summary statistics for results/summary.csv (audit F31/D9). No dependencies. | none |

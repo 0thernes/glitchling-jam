@@ -49,6 +49,18 @@
 'Glitchling.leaky_contraction_identity' depends on axioms: [propext, Quot.sound]
 'Glitchling.leaky_preserves_prior' depends on axioms: [propext, Quot.sound]
 'Glitchling.leaky_strict_contraction_above' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Glitchling.nv01_energy_mass_balanced_witness' depends on axioms: [propext, Quot.sound]
+'Glitchling.nv02_clausius_strict_pos_witness' does not depend on any axioms
+'Glitchling.nv03_cega18_eight_of_nine_witness' depends on axioms: [propext, Quot.sound]
+'Glitchling.nv04_gf16_inverse_and_primitive_witness' depends on axioms: [propext, Quot.sound]
+'Glitchling.nv05_heptarch_valid_simplex_witness' depends on axioms: [propext, Quot.sound]
+'Glitchling.nv06_poincare_interior_witness' does not depend on any axioms
+'Glitchling.at01_refute_unlogged_energy_creation' depends on axioms: [propext, Quot.sound]
+'Glitchling.at02_refute_cega18_noncontextual_nine' depends on axioms: [propext, Quot.sound]
+'Glitchling.at03_refute_chsh_local_exceeds_two' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Glitchling.at04_refute_heptarch_monopoly_or_duopoly' depends on axioms: [propext, Quot.sound]
+'Glitchling.at05_refute_poincare_boundary_escape' depends on axioms: [propext, Quot.sound]
+'Glitchling.at06_refute_mirror_fixed_point' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Glitchling.ComparatorTarget.target_thm1_energy_mass_clausius' depends on axioms: [propext, Quot.sound]
 'Glitchling.ComparatorTarget.target_thm2_cega18_kochen_specker' depends on axioms: [propext,
  Classical.choice,
@@ -61,5 +73,8 @@
 'Glitchling.ComparatorTarget.target_thm6_nestor_stochastic_rounding' depends on axioms: [propext, Quot.sound]
 'Glitchling.ComparatorTarget.target_thm7_poincare_mobius_containment' depends on axioms: [propext, Quot.sound]
 'Glitchling.ComparatorTarget.target_thm8_flaws_and_nonvacuity' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'Glitchling.ComparatorTarget.target_thm9_adversarial_and_nonvacuity' depends on axioms: [propext,
  Classical.choice,
  Quot.sound]

@@ -1,4 +1,4 @@
-name: CI — Cross-Platform Verification, Exact Oracle, Lean 4.35.0 & AMS-LaTeX
+name: CI — Cross-Platform Verification, Exact Oracle, 6-Kernel Lean 4.35.0 & AMS-LaTeX
 
 on:
   push:
@@ -47,8 +47,12 @@ jobs:
         run: python scripts/verify_exact.py
       - name: Pytest + Hypothesis property-based oracle suite
         run: python -m pytest tests/test_oracle.py -v
-      - name: Verbatim README #print axioms drift check
+      - name: Verbatim README #print axioms drift check (72 declarations)
         run: python scripts/check_readme_axioms.py
+      - name: Verify offline citation audit & DigiCert RFC 3161 TSA timestamp
+        run: |
+          python scripts/audit_citations.py --verify-offline
+          python scripts/timestamp_checksums.py --verify-only
       - name: Verify cryptographic SHA-256 manifests (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -85,7 +89,7 @@ jobs:
         run: bash scripts/audit-repo.sh .
 
   lean4-formal-audit:
-    name: Lean 4 (v4.35.0) 59-Decl Audit, leanchecker & lake comparator --paranoid
+    name: Lean 4.35.0 72-Decl Audit, 6-Kernel Palomar Comparator & Live Negative Tamper
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -96,7 +100,7 @@ jobs:
           toolchain="$(tr -d '[:space:]' < lean/lean-toolchain)"
           curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain "$toolchain"
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-      - name: Clean-build GlitchlingProofs, Challenge & Solution + audit 59 axioms + leanchecker
+      - name: Clean-build GlitchlingProofs, Challenge & Solution + audit 72 axioms + leanchecker
         working-directory: lean
         shell: bash
         run: |
@@ -120,15 +124,26 @@ jobs:
                       raise SystemExit(f"ERROR: Forbidden axiom {used - allowed} in: {line}")
               elif "does not depend on any axioms" in line:
                   count += 1
-          assert count >= 59, f"Expected >= 59 audited declarations, got {count}"
+          assert count >= 72, f"Expected >= 72 audited declarations, got {count}"
           print(f"PASS: All {count} Lean 4 declarations strictly within {sorted(allowed)} (or zero axioms).")
           PY
-      - name: Run Palomar lake comparator --paranoid (if supported on toolchain)
+      - name: REQUIRED 6-kernel Palomar verification (lake comparator --paranoid inside bubblewrap)
         working-directory: lean
-        continue-on-error: true
+        shell: bash
         run: |
+          set -o pipefail
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-          lake comparator --config comparator.json --paranoid
+          lake comparator --config comparator.json --paranoid | tee ../results/lean4-multi-kernel-ci.log
+      - name: REQUIRED live negative tamper test (sorry-tampered Solution rejected by VerifyAxioms & comparator)
+        shell: bash
+        run: python3 scripts/test_lean_negative.py --with-comparator
+      - name: Upload 6-kernel Lean verification log artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lean4-6kernel-verification-log
+          path: |
+            results/lean-audit-ci.log
+            results/lean4-multi-kernel-ci.log
 
   latex-manuscript-check:
     name: AMS-LaTeX Zero-Warning PDF & Standalone arXiv Tarball Check (Tectonic)

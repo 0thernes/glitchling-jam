@@ -108,4 +108,20 @@ theorem target_thm8_flaws_and_nonvacuity :
      mirrorSite 0 = 15) := by
   sorry
 
+/-- Target 9 (Adversarial False-Variant Refutations & Constructive Non-Vacuity):
+    Certifies simultaneously that corrupted variants (unlogged energy creation, CEGA-18 9-coloring,
+    CHSH > 2 local strategy, HEPTARCH monopoly/duopoly, Poincaré boundary escape, mirror fixed point)
+    are provably `False`, and that non-trivial witnesses inhabit every specification. -/
+theorem target_thm9_adversarial_and_nonvacuity :
+    (¬ ∃ f : Fin 18 → Bool, isCEGAKSColoring f) ∧
+    (¬ ∃ a0 a1 b0 b1 : Int,
+      (a0 = 1 ∨ a0 = -1) ∧ (a1 = 1 ∨ a1 = -1) ∧ (b0 = 1 ∨ b0 = -1) ∧ (b1 = 1 ∨ b1 = -1) ∧
+      chshExpr a0 a1 b0 b1 > 2) ∧
+    (¬ ∃ k : Nat, k < 16 ∧ mirrorSite k = k) ∧
+    (∃ f : Fin 18 → Bool, (cegaContexts.filter (fun ctx => ctxTrueCount f ctx == 1)).length = 8 ∧
+      ¬ isCEGAKSColoring f) ∧
+    (gf16Mul ⟨2, by omega⟩ ⟨9, by omega⟩ = ⟨1, by omega⟩ ∧
+     gf16Mul ⟨3, by omega⟩ ⟨14, by omega⟩ = ⟨1, by omega⟩) := by
+  sorry
+
 end Glitchling.ComparatorTarget

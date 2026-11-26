@@ -67,7 +67,23 @@ import Solution
 #print axioms Glitchling.leaky_preserves_prior
 #print axioms Glitchling.leaky_strict_contraction_above
 
--- Isolated Comparator Targets (`Solution.lean` vs `Challenge.lean`, 8 targets)
+-- Module 5: Constructive Non-Vacuity Witnesses (`NonVacuity.lean`, 6 theorems)
+#print axioms Glitchling.nv01_energy_mass_balanced_witness
+#print axioms Glitchling.nv02_clausius_strict_pos_witness
+#print axioms Glitchling.nv03_cega18_eight_of_nine_witness
+#print axioms Glitchling.nv04_gf16_inverse_and_primitive_witness
+#print axioms Glitchling.nv05_heptarch_valid_simplex_witness
+#print axioms Glitchling.nv06_poincare_interior_witness
+
+-- Module 6: Adversarial False-Variant Refutations (`AdversarialTests.lean`, 6 theorems)
+#print axioms Glitchling.at01_refute_unlogged_energy_creation
+#print axioms Glitchling.at02_refute_cega18_noncontextual_nine
+#print axioms Glitchling.at03_refute_chsh_local_exceeds_two
+#print axioms Glitchling.at04_refute_heptarch_monopoly_or_duopoly
+#print axioms Glitchling.at05_refute_poincare_boundary_escape
+#print axioms Glitchling.at06_refute_mirror_fixed_point
+
+-- Isolated Comparator Targets (`Solution.lean` vs `Challenge.lean`, 9 targets)
 #print axioms Glitchling.ComparatorTarget.target_thm1_energy_mass_clausius
 #print axioms Glitchling.ComparatorTarget.target_thm2_cega18_kochen_specker
 #print axioms Glitchling.ComparatorTarget.target_thm3_chsh_and_nosignaling
@@ -76,3 +92,4 @@ import Solution
 #print axioms Glitchling.ComparatorTarget.target_thm6_nestor_stochastic_rounding
 #print axioms Glitchling.ComparatorTarget.target_thm7_poincare_mobius_containment
 #print axioms Glitchling.ComparatorTarget.target_thm8_flaws_and_nonvacuity
+#print axioms Glitchling.ComparatorTarget.target_thm9_adversarial_and_nonvacuity

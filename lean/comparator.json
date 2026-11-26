@@ -9,7 +9,8 @@
     "Glitchling.ComparatorTarget.target_thm5_heptarch_anti_monarchy",
     "Glitchling.ComparatorTarget.target_thm6_nestor_stochastic_rounding",
     "Glitchling.ComparatorTarget.target_thm7_poincare_mobius_containment",
-    "Glitchling.ComparatorTarget.target_thm8_flaws_and_nonvacuity"
+    "Glitchling.ComparatorTarget.target_thm8_flaws_and_nonvacuity",
+    "Glitchling.ComparatorTarget.target_thm9_adversarial_and_nonvacuity"
   ],
   "permitted_axioms": [
     "propext",

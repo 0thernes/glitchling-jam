@@ -2,8 +2,8 @@ cff-version: 1.2.0
 title: "Glitchling: Engineered Flaw Resilience, Multi-Cohort A-Life Falsification, Exact Independent Oracles, and Pure Lean 4 Verification"
 message: "If you cite this repository, formal proofs, or preprint, please use the metadata below."
 type: software
-version: "2.2.0"
-date-released: "2026-11-25"
+version: "2.3.0"
+date-released: "2026-11-26"
 license-url: "https://github.com/0thernes/glitchling-jam/blob/main/LICENSE"
 repository-code: "https://github.com/0thernes/glitchling-jam"
 url: "https://0thernes.github.io/glitchling-jam/"

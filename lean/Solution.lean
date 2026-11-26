@@ -99,4 +99,21 @@ theorem target_thm8_flaws_and_nonvacuity :
    Glitchling.leaky_contraction_identity,
    by decide⟩
 
+theorem target_thm9_adversarial_and_nonvacuity :
+    (¬ ∃ f : Fin 18 → Bool, isCEGAKSColoring f) ∧
+    (¬ ∃ a0 a1 b0 b1 : Int,
+      (a0 = 1 ∨ a0 = -1) ∧ (a1 = 1 ∨ a1 = -1) ∧ (b0 = 1 ∨ b0 = -1) ∧ (b1 = 1 ∨ b1 = -1) ∧
+      chshExpr a0 a1 b0 b1 > 2) ∧
+    (¬ ∃ k : Nat, k < 16 ∧ mirrorSite k = k) ∧
+    (∃ f : Fin 18 → Bool, (cegaContexts.filter (fun ctx => ctxTrueCount f ctx == 1)).length = 8 ∧
+      ¬ isCEGAKSColoring f) ∧
+    (gf16Mul ⟨2, by omega⟩ ⟨9, by omega⟩ = ⟨1, by omega⟩ ∧
+     gf16Mul ⟨3, by omega⟩ ⟨14, by omega⟩ = ⟨1, by omega⟩) :=
+  ⟨Glitchling.at02_refute_cega18_noncontextual_nine,
+   Glitchling.at03_refute_chsh_local_exceeds_two,
+   Glitchling.at06_refute_mirror_fixed_point,
+   Glitchling.nv03_cega18_eight_of_nine_witness,
+   ⟨Glitchling.nv04_gf16_inverse_and_primitive_witness.1,
+    Glitchling.nv04_gf16_inverse_and_primitive_witness.2.1⟩⟩
+
 end Glitchling.ComparatorTarget

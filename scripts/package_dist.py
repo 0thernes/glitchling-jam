@@ -86,6 +86,7 @@ def write_manifests() -> None:
         "dist/Donahue_2026_glitchling_alife_verification.pdf",
         "dist/arxiv_submission.tar.gz",
         "results/lean_axioms.txt",
+        "results/citation-audit.json",
         "results/perf-benchmarks.json",
     ]
     lines = [f"{sha256_file(ROOT / rel)}  {rel}" for rel in checksum_targets if (ROOT / rel).exists()]

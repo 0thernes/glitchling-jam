@@ -1,4 +1,4 @@
-name: Release Frozen Artifacts, SHA256SUMS & Build Provenance
+name: Release Frozen Artifacts, SHA256SUMS, RFC 3161 TSA & SLSA Provenance
 
 on:
   push:
@@ -25,12 +25,14 @@ jobs:
           python-version: "3.13"
       - name: Install Python verification deps
         run: python -m pip install --quiet numpy pytest hypothesis
-      - name: Verify JS ladder, examples, Python oracle & checksums prior to release
+      - name: Verify JS ladder, examples, Python oracle, citations, RFC 3161 TSA & checksums prior to release
         run: |
           npm run verify:ladder
           npm run examples
           python scripts/verify_exact.py
           python scripts/check_readme_axioms.py
+          python scripts/audit_citations.py --verify-offline
+          python scripts/timestamp_checksums.py --verify-only
           sha256sum -c CHECKSUMS.sha256
           sha256sum -c data/MANIFEST.sha256
       - name: Stage release artifacts and compute SHA256SUMS
@@ -39,19 +41,21 @@ jobs:
           cp dist/Donahue_2026_glitchling_alife_verification.pdf release-assets/
           cp dist/arxiv_submission.tar.gz release-assets/
           cp results/lean_axioms.txt release-assets/
+          cp results/citation-audit.json release-assets/
           cp results/summary.csv release-assets/
           cp results/perf-benchmarks.json release-assets/
+          cp data/timestamps/CHECKSUMS.sha256.tsr release-assets/
           cp CHECKSUMS.sha256 release-assets/
           (cd release-assets && sha256sum * > SHA256SUMS)
           cat release-assets/SHA256SUMS
       - name: Generate SLSA build provenance attestation for release artifacts
         uses: actions/attest-build-provenance@v2
-        continue-on-error: true
         with:
           subject-path: |
             release-assets/Donahue_2026_glitchling_alife_verification.pdf
             release-assets/arxiv_submission.tar.gz
             release-assets/lean_axioms.txt
+            release-assets/CHECKSUMS.sha256.tsr
             release-assets/SHA256SUMS
       - name: Create or update GitHub Release for tag
         if: startsWith(github.ref, 'refs/tags/v')
