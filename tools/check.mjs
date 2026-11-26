@@ -120,11 +120,16 @@ run('Reference sim (bun glitchling.ts 2 2 500): sane, deterministic, matches com
   }
   if (!bunExe) return 'SKIPPED (bun not installed)';
   const once = () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'glref-'));
+    const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'glref-')));
     fs.cpSync('glitchling.ts', path.join(tmp, 'glitchling.ts')); fs.cpSync('core', path.join(tmp, 'core'), { recursive: true });
-    const r = spawnSync(bunExe, ['run', 'glitchling.ts', '2', '2', '500'], { cwd: tmp, encoding: 'utf8', timeout: 600000, env: { ...process.env, BUN_JSC_useConcurrentJIT: '0' } });
-    if (r.status !== 0) throw new Error('bun run failed: ' + (r.stderr || '').slice(-400));
-    const csv = fs.readFileSync(path.join(tmp, 'results/summary.csv'), 'utf8'); fs.rmSync(tmp, { recursive: true, force: true }); return csv;
+    const r = spawnSync(bunExe, ['run', path.join(tmp, 'glitchling.ts'), '2', '2', '500'], { cwd: tmp, encoding: 'utf8', timeout: 600000, env: { ...process.env, BUN_JSC_useConcurrentJIT: '0' } });
+    const csvPath = path.join(tmp, 'results', 'summary.csv');
+    if (r.status !== 0 || !fs.existsSync(csvPath)) {
+      const diag = `status=${r.status} err=${r.error || ''} stdout=${(r.stdout || '').slice(-300)} stderr=${(r.stderr || '').slice(-300)}`;
+      fs.rmSync(tmp, { recursive: true, force: true });
+      throw new Error('bun run failed: ' + diag);
+    }
+    const csv = fs.readFileSync(csvPath, 'utf8'); fs.rmSync(tmp, { recursive: true, force: true }); return csv;
   };
   const a = once(), b = once();
   if (a !== b) throw new Error('two runs with BUN_JSC_useConcurrentJIT=0 differ');

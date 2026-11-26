@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from fractions import Fraction
-from typing import Sequence
+from typing import Any, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -482,7 +482,7 @@ def solve_cry4_haberkorn(
     liouv -= 0.5 * k_s * (np.kron(p_s, i8) + np.kron(i8, p_s.T))
     liouv -= 0.5 * k_t * (np.kron(p_t, i8) + np.kron(i8, p_t.T))
 
-    def add_lindblad(op: NDArray[np.complex128], rate: float) -> None:
+    def add_lindblad(op: NDArray[np.complexfloating[Any, Any]], rate: float) -> None:
         nonlocal liouv
         if rate <= 0.0:
             return
