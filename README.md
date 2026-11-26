@@ -1,11 +1,11 @@
-# Glitchling (`v2.2.0`)
+# Glitchling (`v2.3.0`)
 
 [![CI](https://github.com/0thernes/glitchling-jam/actions/workflows/ci.yml/badge.svg)](https://github.com/0thernes/glitchling-jam/actions/workflows/ci.yml)
 [![GitHub Pages](https://img.shields.io/badge/live-GitHub%20Pages-6b21a8)](https://0thernes.github.io/glitchling-jam/)
-[![Lean 4.35.0](https://img.shields.io/badge/Lean%204.35.0-59%20decls%20%C2%B7%200%20sorry-2563eb)](lean/README.md)
+[![Lean 4.35.0](https://img.shields.io/badge/Lean%204.35.0-72%20decls%20%C2%B7%200%20sorry-2563eb)](lean/README.md)
 [![Honesty](https://img.shields.io/badge/claims-no%20consciousness%20%2F%20no%20AGI-critical)](#real-vs-simulated-please-read)
 
-A deliberately broken baby clone of Alexander Stephen Donahue's A-Life **Creature #1**, built in a one-day jam (Nov 1, 2026) and hardened into a formally verified, cross-platform reproducible artificial-life research suite. **Status:** `active` (`v2.2.0`).
+A deliberately broken baby clone of Alexander Stephen Donahue's A-Life **Creature #1**, built in a one-day jam (Nov 1, 2026) and hardened into a cross-platform reproducible artificial-life research suite, with a Lean 4 model of its core discrete invariants. **Status:** `active` (`v2.3.0`).
 
 It has four engineered flaws you can switch on and off:
 
@@ -46,7 +46,7 @@ npm run stats
 python scripts/verify_exact.py
 python -m pytest tests/test_oracle.py -v
 
-# 5. Pure zero-Mathlib Lean 4.35.0 formal core (59 audited declarations + leanchecker)
+# 5. Pure zero-Mathlib Lean 4.35.0 formal core (72 audited declarations + leanchecker)
 cd lean && lake build GlitchlingProofs Challenge Solution && lake env lean VerifyAxioms.lean
 ```
 
@@ -79,7 +79,7 @@ Browser URL settings work out of the box, e.g. `play/?seed=7&flaws=backwards,scr
 
 ## Pure Lean 4.35.0 Formal Core & Verbatim `#print axioms` Audit
 
-All 72 exported declarations (`63` library theorems across `EnergyMassConservation`, `QuantumContextuality`, `CodingAndGovernance`, `HyperbolicAndFlaws`, `NonVacuity` [6 witnesses], and `AdversarialTests` [6 false-variant refutations] + `9` isolated comparator targets in `Solution.lean` matched against `Challenge.lean`) compile with **zero Mathlib**, **zero `sorry`**, **zero `native_decide`**, `autoImplicit = false`, pass `lake env leanchecker --fresh`, **all 6 independent Lean kernels** (`Lean paranoid`, `lean4lean`, `nanoda`, `con-leche`, `con-ron`, `Lean default`) via `lake comparator --config comparator.json --paranoid` + live negative tamper rejection (`scripts/test_lean_negative.py`), and depend strictly on `[propext, Classical.choice, Quot.sound]` (or zero axioms). Full 72-declaration output is saved in [`results/lean_axioms.txt`](results/lean_axioms.txt) and guarded against drift by `scripts/check_readme_axioms.py`:
+All 72 exported declarations (`63` library theorems across `EnergyMassConservation`, `QuantumContextuality`, `CodingAndGovernance`, `HyperbolicAndFlaws`, `NonVacuity` [6 witnesses], and `AdversarialTests` [6 false-variant refutations] + `9` isolated comparator targets in `Solution.lean` matched against `Challenge.lean`) compile with **zero Mathlib**, **zero `sorry`** (the only `sorry` placeholders are the intentional targets in `Challenge.lean`), **zero `native_decide`** and `autoImplicit = false`, and depend only on `[propext, Classical.choice, Quot.sound]` (or zero axioms). They are kernel-checked by Lean (`lake build`, `lake env leanchecker --fresh`); the 9 comparator targets in `comparator.json` (and their dependency closure) were also accepted by 6 independent kernels (`Lean paranoid`, `lean4lean`, `nanoda`, `con-leche`, `con-ron`, `Lean default`) via `lake comparator --config comparator.json --paranoid`, and CI checks that a `sorry`-tampered `Solution.lean` is rejected (`scripts/test_lean_negative.py`). Full 72-declaration output is saved in [`results/lean_axioms.txt`](results/lean_axioms.txt) and guarded against drift by `scripts/check_readme_axioms.py`:
 
 <!-- LEAN_AXIOMS_START -->
 ```text
@@ -114,6 +114,17 @@ All 72 exported declarations (`63` library theorems across `EnergyMassConservati
 ```
 <!-- LEAN_AXIOMS_END -->
 
+**Scope of the Lean results (statement audit, 2026-11-26).** The theorems concern a hand-written Lean transcription of the simulator's discrete rules (`lean/GlitchlingProofs/Spec.lean`), not the JavaScript/TypeScript code itself; agreement with the JS is tested differentially and by property tests, not proven. Several items are weaker than their names suggest:
+
+- `rs15_11_mds_radius` checks only the Singleton arithmetic `d = 15 - 11 + 1 = 5`, `t = 2`. No Reed–Solomon code, minimum distance or decoder is modelled in Lean; decoding is covered by property tests only.
+- `c3_cubic_trace_gap` checks only `15360 - 14976 = 384` on literals. The traces themselves are an exact-rational Python result.
+- `bell_diagonal_exact_no_signaling` is a definitional consistency check of hand-written marginal formulas; no density matrix or partial trace is modelled.
+- The Clausius result shows that the model's numerator is `>= 0` when `0 < T_sky <= T_amb <= T_geo` and the fluxes `qDiss, qGeo, qRad >= 0`; it is not a derivation of the Second Law.
+- The NESTOR results are polynomial identities for two-point rounding (expectation and variance numerators) with no probability model; Möbius containment is proved for rational (integer-scaled) points of the open unit disk.
+- The energy ledger is proved balanced under every finite operation sequence; the N/C mass ledger has single-step preservation lemmas only.
+
+CEGA-18 uncolourability is a known result of Cabello, Estebaranz and García-Alcaine (1996), and the CHSH bound for deterministic local outcomes is due to Clauser, Horne, Shimony and Holt (1969); this repository formalizes them for its own model. Audit log: <https://github.com/0thernes/0thernes-research-archive/blob/main/docs/reviews/2026-11-26-statement-audit.md>. Corrections are listed in [`ERRATA.md`](ERRATA.md).
+
 ## Real vs simulated (please read)
 
 - **`play/` is a simplified JavaScript port** written for exploring the flaws interactively. It is **not** the TypeScript reference run, and its numbers will not match the published results.
@@ -129,7 +140,7 @@ All 72 exported declarations (`63` library theorems across `EnergyMassConservati
 
 | Path | What |
 |---|---|
-| [`lean/`](lean/) | Pure Lean `v4.35.0` formal core (0 Mathlib, 72 audited declarations, 6-kernel `Challenge`/`Solution` comparator + `NonVacuity` & `AdversarialTests`) |
+| [`lean/`](lean/) | Pure Lean `v4.35.0` formal core (0 Mathlib, 72 audited declarations, `Challenge`/`Solution` comparator targets checked by 6 kernels, `NonVacuity` & `AdversarialTests`) |
 | [`reference/`](reference/), [`tests/`](tests/) | Independent Python Kronecker/Fraction reference oracle (`glitchling_oracle.py`) + `pytest`/`hypothesis` suite |
 | [`paper/`](paper/), [`dist/`](dist/) | AMS-LaTeX scientific preprint (`main.tex`, `refs.bib`, `WHITE_PAPER.md`), vector figures, frozen PDF & arXiv tarball |
 | [`live/`](live/) | Glitchling v2 live 3D A-Life Bio-Observatory, Geodesic Biodome, HEPTARCH v0.2, NESTOR, & JS verification ladder (`live/test/`) |

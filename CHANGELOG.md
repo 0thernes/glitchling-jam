@@ -2,6 +2,14 @@
 
 The detailed per-pass history of the live 3D sim is in [`live/CHANGELOG.md`](live/CHANGELOG.md). This file records repository-wide changes. Dates are US Pacific.
 
+## 2026-11-26: Statement-audit corrections (documentation only, no version change)
+
+- Narrowed claims in `README.md`, `CLAIMS.md` (C2–C7, C10), `LIMITATIONS.md` and `docs/` to match the Lean statements: `RS[15,11]` `d = 5`, `t = 2` and the `C_3` trace gap are literal arithmetic in Lean; the Bell-diagonal theorem is definitional; the Clausius numerator result needs non-negative fluxes; the N/C mass ledger has single-step lemmas only; Möbius containment covers rational points; NESTOR results are polynomial identities.
+- Stated that the 6-kernel comparator run covers the 9 comparator targets and their dependency closure, and that the Lean model's correspondence to the JS/TS code is tested, not proven.
+- Credited CEGA-18 to Cabello, Estebaranz and García-Alcaine (1996) and the CHSH bound to Clauser, Horne, Shimony and Holt (1969).
+- Fixed version drift (`v2.2.0` to `v2.3.0`) and declaration-count drift (59 to 72) in the edited documents.
+- Recorded errors in the frozen paper and known issues in the Lean comments in `ERRATA.md` (section "2026-11-26 statement audit"). Audit log: <https://github.com/0thernes/0thernes-research-archive/blob/main/docs/reviews/2026-11-26-statement-audit.md>.
+
 ## [2.3.0] - 2026-11-26: 6-Kernel Lean 4.35.0 Hardening (72 Decls), Live Negative Tamper CI, Crossref DOI Audit (F41) & DigiCert RFC 3161 Timestamp
 
 ### Added
