@@ -388,7 +388,7 @@ if (runT(4)) {
 // =========================================================================================
 if (runT(5)) {
   const qWin = [], lhvWin = [], qEmpS = [];
-  let maxExactMargBias = 0, maxEmpNoSig = 0;
+  let maxExactMargBias = 0, maxEmpNoSig = 0, maxNoSigZ = 0;
 
   for (const seed of SEEDS_12) {
     const runXeno = (classicalSurrogate) => {
@@ -410,24 +410,38 @@ if (runT(5)) {
     lhvWin.push(stC.winRate);
     qEmpS.push(stQ.empiricalS);
     maxEmpNoSig = Math.max(maxEmpNoSig, stQ.noSignalingMaxDiff);
+    // Exact two-proportion binomial Z-statistic under H0: p_1 = p_2 = 0.5 across all 4 no-signaling pairs (F33/D10)
+    const cnt = stQ.counts;
+    const cellN = (xy) => cnt[xy * 4] + cnt[xy * 4 + 1] + cnt[xy * 4 + 2] + cnt[xy * 4 + 3];
+    const pA0 = (xy) => (cnt[xy * 4] + cnt[xy * 4 + 1]) / Math.max(1, cellN(xy));
+    const pB0 = (xy) => (cnt[xy * 4] + cnt[xy * 4 + 2]) / Math.max(1, cellN(xy));
+    const zPair = (pa, na, pb, nb) => Math.abs(pa - pb) / Math.sqrt(0.25 * (1 / Math.max(1, na) + 1 / Math.max(1, nb)));
+    const zSeed = Math.max(
+      zPair(pA0(0), cellN(0), pA0(1), cellN(1)),
+      zPair(pA0(2), cellN(2), pA0(3), cellN(3)),
+      zPair(pB0(0), cellN(0), pB0(2), cellN(2)),
+      zPair(pB0(1), cellN(1), pB0(3), cellN(3))
+    );
+    maxNoSigZ = Math.max(maxNoSigZ, zSeed);
   }
 
   const stBell = summarizePaired('T5: CHSH Win Rate (Quantum rho_AB vs Classical LHV)', qWin, lhvWin, 'greater');
   const stBound = summarizePaired('T5b: Quantum Win Rate above 0.75 Bell Ceiling', qWin, SEEDS_12.map(() => 0.75), 'greater');
   check(maxExactMargBias < 1e-15, `T5 Exact reduced density-matrix marginal bias must be 0: ${maxExactMargBias}`);
-  check(maxEmpNoSig < 0.11, `T5 Empirical finite-sample no-signaling discrepancy too large: ${maxEmpNoSig}`);
+  // Analytical Bonferroni alpha=0.001 two-sided critical value across 4*N=48 binomial contrasts: Phi^-1(1 - 0.001/(2*4*N)) ~= 4.26 (replaces ad-hoc 0.11 per F33/D10)
+  check(maxNoSigZ < 4.26, `T5 Empirical finite-sample no-signaling Z-stat exceeded Bonferroni alpha=0.001 bound (4.26): Z=${maxNoSigZ.toFixed(3)} (maxDiff=${maxEmpNoSig.toFixed(4)})`);
   check(mean(lhvWin) <= 0.768, `T5 Classical LHV surrogate exceeded Bell bound beyond binomial noise: ${mean(lhvWin)}`);
   check(stBell.p < 0.001 && stBound.p < 0.001, `T5 Quantum CHSH violation failed p<0.001: p=${stBell.p}`);
 
   SUMMARY_ROWS.push({
     id: 'T5',
     experiment: '4x4 Density-Matrix CHSH & No-Signaling',
-    metric: `exactBias=${maxExactMargBias.toExponential(1)}, empS=${mean(qEmpS).toFixed(3)}>2`,
+    metric: `exactBias=${maxExactMargBias.toExponential(1)}, maxZ=${maxNoSigZ.toFixed(2)}<4.26, empS=${mean(qEmpS).toFixed(3)}>2`,
     effect: `Win: Q=${(stBell.meanX * 100).toFixed(2)}% vs LHV=${(stBell.meanY * 100).toFixed(2)}% (>75% Bell)`,
     p: stBell.p.toFixed(6),
     d: stBell.dzLabel,
   });
-  console.log(`[PASS] T5 4x4 Density-Matrix CHSH & No-Signaling: Q_win=${(stBell.meanX * 100).toFixed(2)}% (S_emp=${mean(qEmpS).toFixed(3)}) vs LHV=${(stBell.meanY * 100).toFixed(2)}%, exactMargBias=${maxExactMargBias.toExponential(1)}, empNoSigMax=${maxEmpNoSig.toFixed(4)} (p=${stBell.p.toFixed(6)}, d_z=${stBell.dzLabel})`);
+  console.log(`[PASS] T5 4x4 Density-Matrix CHSH & No-Signaling: Q_win=${(stBell.meanX * 100).toFixed(2)}% (S_emp=${mean(qEmpS).toFixed(3)}) vs LHV=${(stBell.meanY * 100).toFixed(2)}%, exactMargBias=${maxExactMargBias.toExponential(1)}, empNoSigMax=${maxEmpNoSig.toFixed(4)} (Z_max=${maxNoSigZ.toFixed(2)}<4.26, p=${stBell.p.toFixed(6)}, d_z=${stBell.dzLabel})`);
 }
 
 // =========================================================================================

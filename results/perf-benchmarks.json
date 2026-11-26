@@ -1,0 +1,109 @@
+{
+  "version": "2.2.0",
+  "timestamp_utc": "2026-11-26T02:49:26.501Z",
+  "environment": {
+    "node": "v25.8.2",
+    "platform": "win32-x64",
+    "cpus": 24,
+    "cpu_model": "Intel(R) Core(TM) Ultra 9 275HX",
+    "mem_gb": 47.4
+  },
+  "benchmarks": [
+    {
+      "name": "live_creature_M_step",
+      "batch": 5,
+      "n": 30,
+      "median_ms": 18.6189,
+      "q25_ms": 15.4574,
+      "q75_ms": 21.8829,
+      "iqr_ms": 6.4254,
+      "p95_ms": 27.7788,
+      "min_ms": 12.3085,
+      "max_ms": 33.1265
+    },
+    {
+      "name": "live_creature_S_headless_step",
+      "batch": 10,
+      "n": 30,
+      "median_ms": 16.2066,
+      "q25_ms": 13.8847,
+      "q75_ms": 17.7722,
+      "iqr_ms": 3.8875,
+      "p95_ms": 21.2734,
+      "min_ms": 11.1093,
+      "max_ms": 22.4748
+    },
+    {
+      "name": "fmo_gksl_49x49_exact",
+      "batch": 1,
+      "n": 25,
+      "median_ms": 0.1342,
+      "q25_ms": 0.127,
+      "q75_ms": 0.1798,
+      "iqr_ms": 0.0528,
+      "p95_ms": 0.2747,
+      "min_ms": 0.1187,
+      "max_ms": 2.5662
+    },
+    {
+      "name": "fmo_forster_7x7_exact",
+      "batch": 50,
+      "n": 30,
+      "median_ms": 0.0011,
+      "q25_ms": 0.001,
+      "q75_ms": 0.0016,
+      "iqr_ms": 0.0006,
+      "p95_ms": 0.0047,
+      "min_ms": 0.0009,
+      "max_ms": 0.0068
+    },
+    {
+      "name": "cry4_haberkorn_64x64_exact",
+      "batch": 1,
+      "n": 20,
+      "median_ms": 0.8558,
+      "q25_ms": 0.5376,
+      "q75_ms": 1.5113,
+      "iqr_ms": 0.9737,
+      "p95_ms": 3.175,
+      "min_ms": 0.3446,
+      "max_ms": 3.4167
+    },
+    {
+      "name": "rs15_11_encode_corrupt2_decode",
+      "batch": 200,
+      "n": 30,
+      "median_ms": 0.0035,
+      "q25_ms": 0.0031,
+      "q75_ms": 0.0044,
+      "iqr_ms": 0.0012,
+      "p95_ms": 0.006,
+      "min_ms": 0.0026,
+      "max_ms": 0.0141
+    },
+    {
+      "name": "poincare_mobius_add",
+      "batch": 10000,
+      "n": 30,
+      "median_ms": 0,
+      "q25_ms": 0,
+      "q75_ms": 0.0001,
+      "iqr_ms": 0,
+      "p95_ms": 0.0001,
+      "min_ms": 0,
+      "max_ms": 0.0002
+    },
+    {
+      "name": "c3_cospectral_cached",
+      "batch": 1000,
+      "n": 20,
+      "median_ms": 0.0001,
+      "q25_ms": 0,
+      "q75_ms": 0.0001,
+      "iqr_ms": 0.0001,
+      "p95_ms": 0.0002,
+      "min_ms": 0,
+      "max_ms": 0.0003
+    }
+  ]
+}

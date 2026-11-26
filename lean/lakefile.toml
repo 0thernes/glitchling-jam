@@ -1,0 +1,16 @@
+name = "GlitchlingProofs"
+version = "2.2.0"
+defaultTargets = ["GlitchlingProofs", "Solution"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[lean_lib]]
+name = "GlitchlingProofs"
+
+[[lean_lib]]
+name = "Challenge"
+
+[[lean_lib]]
+name = "Solution"

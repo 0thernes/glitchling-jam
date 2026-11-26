@@ -1,0 +1,11 @@
+title = "Glitchling gitleaks config"
+
+[allowlist]
+description = "Ignore cryptographic checksum manifests and non-secret SHA-256 digests"
+paths = [
+  '''CHECKSUMS\.sha256$''',
+  '''data/MANIFEST\.sha256$''',
+  '''results/lean_axioms\.txt$''',
+  '''AUDIT/FINDINGS\.md$''',
+  '''AUDIT/PASSES\.md$''',
+]

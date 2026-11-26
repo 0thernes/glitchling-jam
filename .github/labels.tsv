@@ -1,0 +1,11 @@
+name	color	description
+bug	d73a4a	Code does the wrong thing
+error	e11d48	Statement, number, or citation is factually wrong
+issue	fbca04	Works, but degraded (UX, layout, accessibility, performance)
+problem	b60205	Structural defect blocking a core goal such as reproducibility
+concern	d93f0b	Legal, privacy, ethical, or scientific credibility risk
+dilemma	5319e7	Fix trades one good against another; requires owner decision
+conflict	c2e0c6	Two parts of the repository disagree with each other
+gap	0e8a16	Something expected or required is missing
+hole	f9d0c4	Unguarded input, boundary condition, or error path
+blindspot	1d76db	Something reported as real/measured that had not been audited

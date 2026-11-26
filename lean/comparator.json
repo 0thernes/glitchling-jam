@@ -1,0 +1,19 @@
+{
+  "challenge_module": "Challenge",
+  "solution_module": "Solution",
+  "theorem_names": [
+    "Glitchling.ComparatorTarget.target_thm1_energy_mass_clausius",
+    "Glitchling.ComparatorTarget.target_thm2_cega18_kochen_specker",
+    "Glitchling.ComparatorTarget.target_thm3_chsh_and_nosignaling",
+    "Glitchling.ComparatorTarget.target_thm4_gf16_and_rs15_11",
+    "Glitchling.ComparatorTarget.target_thm5_heptarch_anti_monarchy",
+    "Glitchling.ComparatorTarget.target_thm6_nestor_stochastic_rounding",
+    "Glitchling.ComparatorTarget.target_thm7_poincare_mobius_containment",
+    "Glitchling.ComparatorTarget.target_thm8_flaws_and_nonvacuity"
+  ],
+  "permitted_axioms": [
+    "propext",
+    "Quot.sound",
+    "Classical.choice"
+  ]
+}

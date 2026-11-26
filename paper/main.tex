@@ -1,0 +1,326 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage[section]{placeins}
+\usepackage{xcolor}
+\usepackage{url}
+\def\UrlBreaks{\do\/\do\-\do\_\do\.}
+\usepackage{enumitem}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,citecolor=teal!60!black,urlcolor=blue!60!black]{hyperref}
+\usepackage[nameinlink,capitalise]{cleveref}
+
+\numberwithin{equation}{section}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\F}{\mathbb{F}}
+\newcommand{\D}{\mathbb{D}}
+\newcommand{\code}[1]{{\ttfamily\footnotesize\def\_{\textunderscore\penalty0\hskip0pt}#1}}
+\emergencystretch=4em
+
+\title{\Large\bfseries Glitchling: Engineered Flaw Resilience, Multi-Cohort Artificial-Life Falsification, Independent Exact Oracles, and Pure Lean~4 Verification}
+
+\author{
+  Alexander Stephen Donahue\thanks{Independent Researcher (project handle \texttt{0thernes}), Spokane, WA, USA. Email: \href{mailto:0_0@0thernes.art}{\texttt{0\_0@0thernes.art}}. ORCID: \href{https://orcid.org/0009-0006-8168-9648}{\texttt{0009-0006-8168-9648}}. Source code, formal proofs, claim ledger, and replication protocol: \url{https://github.com/0thernes/glitchling-jam}. Interactive static observatory: \url{https://0thernes.github.io/glitchling-jam/}.}\\[0.35em]
+  \normalsize Independent Researcher, Spokane, WA, USA
+}
+
+\date{November 25, 2026 (Version 2.2.0)}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present \textbf{Glitchling} (\code{v2.2.0}), a multi-layer artificial-life (A-Life) research testbed and five-tier formal verification pipeline originating from a deliberately perturbed clone of A-Life Creature~\#1 (\code{glitchling.ts} subclassing a frozen copy of \code{core/\allowbreak organism.ts}) and expanded into a live 3D soft-body, spiking-network Geodesic Biodome (\code{live/}). Because computational A-Life claims are vulnerable to hidden RNG drift, JIT nondeterminism, formula-inflated scale metrics, and unverified mathematical submodules, we subject the codebase to a 35-pass external audit (\code{F01--F33}) and three deep hardening cycles (\code{F24/F30/F33--F40}), separating every quantitative statement into five explicit epistemic tiers:
+\begin{enumerate}[leftmargin=1.8em,itemsep=2pt]
+  \item \emph{Repeatable Reference-Sim Flaw Resilience (\code{Results v3}, \cref{sec:refsim}):} Discovering that default Bun/JavaScriptCore concurrent JIT compilation yields six distinct outputs across eleven identical runs (\code{F31}), we pin \code{BUN\_JSC\_\allowbreak useConcurrentJIT=0} across $n=30$ dev seeds ($500$--$529$, $210/210$ alive, byte-identical across simultaneous runs). Enabling all four flaws (\code{scramble}, \code{leaky}, \code{backwards}, \code{misfire}) increases foraging by $+22\%$ ($255.0 \pm 59.7$ vs.\ $209.3 \pm 60.9$, paired $\Delta = +45.8\,[34.5, 57.1]$, $d_z = 1.51$, $p = 5.0\times 10^{-6}$) while cutting hit rate ($0.299$ vs.\ $0.365$, $\Delta = -0.066$, $d_z = -1.01$), keeping total rewards comparable ($76.3$ vs.\ $74.5$). Crucially, $n=30$ \emph{refutes} an earlier $n=2$ hint of within-life hit-rate compensation ($-0.016\,[-0.042, +0.009]$) and a spurious \code{misfire} jump ($p = 0.477$).
+  \item \emph{Pure Zero-Mathlib Lean~4.35.0 Formal Core (\cref{sec:lean}):} Across $59$ exported kernel-checked declarations ($51$ library theorems plus $8$ isolated \code{Challenge}/\code{Solution} comparator targets; zero Mathlib, zero \code{sorry}, zero \code{native\_decide}, \code{autoImplicit = false}, verified by \code{leanchecker {-}{-}fresh} strictly within \code{[propext, Classical.choice, Quot.sound]}), we formally prove inductive 11-pool First-Law energy and closed N/C mass conservation, Clausius $\dot\Sigma \ge 0$, unconditional Cabello--Estebaranz--Garc\'ia-Alcaine (\code{CEGA-18}) Kochen--Specker uncolorability (exact classical ceiling $8 < 9$), CHSH local hidden-variable ceiling ($|S|\le 2$, win rate $\le 75\%$), Bell-diagonal zero no-signaling, complete $\F_{16} = \F_2[x]/(x^4+x+1)$ finite-field axioms and \code{RS[15,11,d=5]} radius $t=2$, \code{HEPTARCH} 7-seat anti-monarchy ($<50\%$) and anti-duopoly ($\ge 3$ active seats) across all $7$ mode-cap rows, \code{NESTOR} stochastic-rounding unbiasedness and Popoviciu variance bound $\Delta^2/4$, universal Ungar $K=-1$ Poincar\'e-disk M\"obius containment $D^2 - |N|^2 = (S^2 - |u|^2)(S^2 - |v|^2)D > 0$, and Glitchling's \code{backwards} involution and \code{leaky} contraction.
+  \item \emph{Independent Exact Python Reference Oracles (\cref{sec:oracle}):} Exact \code{Fraction}, integer, and complex Kronecker solvers with no shared JS code verify our physics modules to $3.44\times 10^{-15}$ (7-site FMO GKSL vs.\ zero-parameter Pauli--F\"orster), $9.99\times 10^{-16}$ ($8\times 8$ Cryptochrome-4 Haberkorn parity and Larmor RF collapse), and $9.71\times 10^{-17}$ (Poincar\'e M\"obius addition), alongside exact \code{Hoggar} ($63/315$ frustrated lines, $\beta_{\mathrm{NCHV}}=189$) and 4-qubit $C_3$ cospectral twins ($\operatorname{Tr}\Lambda^3 = 14{,}976$ vs.\ $15{,}360$).
+  \item \emph{Multi-Cohort Experiments \& Verification Ladder (\cref{sec:experiments}):} We audit $15$ multi-cohort experiments (\code{T1--T15}, $26$ paired contrasts separated honestly into mathematical \code{[M]}, designed \code{[D]}, and emergent \code{[E]} tiers), resolve the post-Fisher--Yates \code{T5} no-signaling gate via an analytical Bonferroni $\alpha=0.001$ two-proportion binomial $Z$-bound ($Z_{\max}=3.21$ in Cohort~A, $2.39$ in Cohort~B; bound $4.26$), and pass $1{,}200$ seeded JS property checks, $9/9$ \code{pytest}/\code{Hypothesis} suites, and $8/8$ killed semantic mutants.
+  \item \emph{Strict Epistemic Honesty:} A systematic cross-check against all $1{,}900$ open problems in \code{0thernes/unsolved-problems-mega-atlas} establishes honestly that Glitchling solves \emph{zero} ($0/1{,}900$) open problems. No claims of consciousness, sentience, AGI, or physical quantum biology are made.
+\end{enumerate}
+\end{abstract}
+
+\medskip
+\noindent\textbf{Keywords:} artificial life; formal verification; Lean~4; Kochen--Specker contextuality; Reed--Solomon coding; Poincar\'e disk; open quantum systems; statistical falsification; reproducibility.
+
+\smallskip
+\noindent\textbf{MSC 2020 / ACM:} 68V20; 92B05; 81P13; 94B05; 51M10; 62G10.
+
+\tableofcontents
+
+% =====================================================================
+\section{Introduction, Epistemic Scope, and Claims Summary}
+\label{sec:intro}
+% =====================================================================
+
+Artificial-life (A-Life) simulations occupy a demanding methodological border between software engineering, dynamical systems, statistical ecology, and theoretical physics. When an agent architecture couples dozens of bio-inspired mechanisms---spiking networks, soft-body continuum mechanics, bioelectric morphogenesis, error-correcting acoustic signaling, evolutionary game theory, and open-quantum-system toy models---two failure modes routinely undermine scientific credibility: (i)~conflating \emph{designed-in} mechanisms or formula-computed headline counts with emergent phenomena, and (ii)~silently shipping subtle implementation bugs such as biased shuffles, unseeded PRNG fallbacks, miscalibrated finite-sample gates, or compiler/JIT nondeterminism.
+
+\textbf{Origin and Scope.} \textbf{Glitchling} began on November~1, 2026 as a deliberately perturbed baby clone of A-Life Creature~\#1 (\code{core/organism.ts}, preserved verbatim as a read-only copy), introducing four toggleable neuro-behavioral flaws (\code{scramble}, \code{leaky}, \code{backwards}, \code{misfire}) in \code{glitchling.ts}. Subsequent passes (Passes~2--22) built an interactive 2D port (\code{play/}) and a 3D soft-body, spiking-brain Geodesic Biodome (\code{live/}) equipped with multi-cohort lesion and emergent experiments (\code{T1--T15}). On November~24--25, 2026, the repository underwent a 35-pass external audit (\code{AUDIT/FINDINGS.md}, \code{F01--F33}) followed by three deep hardening cycles (\code{F24/F30/F33--F40}) elevating it to full Build Standard \code{v1.2.0} compliance ($77/77$ applicable checks, $100.0\%$), a zero-Mathlib Lean~4.35.0 formal core, independent exact Python oracles, and this technical preprint.
+
+\textbf{Epistemic Boundaries and Mega-Atlas Verdict.} This manuscript is an independent computational-science and formal-verification preprint; it is \emph{not} a peer-reviewed journal article. We explicitly disclaim any claim of consciousness, sentience, feelings, or artificial general intelligence (enforced automatically by an honesty guard in \code{tools/check.mjs}). Every quantum submodule (\code{FMO}, \code{Cry4}, \code{CHSH}, \code{CEGA-18}, \code{Hoggar}, $C_3$) performs classical IEEE-754 or exact rational linear algebra on CPU (with optional WASM/WebGPU) and establishes mathematical correctness of the implemented equations---not physical quantum coherence in living organisms. Furthermore, a systematic scan of all $1{,}900$ open problems in \code{0thernes/unsolved-problems-mega-atlas} (archived in \code{docs/MEGA\_ATLAS\_CROSSCHECK.md}) confirms honestly that Glitchling solves \emph{zero} ($0/1{,}900$) open problems; it supplies reproducible toy-model testbeds touching scoped aspects of \code{AI-045}, \code{BIO-022}, \code{BIO-026}, \code{BIO-044}, \code{QM-007}, \code{QM-011}, and \code{STAT-060}. Foundational results in Kochen--Specker contextuality~\cite{Cabello1996}, CHSH inequalities~\cite{CHSH1969}, FMO transport~\cite{AdolphsRenger2006,PlenioHuelga2008,WuCaoSilbey2010,Duan2017}, radical-pair magnetoreception~\cite{RitzAdemSchulten2000,Ritz2004,HoreMouritsen2016}, Reed--Solomon coding~\cite{ReedSolomon1960}, gyrovector hyperbolic geometry~\cite{Ungar2008}, evolutionary activity~\cite{BedauPackard1998}, transfer entropy~\cite{Schreiber2000}, iterated Prisoner's Dilemma~\cite{PressDyson2012}, Ecology of Fear~\cite{Schmitz1997,Brown1999}, predictive coding~\cite{RaoBallard1999}, calibrated regression~\cite{Kuleshov2018}, Holm--Bonferroni correction~\cite{Holm1979}, Kahan summation~\cite{Kahan1965}, and Lean~4~\cite{deMouraUllrich2021} are credited strictly to their original authors. \Cref{tab:claims} summarizes our ten numbered claims (\code{C1--C10}) mapped 1-to-1 to root \code{CLAIMS.md}.
+
+\begin{table}[ht]
+\centering
+\caption{Summary of numbered claims (\code{C1--C10}) separating verification tiers explicitly (mapped 1-to-1 with falsification criteria in root \code{CLAIMS.md}).}
+\label{tab:claims}
+\scriptsize
+\setlength{\tabcolsep}{3.0pt}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{5.1cm}>{\raggedright\arraybackslash}p{2.7cm}>{\raggedright\arraybackslash}p{4.6cm}@{}}
+\toprule
+ID & Statement Summary & Verification Tier & Primary Artifact \\
+\midrule
+C1 & Results v3 ($n=30$, repeatable Bun): $210/210$ alive, \code{all} forages $+22\%$ ($d_z=1.51$), v2 compensation refuted & statistical (repeatable Bun) & \code{results/summary.csv}, \code{tools/results\_stats.mjs} \\
+C2 & 11-pool First-Law energy, closed N/C mass ledger ($<10^{-14}$), and Clausius $\dot\Sigma \ge 0$ (\cref{thm:energy}) & kernel-checked, numerical & \code{EnergyMass\allowbreak Conservation.lean}, \code{world.js} \\
+C3 & \code{CEGA-18} KS uncolorability ($8<9$), CHSH $|S|\le 2$, Bell-diagonal zero bias, \code{T5} $Z_{\max}<4.26$ (\cref{thm:cega,thm:chsh}) & kernel-checked, exact-rational, statistical & \code{Quantum\allowbreak Contextuality.lean}, \code{lesion\_experiments.mjs} \\
+C4 & 3Q Hoggar spectral floor ($63/315$, $\beta_{\mathrm{NCHV}}=189$) \& 4Q $C_3$ cubic trace split ($14{,}976$ vs.\ $15{,}360$) & exact-rational, differential & \code{glitchling\_oracle.py}, \code{qgtl.js} \\
+C5 & Complete $\F_{16}$ field axioms (\code{0x13}) \& systematic \code{RS[15,11,d=5]} ($t=2$, $300/300$ burst recovery) (\cref{thm:gf16}) & kernel-checked, exact-rational, differential & \code{CodingAnd\allowbreak Governance.lean}, \code{heptarch.js} \\
+C6 & \code{HEPTARCH} anti-monarchy ($<50\%$), anti-duopoly ($\ge 3$ seats) \& \code{NESTOR} unbiased SR ($\mathrm{Var}\le\Delta^2/4$) (\cref{thm:heptarch,thm:nestor}) & kernel-checked, numerical & \code{CodingAnd\allowbreak Governance.lean}, \code{verification\_ladder.mjs} \\
+C7 & Ungar $K=-1$ Poincar\'e M\"obius containment $D^2-|N|^2=(S^2-|u|^2)(S^2-|v|^2)D>0$ (diff $9.71\times 10^{-17}$) (\cref{thm:poincare}) & kernel-checked, exact-rational, differential & \code{HyperbolicAnd\allowbreak Flaws.lean}, \code{qgtl.js} \\
+C8 & 7-site FMO GKSL vs.\ Pauli--F\"orster ($3.44\times 10^{-15}$) \& $8\times 8$ Cry4 Haberkorn parity/RF ($9.99\times 10^{-16}$) & differential (Kronecker vs.\ JS), numerical & \code{glitchling\_oracle.py}, \code{tests/test\_oracle.py} \\
+C9 & \code{backwards} fixed-point-free involution, \code{leaky} contraction (\cref{thm:flaws}), \& \code{T1--T15} multi-cohort suite & kernel-checked, multi-cohort statistical & \code{HyperbolicAnd\allowbreak Flaws.lean}, \code{SCIENTIFIC\_DEFENSE\_DOSSIER.md} \\
+C10 & 1,200 properties, $8/8$ killed mutants, 3-OS CI, warmed benchmarks, Build Standard \code{v1.2.0} $100\%$ & contract, mutation, CI & \code{verification\_ladder.mjs}, \code{perf-benchmarks.json} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\section{Reference Simulation: Flaw Resilience and Bun JIT Determinism}
+\label{sec:refsim}
+% =====================================================================
+
+In \code{glitchling.ts}, \code{Glitchling} subclasses the unmodified Creature~\#1 \code{Organism} ($272$ spiking neurons across $14$ regions foraging among $16$ colour$\times$shape sites, $1\text{ tick}=1\text{ sim-minute}$, $2{,}880\text{ ticks}=2\text{ sim-days}$) with four switchable perturbations:
+\begin{itemize}[leftmargin=1.6em,itemsep=1pt]
+  \item \code{scramble}: site values and availability channels are permuted through a random permutation (re-shuffled every $90$ ticks) with additive Gaussian noise ($\sigma = 0.25$);
+  \item \code{leaky}: learned site values decay toward their prior $0.25$ at rate $\lambda = 0.06$/tick (mild v1: $0.02$/tick), with plastic synapses decaying by $0.05\lambda$/tick;
+  \item \code{backwards}: all $8$ \code{MOT} neurons read out in reversed order and the chosen site $k\in\{0,\dots,15\}$ is mirrored via $k \mapsto 15 - k$;
+  \item \code{misfire}: every $60$ ticks, one site value and $20$ random synapses receive multiplicative Gaussian jolts ($\sigma = 0.30$).
+\end{itemize}
+
+\textbf{Discovery of Bun/JSC Concurrent JIT Nondeterminism (\code{F31}).} Earlier one-day jam results (\code{Results v2}, $n=2$ seeds $1$--$2$) appeared reproducible in a single clean check, yet a failing GitHub Actions run revealed that default Bun/JavaScriptCore (JSC) execution depends on background concurrent JIT tier-up timing: $11$ identical runs produced $6$ distinct \code{summary.csv} files, with \code{all}-vs-\code{baseline} foraging ranging from $+7\%$ to $+32\%$ and the hit-rate difference even flipping sign once. Setting \code{BUN\_JSC\_useConcurrentJIT=0} eliminates same-machine JIT variance completely: two simultaneous runs under CPU load produce byte-identical \code{summary.csv} outputs.
+
+\begin{table}[ht]
+\centering
+\caption{Results v3 (\code{2026-11-24}, $n=30$ dev seeds $500$--$529$, $2$ sim-days, repeatable Bun mode \code{BUN\_JSC\_\allowbreak useConcurrentJIT=0}). Paired $\Delta$ is condition minus baseline on the same seed with $95\%$ $t$-interval, Cohen's $d_z$, and two-sided sign-flip permutation $p$ ($200{,}000$ draws). Computed verbatim by \code{node tools/results\_stats.mjs}.}
+\label{tab:resultsv3}
+\scriptsize
+\setlength{\tabcolsep}{2.6pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Condition & Forages ($\mu\pm\sigma$) & $\Delta$ Forages [$95\%$ CI] & $d_z$ ($p$) & Succ. & $\Delta$ Succ.\ [$95\%$ CI] & 2nd$-$1st Half \\
+\midrule
+\code{baseline}  & $209.3\pm 60.9$ & --- & --- & $0.365$ & --- & $+0.035\,[+0.004,+0.065]$ \\
+\code{scramble}  & $235.7\pm 62.6$ & $+26.5\,[+14.5,+38.4]$ & $0.83$ ($1\mathrm{e}{-4}$) & $0.314$ & $-0.050\,[-0.072,-0.029]$ & $+0.010\,[-0.027,+0.046]$ \\
+\code{leaky}     & $235.1\pm 65.7$ & $+25.9\,[+14.2,+37.6]$ & $0.83$ ($1\mathrm{e}{-4}$) & $0.334$ & $-0.031\,[-0.051,-0.010]$ & $+0.020\,[-0.005,+0.044]$ \\
+\code{backwards} & $281.4\pm 92.9$ & $+72.2\,[+41.2,+103.1]$ & $0.87$ ($1\mathrm{e}{-5}$) & $0.263$ & $-0.101\,[-0.135,-0.067]$ & $-0.009\,[-0.041,+0.023]$ \\
+\code{misfire}   & $213.0\pm 59.0$ & $+3.8\,[-6.9,+14.5]$ & $0.13$ ($0.477$) & $0.352$ & $-0.012\,[-0.034,+0.010]$ & $+0.001\,[-0.035,+0.036]$ \\
+\code{all} (v2)  & $255.0\pm 59.7$ & $+45.8\,[+34.5,+57.1]$ & $1.51$ ($5\mathrm{e}{-6}$) & $0.299$ & $-0.066\,[-0.090,-0.042]$ & $-0.016\,[-0.042,+0.009]$ \\
+\code{all\_mild} & $265.5\pm 71.0$ & $+56.2\,[+40.0,+72.5]$ & $1.29$ ($1\mathrm{e}{-5}$) & $0.286$ & $-0.078\,[-0.103,-0.054]$ & $-0.017\,[-0.041,+0.007]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key Empirical Conclusions and Refuted v2 Claims.} Across all $210$ runs ($30\text{ seeds}\times 7\text{ conditions}$), survival is $210/210$ (\cref{tab:resultsv3}, \cref{fig:resultsv3}). With \code{all} flaws enabled, Glitchling compensates for lower hit efficiency ($0.299$ vs.\ $0.365$, lower on $26/30$ seeds) by foraging $22\%$ more often ($29/30$ seeds), maintaining total rewards ($76.3$ vs.\ $74.5$, paired $+1.7\,[-0.1, +3.6]$) and mean blood glucose ($4.03$ vs.\ $3.95$). \code{backwards} produces the largest single-flaw perturbation ($+34\%$ forages, $-0.101$ success) because the fixed-point-free mirror $k\mapsto 15-k$ (\cref{thm:flaws}) redirects every striatal choice away from its selected target. Conversely, two prominent \code{Results v2} ($n=2$) claims fail replication at $n=30$ and are explicitly withdrawn in \code{ERRATA.md}: (i)~within-life hit-rate improvement under \code{all} flaws vanishes ($-0.016\,[-0.042, +0.009]$, rising in only $12/30$ seeds, whereas \code{baseline} improves by $+0.035\,[+0.004, +0.065]$), and (ii)~\code{misfire} alone produces no detectable effect ($\Delta\text{forages}=+2\%$, $p=0.477$; $\Delta\text{success}=-0.012$, $p=0.264$).
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{fig_results_v3.pdf}
+\caption{Results v3 paired differences across $n=30$ dev seeds ($500$--$529$, repeatable mode \code{BUN\_JSC\_\allowbreak useConcurrentJIT=0}). Error bars show two-sided $95\%$ $t$-intervals ($t_{0.975,29}=2.045$). \code{backwards} drives the largest foraging volume increase ($+34\%$) and accuracy penalty ($-0.101$), while \code{misfire} alone is statistically indistinguishable from baseline ($p=0.477$).}
+\label{fig:resultsv3}
+\end{figure}
+
+% =====================================================================
+\section{Pure Zero-Mathlib Lean~4.35.0 Formal Verification Core}
+\label{sec:lean}
+% =====================================================================
+
+To anchor the discrete mathematical invariants of both \code{glitchling.ts} and the \code{live/} Geodesic Biodome in machine-checked logic without external dependencies, \code{lean/} provides a self-contained Lean~\code{v4.35.0} library (\code{GlitchlingProofs}) compiled under strict options (\code{autoImplicit = false}, \code{relaxedAutoImplicit = false}), zero Mathlib, zero \code{sorry}, zero \code{admit}, and zero \code{native\_decide}. Following the isolated comparator methodology, \code{GlitchlingProofs/\allowbreak Spec.lean} holds \emph{pure definitions only} (zero proofs); \code{Challenge.lean} imports solely \code{GlitchlingProofs.\allowbreak Spec} and states eight target theorems (\code{target\_thm1}--\code{target\_thm8}); \code{Solution.lean} proves all eight sorry-free against \code{comparator.json}. Both \code{GlitchlingProofs} and \code{Solution} pass \code{lake env leanchecker {-}{-}fresh}, and \code{VerifyAxioms.lean} audits all $59$ exported declarations (\code{results/\allowbreak lean\_axioms.txt}), confirming every axiom lies strictly inside \code{[propext, Classical.choice, Quot.sound]} (with $45$ declarations strictly constructive in \code{[propext, Quot.sound]} or zero axioms).
+
+\begin{theorem}[Inductive 11-Pool Energy, Closed Mass, and Second-Law Clausius Conservation]
+\label{thm:energy}
+Let $L = (p : \mathrm{Fin}\,11 \to \Z,\, E_0,\, Q_{\mathrm{sol}},\, Q_{\mathrm{geo}},\, Q_{\mathrm{rad}})$ obey the First-Law boundary identity $\sum_{i=0}^{10} p_i + Q_{\mathrm{rad}} = E_0 + Q_{\mathrm{sol}} + Q_{\mathrm{geo}}$. Then every finite trace of internal pool transfers, solar influxes, hydrothermal influxes, and canopy radiative rejections preserves this balance identically (\code{runEnergyOps\_preserves\_firstLaw}). Likewise, soil-reservoir fluxes and lateral mycelial exchanges preserve total N/C mass (\code{fluxSoil\_preserves\_mass}, \code{transferSoil\_preserves\_mass}). For $0 < T_{\mathrm{sky}} \le T_{\mathrm{amb}} \le T_{\mathrm{geo}}$ and non-negative fluxes $\dot Q_{\mathrm{diss}}, \dot Q_{\mathrm{geo}}, \dot Q_{\mathrm{rad}} \ge 0$, the exact positive-denominator Clausius numerator
+\begin{equation}
+  \mathcal{N}_{\dot\Sigma} := \dot Q_{\mathrm{diss}} T_{\mathrm{geo}} T_{\mathrm{sky}}
+  + \dot Q_{\mathrm{geo}}(T_{\mathrm{geo}} - T_{\mathrm{amb}}) T_{\mathrm{sky}}
+  + \dot Q_{\mathrm{rad}}(T_{\mathrm{amb}} - T_{\mathrm{sky}}) T_{\mathrm{geo}} \ge 0
+  \label{eq:clausius}
+\end{equation}
+holds unconditionally, and is strictly positive whenever $\dot Q_{\mathrm{diss}} > 0$ (\code{clausius\_entropy\_nonneg}, \code{clausius\_entropy\_strict\_pos}).
+\end{theorem}
+
+\begin{theorem}[Constructive \code{CEGA-18} Kochen--Specker Uncolorability and Tight Ceiling $8 < 9$]
+\label{thm:cega}
+Let $\{v_0,\dots,v_{17}\} \subset \Z^4 \setminus \{0\}$ and $\mathcal{C} = \{C_0,\dots,C_8\}$ be the literal $18$ rays and $9$ four-ray contexts of Cabello--Estebaranz--Garc\'ia-Alcaine~\cite{Cabello1996} encoded in \code{live/js/tsotchke/qgtl.js:184--218}. Then:
+\begin{enumerate}[leftmargin=1.8em,itemsep=1pt]
+  \item Every ray is nonzero (\code{cega18\_rays\_nonzero}, zero axioms) and every pair of distinct rays inside each context $C_j$ is strictly orthogonal (\code{cega18\_contexts\_orthogonal}).
+  \item Every ray appears in \emph{exact} multiplicity $2$ across $\mathcal{C}$ (\code{cega18\_every\_ray\_in\_two\_contexts}), yielding the double-counting identity $\sum_{C\in\mathcal{C}} \sum_{r\in C} f(r) = 2\sum_{r=0}^{17} f(r)$ for every $f : \mathrm{Fin}\,18 \to \{0,1\}$ (\code{cega18\_double\_counting}).
+  \item No non-contextual $\{0,1\}$-coloring exists (\code{cega18\_kochen\_specker\_uncolorable}), because every valid coloring would sum to $9$ (odd) versus $2k$ (even).
+  \item Any mutually exclusive assignment ($\sum_{r\in C} f(r) \le 1$ for all $C\in\mathcal{C}$) satisfies at most $8$ contexts (\code{cega18\_classical\_max\_eight}), and the explicit witness $\{0, 7, 13, 16\}$ attains $8$ (\code{cega18\_classical\_eight\_achievable}), proving tightness of the $8 < 9$ contextual gap.
+\end{enumerate}
+\end{theorem}
+
+\begin{theorem}[CHSH Local Hidden-Variable Bound and Exact Bell-Diagonal No-Signaling]
+\label{thm:chsh}
+For all deterministic outcomes $a_0, a_1, b_0, b_1 \in \{-1, +1\}$, $-2 \le a_0 b_0 + a_0 b_1 + a_1 b_0 - a_1 b_1 \le 2$ (\code{chsh\_lhv\_bound}), and every Boolean strategy wins at most $3$ of $4$ CHSH game inputs (\code{chsh\_game\_classical\_max\_three}, zero axioms). Moreover, for any normalized Bell-diagonal/Werner $4\times 4$ state with diagonal $(a,b,b,a)$ ($2a+2b = S$) and real anti-diagonal coherences $(c,d,d,c)$ (\code{live/js/sim/ecosystem.js:72--82}), Alice's reduced density matrix obeys $2\rho^A_{00} = S$ ($\rho^A_{00}=\tfrac{1}{2}$) and $\rho^A_{01}=0$ identically (\code{bell\_diagonal\_exact\_no\_signaling}).
+\end{theorem}
+
+\begin{theorem}[Complete $\F_{16}$ Finite-Field Verification and \code{RS[15,11,d=5]} Radius]
+\label{thm:gf16}
+On $\mathrm{Fin}\,16$ equipped with bitwise XOR addition and carry-less multiplication modulo the primitive polynomial $x^4+x+1$ (\code{0x13}, \code{live/js/sim/heptarch.js:23}), exhaustive kernel reduction proves commutativity, associativity, left distributivity across all $16^3 = 4{,}096$ triples, multiplicative inverses for all $15$ nonzero elements (\code{gf16\_exists\_inv}), and exact primitive order $15$ for $\alpha = x$ (\code{gf16\_alpha\_primitive\_order\_15}). Consequently, systematic \code{RS[15,11]}~\cite{ReedSolomon1960} achieves MDS Singleton distance $d = 15 - 11 + 1 = 5$ and arbitrary symbol error-correction radius $t = \lfloor(d-1)/2\rfloor = 2$ (\code{rs15\_11\_mds\_radius}).
+\end{theorem}
+
+\begin{theorem}[\code{HEPTARCH} Anti-Monarchy, Anti-Duopoly, and Mode-Cap Feasibility]
+\label{thm:heptarch}
+For any 7-seat council weight vector $w : \mathrm{Fin}\,7 \to \N$ scaled to $\sum_{i=0}^{6} w_i = 100$ with per-seat cap $w_i \le 46$, no single seat can hold a majority ($w_i < 50$, \code{heptarch\_anti\_monarchy}), any two seats hold at most $92 < 100$, and for every pair $(i, j)$ there constructively exists a third seat $k \notin \{i, j\}$ with $w_k > 0$ (\code{heptarch\_anti\_duopoly}, zero \code{Classical.choice}). All $7$ literal \code{MODE\_CAPS} rows in \code{heptarch.js:486--492} satisfy every cap $\le 46$ and row sum $\ge 100$ (\code{heptarch\_all\_modes\_feasible}, zero axioms).
+\end{theorem}
+
+\begin{theorem}[\code{NESTOR} Stochastic-Rounding Unbiasedness and Popoviciu Variance Ceiling]
+\label{thm:nestor}
+On any uniform quantization cell $[q, q+\Delta]$ with offset $r \in [0, \Delta]$ and rounding probability $p = r/\Delta$ (\code{heptarch.js:453--455}),
+\begin{equation}
+  (\Delta - r) q + r (q + \Delta) = \Delta(q + r),
+  \qquad
+  4 r(\Delta - r) + (\Delta - 2r)^2 = \Delta^2,
+  \label{eq:nestor}
+\end{equation}
+establishing exact unbiasedness $\mathbb{E}[Q(q+r)] = q+r$ and exact variance bound $\operatorname{Var}[Q] = r(\Delta-r) \le \Delta^2/4$ (\code{nestor\_sr\_unbiased}, \code{nestor\_sr\_variance\_bound}).
+\end{theorem}
+
+\begin{theorem}[Universal Ungar $K=-1$ Poincar\'e-Disk M\"obius Containment]
+\label{thm:poincare}
+For arbitrary scaled coordinates $(u_x, u_y), (v_x, v_y) \in \Z^2$ and scale $S \in \Z$ representing $u = (u_x, u_y)/S$, $v = (v_x, v_y)/S$, define the M\"obius denominator $D := S^4 + 2 S^2 \langle u,v\rangle + |u|^2|v|^2$ and numerator $N := S\bigl((S^2 + 2\langle u,v\rangle + |v|^2)u + (S^2 - |u|^2)v\bigr)$ matching \code{qgtl.js:565--580}. Then unconditionally over $\Z$:
+\begin{align}
+  D &= (S^2 + u_x v_x + u_y v_y)^2 + (u_x v_y - u_y v_x)^2 \ge 0, \label{eq:mob-sos} \\
+  D^2 - (N_x^2 + N_y^2) &= (S^2 - |u|^2)(S^2 - |v|^2) D. \label{eq:mob-gap}
+\end{align}
+In particular, whenever $u, v$ lie strictly inside the open unit disk ($|u|^2 < S^2$ and $|v|^2 < S^2$), Cauchy--Schwarz gives $D > 0$ (\code{poincare\_mobius\_den\_pos}), and \eqref{eq:mob-gap} yields $|N|^2 < D^2$, proving $|u \oplus v| < 1$ strictly (\code{poincare\_mobius\_preserves\_disk}, strictly in \code{[propext, Quot.sound]}).
+\end{theorem}
+
+\begin{proof}[Proof structure]
+Equation~\eqref{eq:mob-sos} is the Brahmagupta--Fibonacci expansion of $|S^2 + \bar u v|^2$. Setting $s = S^2$, $a = |u|^2$, $b = |v|^2$, $c = \langle u,v\rangle$, $p = s + 2c + b$, $q = s - a$, direct algebraic factorization gives $N_x^2 + N_y^2 = s(p^2 a + 2pqc + q^2 b) = s D (a + 2c + b)$ while $D - s(a+2c+b) = (s-a)(s-b)$, yielding $D^2 - |N|^2 = D(s-a)(s-b)$. All steps are machine-checked over $\Z$ in \code{HyperbolicAndFlaws.lean}.
+\end{proof}
+
+\begin{theorem}[Glitchling Flaw Algebraic Invariants]
+\label{thm:flaws}
+For every $k \in \{0,\dots,15\}$, the \code{backwards} site mirror $m(k) := 15 - k$ satisfies $m(k) < 16$, $m(m(k)) = k$, and $m(k) \ne k$ (\code{mirrorSite\_properties}). Under the \code{leaky} update $S v' = (S - \lambda)v + \lambda p$ (\code{glitchling.ts:29}), $S v' - S p = (S - \lambda)(v - p)$, preserving $p$ identically and strictly contracting $|v' - p| < |v - p|$ whenever $0 < \lambda < S$ and $v \ne p$ (\code{leaky\_contraction\_identity}, \code{leaky\_strict\_contraction\_above}).
+\end{theorem}
+
+% =====================================================================
+\section{Independent Exact-Arithmetic and Complex-Kronecker Oracles}
+\label{sec:oracle}
+% =====================================================================
+
+To guard against common-mode implementation errors between \code{live/js/} and our tests, \code{reference/glitchling\_oracle.py} re-implements the core physics and contextuality solvers from scratch using Python's exact \code{fractions.Fraction}, integer matrices, and complex Kronecker-product Liouvillians $\mathrm{vec}(AXB) = (A \otimes B^{\mathsf{T}})\mathrm{vec}(X)$ (whereas \code{live/js/} uses hand-unrolled real symmetric Hermitian coordinate bases). Differential verification via \code{scripts/verify\_exact.py} and $9/9$ \code{pytest}/\code{Hypothesis} suites (\code{tests/test\_oracle.py}) establishes machine-precision agreement across all five modules (\cref{tab:oracle}, \cref{fig:oracle}):
+\begin{itemize}[leftmargin=1.6em,itemsep=1pt]
+  \item \textbf{7-Site FMO GKSL Lindblad vs.\ Zero-Parameter Adiabatic Pauli--F\"orster:} Solving $\mathcal{L}\mathrm{vec}(R) = -\mathrm{vec}(|1\rangle\langle 1|)$ on the $7$-site Adolphs--Renger Hamiltonian~\cite{AdolphsRenger2006} matches \code{world.js} to $3.44\times 10^{-15}$ across cryo ($0.08\,\mathrm{ps}^{-1}$, $\Phi=0.3577$ vs.\ F\"orster $0.2606$), physiological room temperature ($22.0\,\mathrm{ps}^{-1}$, $0.8109$ vs.\ $0.8056$, matching~\cite{PlenioHuelga2008,WuCaoSilbey2010}), and high-dephasing Zeno regime ($518\,\mathrm{ps}^{-1}$, $0.638849$ vs.\ $0.638862$, classical correspondence gap $1.32\times 10^{-5}$).
+  \item \textbf{$8\times 8$ Cryptochrome-4 Liouville--Haberkorn Radical-Pair Model:} The $64\times 64$ complex Kronecker superoperator on $\mathcal{H}_{e_1}\otimes\mathcal{H}_{e_2}\otimes\mathcal{H}_{I=1/2}$~\cite{RitzAdemSchulten2000} matches \code{heptarch.js} to $9.99\times 10^{-16}$, confirming exact yield conservation $\Phi_S + \Phi_T = 1$, exact geomagnetic inversion symmetry $\Phi_S(-\mathbf{B}) = \Phi_S(\mathbf{B})$ ($<10^{-14}$), axial $\mathrm{SO}(2)$ invariance, and resonant Larmor RF ($\omega_L = \gamma_e B_0$) anisotropy collapse~\cite{Ritz2004} relative to off-resonant $7\omega_L$ RF.
+  \item \textbf{Exact Contextuality \& Cospectral Twins:} Exhaustive $2^{18}$ search confirms \code{CEGA-18} classical maximum $8 < 9$; exact Gaussian-integer arithmetic on the 3-qubit Hoggar fiducial $|\psi_H\rangle = \frac{1}{\sqrt{12}}(-1+2i, 1, \dots, 1)$ confirms $|\langle P_u\rangle| = \frac{1}{3}$ for all $63$ Paulis and splits the $315$ isotropic lines of $W(5,2)$ into $63$ frustrated ($4|g_{uv}| = \frac{4}{9}$) and $252$ unfrustrated ($\frac{2}{9}$) lines ($\beta_{\mathrm{NCHV}} = 189$); integer $16\times 16$ carrier matrices $A_{\sigma_0}, A_{\sigma_1}$ on the $71$-point hyperplane section of $Q^+(7,2)$ are cospectral ($<10^{-14}$) with $\operatorname{Tr}\Lambda^2 = 2{,}240$ yet split at cubic Jordan order $\operatorname{Tr}\Lambda^3 = 14{,}976$ vs.\ $15{,}360$ (gap $384/15{,}360 = 0.025$).
+\end{itemize}
+
+\begin{table}[ht]
+\centering
+\caption{Differential agreement between \code{live/js/} and independent textbook Python oracle (\code{scripts/\allowbreak verify\_exact.py}).}
+\label{tab:oracle}
+\scriptsize
+\setlength{\tabcolsep}{3.4pt}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{4.8cm}ll@{}}
+\toprule
+Subsystem & Independent Python Method & Observed Max Error & Tolerance \\
+\midrule
+7-site FMO GKSL + Pauli--F\"orster & $49\times 49$ complex Kronecker \code{np.linalg.solve} & $3.44\times 10^{-15}$ & $< 10^{-12}$ \\
+$8\times 8$ Cry4 Haberkorn + RF & $64\times 64$ complex Kronecker \code{np.linalg.solve} & $9.99\times 10^{-16}$ & $< 10^{-12}$ \\
+Poincar\'e M\"obius $u\oplus v$ & Exact \code{fractions.Fraction} rational arithmetic & $9.71\times 10^{-17}$ & $< 10^{-14}$ \\
+\code{RS[15,11]} over $\F_{16}$ (\code{0x13}) & Polynomial shift register + syndromes & $0$ (exact symbol) & exact \\
+\code{CEGA-18} / Hoggar / $C_3$ twins & Exhaustive $2^{18}$ / Gaussian-int / $\Z^{64\times 64}$ & $0$ (exact integer) & exact \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{fig_fmo_cry4_oracle.pdf}
+\caption{Exact open-quantum differential physics reproduced identically by \code{live/js/} and the independent Python complex-Kronecker oracle: (a)~7-site Adolphs--Renger FMO ENAQT curve converging to zero-parameter adiabatic Pauli--F\"orster at high dephasing; (b)~$8\times 8$ Cry4 singlet yield displaying exact $\theta\leftrightarrow \pi-\theta$ inversion symmetry and resonant Larmor RF anisotropy suppression.}
+\label{fig:oracle}
+\end{figure}
+
+% =====================================================================
+\section{Multi-Cohort Lesion/Emergent Experiments and the \code{F03}/\code{F33} Audit}
+\label{sec:experiments}
+% =====================================================================
+
+In \code{live/test/lesion\_experiments.mjs} (renamed from \code{nobel\_rigor\_suite.mjs} under audit \code{F02/D1} to eliminate promotional framing), $15$ pre-specified experiments (\code{T1--T15}, $26$ paired contrasts) evaluate causal lesions, matched surrogates, and emergent dynamics across independent $12$-seed cohorts (\code{Cohort A: 1..12}, \code{Cohort B: 13..24}, plus zero-leakage locked \code{Cohort C: 25..36} for \code{T12--T15}) using exact $2^{12}=4{,}096$ paired sign-flip permutation tests, $10{,}000$-resample percentile bootstrap $95\%$ CIs, and Holm--Bonferroni, full Bonferroni, and Benjamini--Hochberg FDR corrections~\cite{Holm1979}.
+
+Crucially, every contrast is labeled by its honest claim tier (\cref{fig:forest}): \code{[M]} mathematical identity checks (\code{T1--T7, T9}), \code{[D]} designed mechanisms verified by causal lesion (\code{T8} Levin bistable bioelectric morph switching with $0/128$ genes altered; \code{T10} sanctioned IPD Titans~\cite{PressDyson2012} and Level-2 Bayesian Shoggoths; \code{T12a/b} prequential Gaussian NLL and per-dimension Kuleshov ECE~\cite{Kuleshov2018}), and genuinely emergent \code{[E]} outcomes not hardcoded into any rule:
+\begin{itemize}[leftmargin=1.6em,itemsep=1pt]
+  \item \textbf{\code{T11} Bedau--Packard Evolutionary Activity~\cite{BedauPackard1998}:} Adaptive population exceeds a demographically matched, fitness-blind neutral shadow ($23/24$ seeds, $+16.70$, $d_z = 1.45$, $p_{\mathrm{Bonf},24} = 5.25\times 10^{-5}$).
+  \item \textbf{\code{T12c/d} Matched 3-Edge Sensorimotor Transfer Entropy~\cite{Schreiber2000}:} Closed-loop 3-edge TE beats both matched 3-edge circularly time-shifted nulls ($+0.1012$ bits, $d_z = 3.10$) and motor-lesioned controls ($+0.1418$ bits, $d_z = 3.51$) across $36/36$ seeds.
+  \item \textbf{\code{T13} Divergent Multi-Generation Natural Selection:} Starting from identical Gen-$0$ genomes in Warm vs.\ Cool domes with zero hardcoded target locus, $6.0$--$6.2$ diploid generations diverge inherited \code{thermOpt} by $+0.317$ ($d_z = 6.71$), beating the neutral shadow across $36/36$ seeds.
+  \item \textbf{\code{T14} Ontogenetic Unsupervised Learning:} Online plasticity cuts Transformer-XL 1-step MSE by $\sim 75\%$ ($d_z=5.19$) and Rao--Ballard predictive-coding error~\cite{RaoBallard1999} by $\sim 63\%$ ($d_z=7.26$), while Wiener HDC beats delta-fixed and superposition baselines on held-out coordinates ($36/36$ seeds).
+  \item \textbf{\code{T15b} Unprogrammed 3-Trophic Ecology-of-Fear Cascade~\cite{Schmitz1997,Brown1999}:} Zero code links alarm pheromones or \code{RS[15,11]} calls to plant growth, yet social alarm communication reduces predations ($d_z=4.48$) and indirectly increases standing plant fruit biomass ($+0.1362$, $d_z=3.26$; Cohort~C $+0.1530$, $d_z=2.45$) across $36/36$ seeds via sheltering-mediated grazing reduction.
+\end{itemize}
+
+\textbf{Resolution of the \code{F03} Shuffle Fix and \code{F33/D10} \code{T5} Gate.} Audit \code{F03} discovered that \code{[0,1,2,3].sort(() => r() - 0.5)} produced biased, engine-dependent worlds differing between V8 and JSC on $186/200$ seeds. Replacing it with seeded Fisher--Yates broke one soft gate in \code{T5} (\code{maxEmpNoSig < 0.11}, measuring $0.1376$ on Cohort~A even though exact reduced-density bias remained $0.0$). Under exact no-signaling ($p_1 = p_2 = \tfrac{1}{2}$) across $4N = 48$ finite-sample contrasts with cell counts $n_{xy}\approx 260$, $\mathrm{SE} = \sqrt{0.25(n_1^{-1} + n_2^{-1})}\approx 0.044$, giving an unintended $\sim 49\%$ false-failure rate for the ad-hoc $0.11$ cutoff. In \code{v2.2.0} (\code{ADR-0005}), we replace $0.11$ with the exact analytical Bonferroni $\alpha = 0.001$ two-proportion binomial critical bound $Z_{\max} < \Phi^{-1}(1 - 0.001/96) \approx 4.26$, transparently disclosed as a post-\code{F03} analytical fix (\code{docs/preregistration.md}). Re-executing \code{T5} post-\code{F03} passes cleanly on both Cohort~A ($Q_{\mathrm{win}}=80.49\%$ vs.\ LHV $74.47\%$, $S_{\mathrm{emp}}=2.436$, $Z_{\max}=3.21 < 4.26$, $p=0.000244$) and unseen Cohort~B ($80.54\%$ vs.\ $74.76\%$, $S_{\mathrm{emp}}=2.440$, $Z_{\max}=2.39 < 4.26$, $p=0.000244$), with exact density-matrix marginal bias $0.0$.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{fig_lesion_forest.pdf}
+\caption{Combined $N=24$ standardized paired effect sizes ($d_z$) from \code{live/test/lesion\_experiments.mjs} separated explicitly by claim tier (\code{[E]} emergent, \code{[D]} designed lesion, \code{[M]} mathematical identity). Deterministic zero-variance \code{T8a/b} and \code{T7b} ($d_z=15{,}828$) are omitted from the horizontal axis for visual scale; full numbers appear in \code{SCIENTIFIC\_DEFENSE\_DOSSIER.md}.}
+\label{fig:forest}
+\end{figure}
+
+% =====================================================================
+\section{Verification Ladder, Honest Benchmarks, and 3-Cycle Hardening Audit}
+\label{sec:hardening}
+% =====================================================================
+
+Beyond formal proofs and differential oracles, \code{live/test/verification\_ladder.mjs} exercises $1{,}200$ seeded property checks (\code{RS[15,11]} burst repair, Poincar\'e M\"obius containment/isometry, Bell-diagonal zero marginal bias, 11-pool energy and N/C mass exchanges, \code{HEPTARCH} simplex caps), $7$ negative/boundary guards (including \code{TypeError} enforcement when stochastic rungs omit a seeded PRNG, \code{F30}), $7$ regression tests pinned to historical findings (\code{F03, F15, F16, F27, F30, F33, F34}), $4$ metamorphic symmetries, and $8/8$ semantic mutation kills (\code{M1--M8}: omitting energy debit, breaking Cry4 parity, exceeding \code{RS[15,11]} radius, relaxing \code{HEPTARCH} cap $>0.50$, replacing stochastic rounding with floor, flipping M\"obius denominator sign, injecting Bell marginal bias, and violating FMO yield conservation).
+
+\textbf{Honest Performance Budgets (\code{results/\allowbreak perf-\allowbreak benchmarks.json}).} Warmed benchmarks on Windows~11 x64 (Intel Core Ultra~9 275HX, Node~\code{v25.8.2}) measure median $18.62\,\mathrm{ms}$ (IQR $6.43\,\mathrm{ms}$) per M-scale ($3{,}268$-neuron) step, $16.21\,\mathrm{ms}$ (S-headless), $0.134\,\mathrm{ms}$ (FMO $49\times 49$ exact), $0.0011\,\mathrm{ms}$ (F\"orster $7\times 7$), $0.856\,\mathrm{ms}$ (Cry4 $64\times 64$ exact), $0.0035\,\mathrm{ms}$ (\code{RS[15,11]} encode $+$ 2-error decode), and $<0.0001\,\mathrm{ms}$ (Poincar\'e M\"obius addition). Crucially, \code{MEGA} ($16.78\mathrm{M}$ nominal / $30{,}554$ stored synapses, $\sim 219\,\mathrm{ms}$/step) and \code{GIGA} ($1.13\mathrm{B}$ nominal / $28{,}131$ explicit $+$ $113\mathrm{M}$ Int8 cluster weights, $\sim 1{,}076\,\mathrm{ms}$/step) are explicitly labeled \emph{nominal} and non-real-time everywhere (\code{F01}).
+
+\textbf{3-Cycle Hardening Summary (\code{docs/\allowbreak reviews/\allowbreak 2026-\allowbreak 11-\allowbreak 25-\allowbreak 3cycle-\allowbreak hardening-\allowbreak audit.md}).} Combining the Nov~24 35-pass audit (\code{F01--F33}) with our three Nov~25 hardening cycles (\code{F34--F40}) resolved Windows \code{check.mjs} path crashes (\code{F34}), removed all remaining \code{Math.random} default fallbacks (\code{F30}), relabeled public randomness beacons (\code{F24}), corrected stale \code{Results v2} prose (\code{F35}), compressed all five $>5\,\mathrm{MB}$ binary assets below $4.2\,\mathrm{MB}$ (\code{F36}), audited $1{,}900$ Mega-Atlas entries (\code{F39}), and raised Build Standard \code{v1.2.0} compliance from $27.3\%$ ($15/55$) to $100.0\%$ ($77/77$ applicable, \cref{fig:pyramid}(b)).
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{fig_verification_pyramid.pdf}
+\caption{(a)~Five-tier verification architecture combining Lean~4.35.0 proofs, independent Python Kronecker/rational oracles, JS property/mutation testing, cross-platform CI, and multi-cohort statistical testing. (b)~Build Standard \code{v1.2.0} compliance progression from \code{v2.1.0} baseline ($27.3\%$, $15/55$) to \code{v2.2.0} ($100.0\%$, $77/77$ applicable checks, $33/33$ core).}
+\label{fig:pyramid}
+\end{figure}
+
+% =====================================================================
+\section{Limitations, Disclosures, and Replication}
+\label{sec:limitations}
+% =====================================================================
+
+\textbf{Remaining Open Limitations.} (1)~\emph{Post-\code{F03} full sweep:} while \code{T5} was re-verified post-\code{F03} on Cohorts~A and~B, re-running the multi-hour full $36$-seed \code{T1--T15} matrix on the Fisher--Yates world is scheduled under our pre-registered \code{v2.3} protocol (\code{SEEDS=1001..1030}, \code{docs/preregistration.md}). (2)~\emph{Cross-machine Bun JSC:} \code{BUN\_JSC\_useConcurrentJIT=0} guarantees same-machine bit-identity, whereas cross-OS JSC floating-point realizations can still differ on seeds $500$--$501$ (reported transparently by \code{tools/check.mjs}). (3)~\emph{Formal boundary:} Lean~4.35.0 verifies exact integer and finite-field models, not IEEE-754 floating-point roundoff bounds of the full JS runtime. (4)~\emph{Frozen \code{core/} and license:} \code{core/} remains unmodified pending Creature~\#1 Phase~1 (\code{F18/D8}), and \code{LICENSE} remains the non-commercial Cosmogonic License (\code{ADR-0001}).
+
+\textbf{CRediT, COI, and AI-Assistance Disclosure.} Conceptualization, project direction, experimental design decisions (\code{D1--D10}), and final verification responsibility: Alexander Stephen Donahue (Independent Researcher, Spokane, WA, USA; no competing financial interests; unfunded independent work). AI coding and research assistants contributed to code hardening, Lean~4 proof engineering, Python differential oracles, Build Standard compliance, and manuscript drafting under direct human oversight; every theorem was independently verified by the Lean~4.35.0 kernel and \code{leanchecker}, and every numerical entry was extracted verbatim from executed code.
+
+\textbf{Clean-Clone Replication.} Full reproduction steps appear in \code{REPLICATION.md} and \code{justfile}, including \code{npm test}, \code{npm run verify:ladder}, \code{npm run examples}, \code{python scripts/\allowbreak verify\_exact.py}, \code{pytest tests/\allowbreak test\_oracle.py}, and inside \code{lean/}, \code{lake build} followed by \code{lake env lean VerifyAxioms.lean}. Frozen PDF, standalone arXiv tarball, Lean axiom log, and dataset digests are pinned in \code{CHECKSUMS.sha256} and \code{data/\allowbreak MANIFEST.sha256}.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

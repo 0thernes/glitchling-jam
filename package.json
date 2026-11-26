@@ -1,13 +1,18 @@
 {
   "name": "glitchling-jam",
+  "version": "2.2.0",
   "private": true,
-  "description": "Glitchling: a deliberately broken baby clone of A-Life Creature #1 (static site + Node/Bun sims). No build step.",
+  "description": "Glitchling: a deliberately broken baby clone of A-Life Creature #1, with a 3D spiking-brain biodome, pure Lean 4.35.0 formal core, independent exact oracle, and AMS-LaTeX research preprint.",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "test": "node tools/check.mjs",
     "test:full": "FULL=1 node tools/check.mjs",
+    "verify:ladder": "node live/test/verification_ladder.mjs",
+    "bench": "node scripts/bench.mjs",
+    "examples": "node examples/01_flaw_invariants.mjs && node examples/02_biodome_conservation.mjs && node examples/03_rs15_11_burst_repair.mjs",
+    "stats": "node tools/results_stats.mjs",
     "serve": "python3 -m http.server 8000",
     "sim": "bun run glitchling.ts 2 2",
     "lesion": "cd live && node test/lesion_experiments.mjs"

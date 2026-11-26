@@ -1,62 +1,139 @@
-# Glitchling
+# Glitchling (`v2.2.0`)
 
 [![CI](https://github.com/0thernes/glitchling-jam/actions/workflows/ci.yml/badge.svg)](https://github.com/0thernes/glitchling-jam/actions/workflows/ci.yml)
 [![GitHub Pages](https://img.shields.io/badge/live-GitHub%20Pages-6b21a8)](https://0thernes.github.io/glitchling-jam/)
-[![No build step](https://img.shields.io/badge/build-none%20(static%20site)-informational)](#run-the-reference-sim-locally)
+[![Lean 4.35.0](https://img.shields.io/badge/Lean%204.35.0-59%20decls%20%C2%B7%200%20sorry-2563eb)](lean/README.md)
 [![Honesty](https://img.shields.io/badge/claims-no%20consciousness%20%2F%20no%20AGI-critical)](#real-vs-simulated-please-read)
 
-A deliberately broken baby clone of Alex Donahue's A-Life **Creature #1**, built in a one-day jam (Nov 1, 2026). It has four engineered flaws you can switch on and off:
+A deliberately broken baby clone of Alexander Stephen Donahue's A-Life **Creature #1**, built in a one-day jam (Nov 1, 2026) and hardened into a formally verified, cross-platform reproducible artificial-life research suite. **Status:** `active` (`v2.2.0`).
+
+It has four engineered flaws you can switch on and off:
 
 - **scramble**: senses read through a random permutation plus noise, re-shuffled every 90 ticks
 - **leaky**: learned values decay toward their prior by 6% per tick
-- **backwards**: the 8 MOT motor neurons read out reversed, and the chosen site is mirrored (k → 15−k)
+- **backwards**: the 8 MOT motor neurons read out reversed, and the chosen site is mirrored ($k \mapsto 15 - k$)
 - **misfire**: every 60 ticks, one site value and 20 random synapses get a jolt
 
-## Live
+![Glitchling Results v3: 30-seed forage success and blood glucose across 7 flaw conditions](results/glitchling.png)
 
-- Landing page: https://0thernes.github.io/glitchling-jam/
-- **Glitchling v2 (live 3D soft-body & spiking brain):** https://0thernes.github.io/glitchling-jam/live/
+## Live Interactive Pages
+
+- **Landing page:** https://0thernes.github.io/glitchling-jam/
+- **Glitchling v2 (live 3D soft-body & spiking brain biodome):** https://0thernes.github.io/glitchling-jam/live/
 - **Play the 2D sim:** https://0thernes.github.io/glitchling-jam/play/
-- Jam showcase: https://0thernes.github.io/glitchling-jam/site/
-- Brain viz (real activation playback): https://0thernes.github.io/glitchling-jam/brain-viz/
+- **Jam showcase:** https://0thernes.github.io/glitchling-jam/site/
+- **Brain viz (real activation playback):** https://0thernes.github.io/glitchling-jam/brain-viz/
 
-The play page runs in any modern browser (phone or desktop), with no build step, no external libraries and no network calls. You can toggle each flaw, adjust its period or leak rate, change the seed, pause, step, speed up, and tap the world to drop food. It shows the creature foraging, a live 272-neuron brain view by region, and live glucose, reward and success charts. Settings are saved in the URL, e.g. `play/?seed=7&flaws=backwards,scramble`.
+## Quickstart
+
+Zero external runtime npm packages and zero build step are required. Clone and verify everything locally:
+
+```bash
+git clone https://github.com/0thernes/glitchling-jam.git
+cd glitchling-jam
+
+# 1. Core health check (syntax, JSON, links, secrets, honesty guard, determinism, Bun ref-sim)
+npm test
+
+# 2. JS Verification Ladder (1,200 property checks, 7 negative, 7 regressions, 4 metamorphic, 8/8 mutants killed)
+npm run verify:ladder
+
+# 3. Runnable examples & Results v3 paired statistics
+npm run examples
+npm run stats
+
+# 4. Independent Python Kronecker/Fraction reference oracle & Hypothesis tests
+python scripts/verify_exact.py
+python -m pytest tests/test_oracle.py -v
+
+# 5. Pure zero-Mathlib Lean 4.35.0 formal core (59 audited declarations + leanchecker)
+cd lean && lake build GlitchlingProofs Challenge Solution && lake env lean VerifyAxioms.lean
+```
+
+## Usage
+
+### Run the repeatable TypeScript reference sim (`Results v3`)
+
+```bash
+BUN_JSC_useConcurrentJIT=0 bun run glitchling.ts 2 30 500   # days=2, 30 seeds 500-529 -> results/summary.csv
+node tools/results_stats.mjs                                # paired t-intervals, Cohen's d_z, 200k permutation p
+python3 plot.py                                             # -> results/glitchling.png, results/cursed_portrait.png
+```
+
+### Run warmed benchmarks, lesion experiments, or local static server
+
+```bash
+npm run bench                                                              # -> results/perf-benchmarks.json
+npm run serve                                                              # -> http://127.0.0.1:8000/
+FROM_T=5 TO_T=5 SEEDS=1,2,3,4,5,6,7,8,9,10,11,12 node live/test/lesion_experiments.mjs
+```
+
+Browser URL settings work out of the box, e.g. `play/?seed=7&flaws=backwards,scramble` or `live/?seed=7&brain=M`. See [`examples/`](examples/) and [`docs/configuration.md`](docs/configuration.md) for full options.
+
+## Research Manuscript, Claims & Mega-Atlas Cross-Check
+
+- **AMS-LaTeX White Paper (Preprint, not peer-reviewed):** [`paper/main.tex`](paper/main.tex) · [`paper/WHITE_PAPER.md`](paper/WHITE_PAPER.md) · [`dist/Donahue_2026_glitchling_alife_verification.pdf`](dist/Donahue_2026_glitchling_alife_verification.pdf) · [`dist/arxiv_submission.tar.gz`](dist/arxiv_submission.tar.gz)
+- **Claims & Falsification Ledger (`C1–C10`):** [`CLAIMS.md`](CLAIMS.md) · [`VERIFICATION.md`](VERIFICATION.md) · [`docs/statement-fidelity.md`](docs/statement-fidelity.md)
+- **Unsolved Problems Mega-Atlas Cross-Check (1,900 problems):** [`docs/MEGA_ATLAS_CROSSCHECK.md`](docs/MEGA_ATLAS_CROSSCHECK.md) — **honest verdict: `0 / 1,900` open problems solved** (scoped toy-model overlaps documented explicitly).
+- **Hardening Audits & Errata:** [`AUDIT/`](AUDIT/) (35 passes, `F01–F33`) · [`docs/reviews/2026-11-25-3cycle-hardening-audit.md`](docs/reviews/2026-11-25-3cycle-hardening-audit.md) (`F24/F30/F33–F40`) · [`ERRATA.md`](ERRATA.md) · [`LIMITATIONS.md`](LIMITATIONS.md) · [`REPLICATION.md`](REPLICATION.md)
+
+## Pure Lean 4.35.0 Formal Core & Verbatim `#print axioms` Audit
+
+All 59 exported declarations (`51` library theorems across `EnergyMassConservation`, `QuantumContextuality`, `CodingAndGovernance`, `HyperbolicAndFlaws` + `8` isolated comparator targets in `Solution.lean` matched against `Challenge.lean`) compile with **zero Mathlib**, **zero `sorry`**, **zero `native_decide`**, `autoImplicit = false`, pass `lake env leanchecker --fresh`, and depend strictly on `[propext, Classical.choice, Quot.sound]` (or zero axioms). Full 59-declaration output is saved in [`results/lean_axioms.txt`](results/lean_axioms.txt) and guarded against drift by `scripts/check_readme_axioms.py`:
+
+<!-- LEAN_AXIOMS_START -->
+```text
+'Glitchling.runEnergyOps_preserves_firstLaw' depends on axioms: [propext, Quot.sound]
+'Glitchling.fluxSoil_preserves_mass' depends on axioms: [propext, Quot.sound]
+'Glitchling.clausius_entropy_nonneg' depends on axioms: [propext, Quot.sound]
+'Glitchling.cega18_rays_nonzero' does not depend on any axioms
+'Glitchling.cega18_kochen_specker_uncolorable' depends on axioms: [propext, Quot.sound]
+'Glitchling.cega18_classical_max_eight' depends on axioms: [propext, Quot.sound]
+'Glitchling.chsh_game_classical_max_three' does not depend on any axioms
+'Glitchling.gf16_exists_inv' depends on axioms: [propext, Quot.sound]
+'Glitchling.heptarch_anti_duopoly' depends on axioms: [propext, Quot.sound]
+'Glitchling.heptarch_all_modes_feasible' does not depend on any axioms
+'Glitchling.nestor_sr_unbiased' depends on axioms: [propext, Quot.sound]
+'Glitchling.nestor_sr_variance_bound' depends on axioms: [propext, Quot.sound]
+'Glitchling.poincare_mobius_norm_identity' depends on axioms: [propext, Quot.sound]
+'Glitchling.poincare_mobius_preserves_disk' depends on axioms: [propext, Quot.sound]
+'Glitchling.ComparatorTarget.target_thm1_energy_mass_clausius' depends on axioms: [propext, Quot.sound]
+'Glitchling.ComparatorTarget.target_thm2_cega18_kochen_specker' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Glitchling.ComparatorTarget.target_thm3_chsh_and_nosignaling' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Glitchling.ComparatorTarget.target_thm4_gf16_and_rs15_11' depends on axioms: [propext, Quot.sound]
+'Glitchling.ComparatorTarget.target_thm5_heptarch_anti_monarchy' depends on axioms: [propext, Quot.sound]
+'Glitchling.ComparatorTarget.target_thm6_nestor_stochastic_rounding' depends on axioms: [propext, Quot.sound]
+'Glitchling.ComparatorTarget.target_thm7_poincare_mobius_containment' depends on axioms: [propext, Quot.sound]
+'Glitchling.ComparatorTarget.target_thm8_flaws_and_nonvacuity' depends on axioms: [propext, Classical.choice, Quot.sound]
+```
+<!-- LEAN_AXIOMS_END -->
 
 ## Real vs simulated (please read)
 
 - **`play/` is a simplified JavaScript port** written for exploring the flaws interactively. It is **not** the TypeScript reference run, and its numbers will not match the published results.
   - *Kept from the reference:* 16 sites (4 colours × 4 shapes) with the same reward formula, depletion and the days 1–3 half-access pattern; 1 tick = 1 sim-minute; the 272-neuron layout in the same 14 regions with the reference's region-to-region connection probabilities; the four flaws applied the way `glitchling.ts` applies them; seeded mulberry32 RNG with a separate flaw stream.
-  - *Simplified or invented:* rate-unit neurons instead of the spiking substrate; a 3-pool toy metabolism; a noisy value race instead of the striatal spike race and expected-free-energy terms; the walking body, 2D map and click-to-drop food; MOT as an 8-way heading code. Since 2026-11-24 the world shuffle uses a seeded Fisher–Yates, so every browser builds the same world for a seed. That world differs from the reference run's world for the same seed number.
-- **The results tables, plots and brain-viz playback come from the TypeScript sim** (`glitchling.ts` subclassing `core/organism.ts`, a copy of the Creature #1 organism). Results v3 (2026-11-24) uses 30 dev seeds per condition (500–529) and reports means, SDs, 95% CIs and paired effect sizes. It is still a toy model, so the numbers describe the model, not animals. With all flaws on: forages +22% [+16%, +27%], success 0.299 vs 0.365, rewards about the same, 30/30 alive.
-- **Repeatability (audit F31).** Under Bun/JavaScriptCore with default settings, the reference sim's output depends on JIT timing, so the same seeds give different numbers under different CPU load. Across 11 re-runs of the old 2-seed setup, "all flaws vs baseline" ranged from 7% to 32% more forages. Results v3 was therefore generated with `BUN_JSC_useConcurrentJIT=0`. Two simultaneous runs gave byte-identical output. Use `BUN_JSC_useConcurrentJIT=0 bun run glitchling.ts 2 30 500` to reproduce it.
-- Some renders in the showcase are driven by **synthetic** data; they are labelled SYNTHETIC on the page.
-- No claims of consciousness, sentience or feelings are made for Glitchling or Creature #1.
-
-## Checks and audit
-
-- `npm test` runs `tools/check.mjs`, which needs Node 22 or newer and Bun. It checks syntax, JSON, local links, secrets, eval use and the honesty guard, runs a 20-second `live/` creature, confirms the same seed gives the same run, and re-runs the reference sim twice with `BUN_JSC_useConcurrentJIT=0` to check its output is sane and deterministic (see F31). CI runs it on every push.
-- `npm run test:full` also runs the 90-second dome/HEPTARCH probe. `npm run lesion` runs the full lesion-experiment suite (`live/test/lesion_experiments.mjs`), which is slow (it takes hours on a laptop CPU).
-- The 2026-11-24 hardening audit is in [`AUDIT/`](AUDIT/): [`INDEX.md`](AUDIT/INDEX.md) (table of contents of every file), [`PASSES.md`](AUDIT/PASSES.md) (what was checked) and [`FINDINGS.md`](AUDIT/FINDINGS.md) (what was found, fixed or left open).
-- **License:** [`LICENSE`](LICENSE) is the Cosmogonic License (non-commercial research and play), the same text as Alex's CQM project ([0thernes/CQM2](https://github.com/0thernes/CQM2)). Vendored third-party code keeps its own licence: `live/vendor/three/LICENSE` (MIT), `live/vendor/p5/LICENSE` (LGPL-2.1) and `live/js/tsotchke/LICENSE-eshkol`. Research images keep the licences listed in `research/img/SOURCES.md`.
-
-## Run the reference sim locally
-
-```bash
-BUN_JSC_useConcurrentJIT=0 bun run glitchling.ts 2 30 500   # days=2, 30 seeds from 500 -> results/results.json, results/summary.csv
-node tools/results_stats.mjs  # means, SDs, 95% CIs, paired effect sizes
-python3 plot.py               # -> results/glitchling.png, results/cursed_portrait.png (needs matplotlib)
-```
+  - *Simplified or invented:* rate-unit neurons instead of the spiking substrate; a 3-pool toy metabolism; a noisy value race instead of the striatal spike race and expected-free-energy terms; the walking body, 2D map and click-to-drop food; MOT as an 8-way heading code. Since 2026-11-24 the world shuffle uses a seeded Fisher–Yates, so every browser builds the same world for a seed.
+- **The results tables, plots and brain-viz playback come from the TypeScript sim** (`glitchling.ts` subclassing `core/organism.ts`, a frozen copy of the Creature #1 organism). Results v3 (2026-11-24) uses 30 dev seeds per condition (500–529) and reports means, SDs, 95% CIs and paired effect sizes. With all flaws on: forages +22% (`Δ +45.8 [34.5, 57.1]`, $d_z = 1.51$), success `0.299` vs `0.365` (`Δ -0.066`), rewards about the same (`76.3` vs `74.5`), `210/210` runs alive. The v2 hint of within-life hit-rate compensation did **not** replicate (`-0.016 [-0.042, +0.009]`) and was withdrawn.
+- **Repeatability (audit F31):** Under default Bun/JavaScriptCore settings, `glitchling.ts` depends on concurrent JIT timing. Results v3 was generated with `BUN_JSC_useConcurrentJIT=0` (two simultaneous runs were byte-identical).
+- **Quantum modules & synapse scales (`F01`):** Every quantum module (`FMO`, `Cry4`, `CHSH`, `CEGA-18`, `Hoggar`, `C3`) executes classical linear algebra on CPU (with optional WASM/WebGPU) and proves mathematical correctness, not physical quantum effects. `MEGA` (`16.78M`) and `GIGA` (`1.13B`) synapse totals are **nominal** formulas (`30,554` and `28,131` explicitly stored + `113M` Int8 cluster weights on `GIGA`).
+- Some showcase renders (`v4`) are driven by **synthetic** data and labelled `SYNTHETIC` on every frame.
+- **No claims of consciousness, sentience, feelings, or AGI are made for Glitchling or Creature #1.** See [`LIMITATIONS.md`](LIMITATIONS.md).
 
 ## Layout
 
 | Path | What |
 |---|---|
-| [`GLITCHLING_MASTER_COMPENDIUM.md`](GLITCHLING_MASTER_COMPENDIUM.md), [`docs/`](docs/) | **Complete 6-File Architecture & Development Compendium of All 29 Research PDFs (`1,932` pages)**: [`01_NESTOR_HEPTARCH_WISHLIST_OMNIHARNESS.md`](docs/01_NESTOR_HEPTARCH_WISHLIST_OMNIHARNESS.md), [`02_FRONTIER_LINEAGE25_SUBSTRATES_GLITCHES.md`](docs/02_FRONTIER_LINEAGE25_SUBSTRATES_GLITCHES.md), [`03_ALIFE_V3_BLUEPRINT_CREATURE1_100PASSES.md`](docs/03_ALIFE_V3_BLUEPRINT_CREATURE1_100PASSES.md), [`04_QUANTUM_2050_HYPERION_CONTEXTUALITY_KS.md`](docs/04_QUANTUM_2050_HYPERION_CONTEXTUALITY_KS.md), and [`05_EMBODIED_CORTEX_CQM_DOME_VERIFICATION.md`](docs/05_EMBODIED_CORTEX_CQM_DOME_VERIFICATION.md) |
-| `live/` | Glitchling v2 live 3D A-Life Bio-Observatory, **Layer-1 Geodesic Biodome & HEPTARCH v0.2 Organism** (`436`–`14,156,048` 16-compartment branched HH+NMDA+SK + discrete integer binomial Markov spiking neurons / up to a **nominal** `1,132,483,840` (`1.13B`, = 80 × neurons by formula; **28,131 explicitly stored** + 113M Int8 cluster weights, measured) synapses & spine-turnover masks in mouse-cortex-scale `GIGA`, **HEPTARCH v0.2 7-seat capped council** (`max π_m ≤ 0.46`) + Raider 6-phase `ColdStrike` + **NESTOR 23-rung adaptive precision governor** + `DSD/RSR` + `Exuvia` escape + **`RS[15,11,d=5]` `GF(16)` acoustic ECC** + **`Cryptochrome-4` nocturnal compass** + **`Levin V_mem` blastema limb regeneration**, LTC CPG, 85–93-node / 336–360-tet anisotropic 3D FEM body + 32 Henneman motor-unit fascicles + Huxley sarcomeres + 36-node / 64-vessel 3D Murray's-Law vascular tree + `24×8×8` `D3Q19` LBM FSI & `1,024` WCSPH differentiated erythrocytes (`896`) + chemotactic leukocytes (`128`), dual `256×128` (`65,536`-receptor / `196,608`-RGC) foveated retinas → `V1→V2→V4→65,536-concept grounded semantic ontology DAG IT + Perirhinal` + EKF-SLAM, histological `32,768`-neuron spiking hippocampal–subicular loop (`16,384` DG with adult neurogenesis + `6` GABAergic interneuron classes + Predictive Successor Representation), `797k`–`29.06M` (`omega`) Multimodal RoPE-SwiGLU Transformer-XL world model (`32×16×3` Spatial-Pyramid Patch-VAE + 4-step Rectified Flow-Matching video head + `+300.0 s` Neuro-Symbolic HTN + Depth-5 UCT MCTS planner), 128-gene Single-Cell Zygote Cleavage (`1→128` blastomeres) + Gastrulation + `Hox` GRN (`0L`–`10L` clades + Patagium wings + Angler Esca), **Geodesic Biodome** (`R = 21.6 u`, **11-pool `FP64` Kahan First-Law energy ledger `< 1e-12` closure**, Daisyworld biotic albedo, FMO vibronic-ENAQT, 16-spin p-bit Ising mycelia, 3 physics-seam Anomaly Tori, 2 `Big-Tree` Sanctuaries, 4 Quantum Monoliths + `C3` cospectral twins, 6 lithic `DomeStones`, 4 `DomeCaches`), **5-Caste colony + 4 Multi-Kingdom Dome species** (`Xenomimics` Bell twins, `Xylos` 48-foci Poincaré gliders, `Titans` IPD colossi, `Shoggoths` deceptive ambushers), `Three.js` HDR16F + `4096×4096` PCF soft shadows + Sky PMREM IBL + 12-tap GTAO + FidelityFX CAS + Display-P3 + 4K UHD + `p5.js` 5-tab studio, and 16Q WASM / 18Q WebGPU + Qutrit DRAG (`25.6×`) + PEC (`10.7×`) + ZNE (`7.7×`) + **KCBS / CEGA-18 / Hoggar contextuality** + **32-Qubit ($\chi=32$) Vidal MPS with Verstraete–Cirac bound & 2-Rényi Magic $M_2$**; see [`live/README.md`](live/README.md)) |
-| `play/` | Live playable 2D browser port (`sim.js` model, `app.js` UI, `style.css`) |
-| `site/` | One-day jam showcase page |
-| `brain-viz/` | Real activation playback viewer |
-| `glitchling.ts`, `core/` | TypeScript reference sim |
-| `results/` | Sim outputs (Results v2; the v1 run in `results_v1/` was never published here, and the v1 flaw settings are re-run as `all_mild`) |
-| `art/`, `artifacts/`, `research/` | Art, renders, research notes and reference images |
-| `NOTES.md`, `BLUEPRINT.md`, `BRAINS.md`, `WRITEUP.md` | Jam notes and design docs |
+| [`lean/`](lean/) | Pure Lean `v4.35.0` formal core (0 Mathlib, 59 audited declarations, `Challenge`/`Solution` comparator) |
+| [`reference/`](reference/), [`tests/`](tests/) | Independent Python Kronecker/Fraction reference oracle (`glitchling_oracle.py`) + `pytest`/`hypothesis` suite |
+| [`paper/`](paper/), [`dist/`](dist/) | AMS-LaTeX scientific preprint (`main.tex`, `refs.bib`, `WHITE_PAPER.md`), vector figures, frozen PDF & arXiv tarball |
+| [`live/`](live/) | Glitchling v2 live 3D A-Life Bio-Observatory, Geodesic Biodome, HEPTARCH v0.2, NESTOR, & JS verification ladder (`live/test/`) |
+| [`play/`](play/), [`site/`](site/), [`brain-viz/`](brain-viz/) | Zero-build 2D sim port, one-day jam showcase, and real activation playback viewer |
+| [`glitchling.ts`](glitchling.ts), [`core/`](core/) | TypeScript reference sim + frozen Creature #1 organism copy (do not edit `core/`) |
+| [`results/`](results/) | Results v3 (`summary.csv`, `results.json`), `lean_axioms.txt`, `perf-benchmarks.json`, plots |
+| [`examples/`](examples/), [`scripts/`](scripts/), [`tools/`](tools/) | Runnable examples, repo health check (`tools/check.mjs`), exact verifier, benchmarks, Build Standard audit scripts |
+| [`docs/`](docs/), [`AUDIT/`](AUDIT/), [`GLITCHLING_MASTER_COMPENDIUM.md`](GLITCHLING_MASTER_COMPENDIUM.md) | 29-PDF research compendium, architecture, ADRs `0001–0005`, Mega-Atlas cross-check, benchmarks, preregistration, threat model, and 3-cycle + 35-pass hardening audits |
+
+## License & Citation
+
+- **License:** [`LICENSE`](LICENSE) is the Cosmogonic License (non-commercial research and play), byte-identical to [`0thernes/CQM2`](https://github.com/0thernes/CQM2). Third-party code and Wikimedia images retain their original licenses (`THIRD_PARTY_NOTICES.md`, `research/img/SOURCES.md`).
+- **Author & Citation:** Alexander Stephen Donahue (Independent Researcher, Spokane, WA, USA; ORCID [`0009-0006-8168-9648`](https://orcid.org/0009-0006-8168-9648)). See [`CITATION.cff`](CITATION.cff) and [`CITATION.bib`](CITATION.bib).

@@ -1,0 +1,17 @@
+# Glossary (`docs/glossary.md`)
+
+- **Bell-Diagonal / Werner State:** A two-qubit $4\times 4$ density matrix diagonal in the Bell basis, whose single-qubit reduced density matrices equal $\frac{1}{2}I_2$ identically (exact zero no-signaling bias).
+- **$C_3$ Cospectral Twins ($\sigma_0, \sigma_1$):** Two $16\times 16$ real symmetric 4-qubit carrier matrices on the 71-point hyperplane section of $Q^+(7,2)$ sharing identical eigenvalues (`< 1e-14`) and $\operatorname{Tr}\Lambda^2 = 2240$ on the 64-point complement, separated by cubic Jordan completion trace $\operatorname{Tr}\Lambda^3 = 14976$ vs $15360$.
+- **CEGA-18:** Cabello–Estebaranz–García-Alcaine (1996) minimal 18-ray, 9-context Kochen–Specker set in $\mathbb{R}^4$ where every ray belongs to exactly 2 orthonormal tetrads, forcing classical non-contextual ceiling $8 < 9$.
+- **CHSH Game:** Two-player non-local game with deterministic local hidden-variable ceiling $|S| \le 2$ (75% win rate) and Tsirelson quantum ceiling $2\sqrt{2}$ ($\cos^2(\pi/8) \approx 85.36\%$).
+- **Cryptochrome-4 (Cry4) Minimal Model:** Ritz–Adem–Schulten (2000) $8\times 8$ (`2×2×2`) two-electron + one axial spin-$1/2$ hyperfine radical-pair Liouville–Haberkorn model exhibiting geomagnetic inversion symmetry $\Phi_S(-\mathbf{B}) = \Phi_S(\mathbf{B})$.
+- **ENAQT:** Environment-Assisted Quantum Transport — non-monotonic peak in 7-site Adolphs–Renger FMO reaction-center sink efficiency versus dephasing rate $\gamma_\phi$, converging to the zero-parameter adiabatic secular Pauli–Förster limit at high dephasing.
+- **Finding Class (10-Class Taxonomy):** Canonical Build Standard `R5` classification: `bug`, `error`, `issue`, `problem`, `concern`, `dilemma`, `conflict`, `gap`, `hole`, `blindspot`.
+- **HEPTARCH v0.2:** 7-seat capped probability simplex council (`Surge`, `Chronoscope`, `Keel`, `Capacitor`, `Wildcard`, `LongGame`, `Jester`) enforcing $\pi_m \le 0.46 < 0.50$ (anti-monarchy) and $\pi_i + \pi_j \le 0.92 < 1$ (anti-duopoly, $\ge 3$ active seats).
+- **Hoggar Spectral Floor:** 3-qubit Pauli-flat fiducial $|\psi_H\rangle$ with $|\langle P_u\rangle| = 1/3$ across all 63 non-identity Paulis, splitting the 315 isotropic lines of $W(5,2)$ into 63 frustrated ($4|g_{uv}| = 4/9$) and 252 unfrustrated ($2/9$) lines across floor $1/3$.
+- **Kahan Summation:** Compensated floating-point summation maintaining 11-pool First-Law energy and closed N/C mass closure to $< 10^{-14}$ in `live/js/sim/world.js`.
+- **NESTOR 23-Rung Governor:** Adaptive precision scheduler (`R0..R22`) employing provably unbiased stochastic rounding ($\mathbb{E}[Q(x)] = x$, $\operatorname{Var}[Q] \le \Delta^2/4$).
+- **Nominal vs. Stored Synapses (`F01`):** Formula-derived capacity totals (`MEGA 16.78M`, `GIGA 1.13B`) contrasted explicitly against measured stored weights (`30,554` / `28,131` explicit + `113M` Int8 cluster weights).
+- **Poincaré-Disk Möbius Addition ($u \oplus v$):** Ungar's gyrovector addition on the $K=-1$ unit hyperbolic disk $\mathbb{D}^2$, preserving $|u \oplus v| < 1$ identically via $1 - |u \oplus v|^2 = (1-|u|^2)(1-|v|^2)/(1 + 2\langle u,v\rangle + |u|^2|v|^2)$.
+- **`RS[15, 11, d=5]`:** Systematic Reed–Solomon MDS error-correcting code over $\mathbb{F}_{16} = \mathbb{F}_2[x]/(x^4 + x + 1)$ (`0x13`) repairing up to $t = 2$ arbitrary 4-bit symbol errors per 15-symbol bio-acoustic frame.
+- **TMII / Ecology of Fear:** Trait-mediated indirect interaction where predator-induced alarm sheltering by herbivores indirectly raises standing plant fruit biomass (`T15b`).

@@ -1,22 +1,22 @@
 import subprocess,re,os,collections
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
-rows=[l.split(None,4) for l in subprocess.check_output(['git','ls-tree','-r','-l','HEAD']).decode().splitlines()]
-files=[(r[4],int(r[3])) for r in rows]
-LANG={'.js':'JavaScript (ESM)','.mjs':'JavaScript (ESM, Node)','.ts':'TypeScript (Bun)','.md':'Markdown','.html':'HTML','.css':'CSS','.py':'Python 3','.json':'JSON','.jsonl':'JSON Lines','.csv':'CSV','.tsv':'TSV','.png':'PNG image','.jpg':'JPEG image','.webp':'WebP image','.mp4':'MP4 video'}
+rows=subprocess.check_output(['git','ls-files']).decode().splitlines()
+files=[(f,os.path.getsize(f)) for f in rows if os.path.exists(f)]
+LANG={'.js':'JavaScript (ESM)','.mjs':'JavaScript (ESM, Node)','.ts':'TypeScript (Bun)','.md':'Markdown','.html':'HTML','.css':'CSS','.py':'Python 3','.lean':'Lean 4','.tex':'AMS-LaTeX','.bib':'BibTeX','.pdf':'PDF document','.gz':'Gzip tarball','.yml':'YAML','.yaml':'YAML','.toml':'TOML','.cff':'CITATION.cff','.sh':'Bash shell','.ps1':'PowerShell','.mdc':'Cursor rule','.json':'JSON','.jsonl':'JSON Lines','.csv':'CSV','.tsv':'TSV','.sha256':'SHA-256 manifest','.png':'PNG image','.jpg':'JPEG image','.webp':'WebP image','.mp4':'MP4 video'}
 # coverage: which test files import which module
 cov=collections.defaultdict(set)
 for f,_ in files:
     if f.startswith('live/test/') and f.endswith('.mjs'):
-        s=open(f).read()
+        s=open(f,encoding='utf-8',errors='ignore').read()
         for m in re.finditer(r"""from\s+['"](\.[^'"]+)['"]|import\(\s*['"](\.[^'"]+)['"]""",s):
-            t=os.path.normpath(os.path.join('live/test',m.group(1) or m.group(2)))
+            t=os.path.normpath(os.path.join('live/test',m.group(1) or m.group(2))).replace('\\','/')
             cov[t].add(os.path.basename(f))
 # transitive: modules imported by covered modules count as indirectly exercised
 imp={}
 for f,_ in files:
     if f.startswith('live/js') and f.endswith('.js'):
-        s=open(f).read()
-        imp[f]={os.path.normpath(os.path.join(os.path.dirname(f),m.group(1))) for m in re.finditer(r"""from\s+['"](\.[^'"]+)['"]""",s)}
+        s=open(f,encoding='utf-8',errors='ignore').read()
+        imp[f]={os.path.normpath(os.path.join(os.path.dirname(f),m.group(1))).replace('\\','/') for m in re.finditer(r"""from\s+['"](\.[^'"]+)['"]""",s)}
 ind=set()
 stack=[k for k in cov]
 while stack:
@@ -39,7 +39,7 @@ def purpose(f):
         if m: return 'Page: '+m.group(1).strip()[:100]
     return ''
 out=['# AUDIT/INDEX.md: table of contents of every tracked file','',
-f'Generated from `git ls-tree -r -l HEAD` by `AUDIT/tools/index.py`. {len(files)} tracked files, {sum(s for _,s in files)/1e6:.1f} MB.','',
+f'Generated from `git ls-files` by `AUDIT/tools/index.py`. {len(files)} tracked files, {sum(s for _,s in files)/1e6:.1f} MB.','',
 'Test coverage key: **direct** = imported by a `live/test/*.mjs` probe; **indirect** = imported (transitively) by a directly covered module; **page** = exercised by the headless page check (`AUDIT/tools/pages_check.mjs`); **none** = no automated check.','',
 '## Contents','']
 groups=collections.OrderedDict()
@@ -57,5 +57,5 @@ for g,items in groups.items():
         if f.startswith('live/test/'): c='is a test/probe'
         if f.startswith('live/vendor/'): c='vendored third-party'
         out.append(f'| `{f}` | {s:,} | {LANG.get(ext,ext or "-")} | {purpose(f)} | {c} |')
-open('AUDIT/INDEX.md','w').write('\n'.join(out)+'\n')
+open('AUDIT/INDEX.md','w',encoding='utf-8',newline='\n').write('\n'.join(out)+'\n')
 print(len(files))

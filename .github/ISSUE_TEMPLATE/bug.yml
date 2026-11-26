@@ -1,0 +1,37 @@
+name: Bug, Defect, or Falsification Challenge
+description: Report a bug, mathematical error, reproducibility failure, or falsification counterexample
+title: "[finding]: "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: finding_class
+    attributes:
+      label: Finding Class (Build Standard R5)
+      description: Select the single best class from the 10-class audit taxonomy.
+      options:
+        - bug
+        - error
+        - issue
+        - problem
+        - concern
+        - dilemma
+        - conflict
+        - gap
+        - hole
+        - blindspot
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened / Claim challenged
+      description: Cite exact file paths, line numbers, claim ID (C1-C10), or theorem name.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Exact reproduction steps & environment
+      description: OS, Node/Bun/Python/Lean versions, seed(s), and exact command run.
+    validations:
+      required: true

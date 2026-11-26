@@ -6,8 +6,9 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 process.chdir(ROOT);
 const results = [];
 const run = (name, fn) => {
@@ -41,12 +42,13 @@ run('Local links in Markdown/HTML resolve to tracked files', () => {
   for (const f of tracked) { const p = f.split('/'); for (let i = 1; i < p.length; i++) dirs.add(p.slice(0, i).join('/')); }
   const bad = [];
   for (const f of tracked.filter((x) => /\.(md|html)$/.test(x) && exists(x))) {
-    const s = fs.readFileSync(f, 'utf8');
+    let s = fs.readFileSync(f, 'utf8');
+    if (f.endsWith('.md')) s = s.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]+`/g, '');
     const pats = [/\]\(([^)\s]+)\)/g, /(?:href|src)=["']([^"'#]+)/g];
     for (const re of pats) for (const m of s.matchAll(re)) {
       let u = m[1].split('#')[0].split('?')[0];
       if (!u || /^(https?:|mailto:|data:|javascript:|blob:|\$|\{)/.test(u) || u.includes('${')) continue;
-      const t = path.normalize(path.join(path.dirname(f), decodeURIComponent(u))).replace(/\/$/, '');
+      const t = path.normalize(path.join(path.dirname(f), decodeURIComponent(u))).replace(/\\/g, '/').replace(/\/$/, '');
       if (t === '.' || t.startsWith('..') || t.startsWith('/')) continue;
       if (!set.has(t) && !dirs.has(t) && !set.has(t + '/index.html')) bad.push(`${f} -> ${u}`);
     }
@@ -110,12 +112,17 @@ run('Reference sim (bun glitchling.ts 2 2 500): sane, deterministic, matches com
   // Audit finding F31: under Bun/JavaScriptCore the reference sim's output depends on JIT tier-up timing (CPU load), so the
   // committed results/summary.csv is one realization and is NOT byte-reproducible in general. With concurrent JIT compilation
   // disabled the run is deterministic, so that is what this check pins down. It also checks the structure of the output.
-  const bun = spawnSync('bun', ['--version'], { encoding: 'utf8' });
-  if (bun.status !== 0) return 'SKIPPED (bun not installed)';
+  const bunCandidates = ['bun', path.join(os.homedir(), '.bun', 'bin', process.platform === 'win32' ? 'bun.exe' : 'bun')];
+  let bunExe = null;
+  for (const cand of bunCandidates) {
+    const probe = spawnSync(cand, ['--version'], { encoding: 'utf8' });
+    if (probe.status === 0) { bunExe = cand; break; }
+  }
+  if (!bunExe) return 'SKIPPED (bun not installed)';
   const once = () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'glref-'));
     fs.cpSync('glitchling.ts', path.join(tmp, 'glitchling.ts')); fs.cpSync('core', path.join(tmp, 'core'), { recursive: true });
-    const r = spawnSync('bun', ['run', 'glitchling.ts', '2', '2', '500'], { cwd: tmp, encoding: 'utf8', timeout: 600000, env: { ...process.env, BUN_JSC_useConcurrentJIT: '0' } });
+    const r = spawnSync(bunExe, ['run', 'glitchling.ts', '2', '2', '500'], { cwd: tmp, encoding: 'utf8', timeout: 600000, env: { ...process.env, BUN_JSC_useConcurrentJIT: '0' } });
     if (r.status !== 0) throw new Error('bun run failed: ' + (r.stderr || '').slice(-400));
     const csv = fs.readFileSync(path.join(tmp, 'results/summary.csv'), 'utf8'); fs.rmSync(tmp, { recursive: true, force: true }); return csv;
   };

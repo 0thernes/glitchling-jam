@@ -2,6 +2,25 @@
 
 The detailed per-pass history of the live 3D sim is in [`live/CHANGELOG.md`](live/CHANGELOG.md). This file records repository-wide changes. Dates are US Pacific.
 
+## [2.2.0] - 2026-11-25: 3-Cycle Hardening, Lean 4.35.0 Formal Core, Python Oracle, Build Standard v1.2.0 & AMS-LaTeX Preprint
+
+### Added
+- **Pure Lean 4.35.0 formal core (`lean/`):** 59 exported kernel-checked declarations (`51` library theorems + `8` isolated `Challenge`/`Solution` comparator targets) across `EnergyMassConservation`, `QuantumContextuality`, `CodingAndGovernance`, and `HyperbolicAndFlaws` (zero Mathlib, zero `sorry`, zero `native_decide`, `autoImplicit = false`, strictly `[propext, Classical.choice, Quot.sound]`, passing `leanchecker --fresh`). Verbatim output saved in `results/lean_axioms.txt` and guarded by `scripts/check_readme_axioms.py`.
+- **Independent Python reference oracle (`reference/glitchling_oracle.py`, `scripts/verify_exact.py`, `tests/test_oracle.py`):** Exact `Fraction` / Gaussian-integer / complex-Kronecker solvers differentially verifying `live/js/` to `3.44e-15` (FMO), `9.99e-16` (Cry4), and `9.71e-17` (Poincaré), plus `pytest`/`hypothesis`, `ruff`, and strict `mypy`.
+- **JS Verification Ladder (`live/test/verification_ladder.mjs`):** 1,200 seeded property tests, 7 negative/boundary guards, 7 bug regressions (`F03, F15, F16, F27, F30, F33, F34`), 4 metamorphic invariants, and `8/8` killed semantic mutants.
+- **Warmed Benchmarks (`scripts/bench.mjs`):** Hardware-tagged median/IQR/p95 timings saved to `results/perf-benchmarks.json` and `docs/benchmarks.md`.
+- **Mega-Atlas 1,900-Problem Cross-Check (`docs/MEGA_ATLAS_CROSSCHECK.md`):** Honest verdict **`0 / 1,900` solved**, with scoped overlap table and explicit non-claims.
+- **Build Standard v1.2.0 Full Compliance (`repo.yaml`, `VERSION`, `CLAIMS.md`, `LIMITATIONS.md`, `REPLICATION.md`, `VERIFICATION.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `CITATION.cff`, `justfile`, `examples/`, `docs/adr/0001..0005`, `docs/reviews/2026-11-25-3cycle-hardening-audit.md`, cross-platform CI + Pages + Release workflows, `docs/media/social-preview.png`).**
+- **Publication-Grade AMS-LaTeX Preprint (`paper/main.tex`, `paper/refs.bib`, `paper/WHITE_PAPER.md`, `dist/Donahue_2026_glitchling_alife_verification.pdf`, `dist/arxiv_submission.tar.gz`).**
+
+### Fixed
+- **F34 (Windows CI/CLI bug):** Fixed `tools/check.mjs` Windows `ENOENT` crash (`fileURLToPath`), backslash link normalization, and `~/.bun/bin/bun.exe` detection (`9/9 PASS` on Windows).
+- **F33/D10 (T5 no-signaling gate):** Replaced miscalibrated ad-hoc `maxEmpNoSig < 0.11` with exact analytical Bonferroni $\alpha = 0.001$ two-proportion binomial critical bound `maxNoSigZ < 4.26` (verified PASS on Cohort A `Z_max = 3.21` and Cohort B `Z_max = 2.39`).
+- **F30 (RNG fallback hole):** Removed unused `Math.random` default fallbacks in `live/js/sim/heptarch.js` and `live/js/tsotchke/qgtl.js` (now throw `TypeError` without a seeded PRNG; `0` `Math.random` occurrences across `live/js/{sim,tsotchke}`).
+- **F24/D7 (Beacon label):** Reworded opt-in button in `live/index.html` to *"Fetch public randomness beacons"*.
+- **F35 (Doc conflict):** Updated stale `Results v2` mentions in `README.md` and `site/index.html` to `Results v3`.
+- **F36 (Media hygiene `A24`):** Optimized five >5 MB media assets below 5 MB (`2560×1440` PNGs / `1440×1440` Purkinje / `2.71 MB` H.264 MP4) and updated `site/index.html` dimensions/captions honestly.
+
 ## 2026-11-24 (evening): Alex's decisions D1–D5, D9 and D3
 
 - **Licence, F04/D4:** added `LICENSE`, a byte-identical copy of the Cosmogonic License from `0thernes/CQM2` (non-commercial research and play). The README and `package.json` point to it.

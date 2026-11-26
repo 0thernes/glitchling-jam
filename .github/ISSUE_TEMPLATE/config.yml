@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability Disclosure
+    url: https://github.com/0thernes/glitchling-jam/blob/main/SECURITY.md
+    about: Please report security issues privately to 0_0@0thernes.art.
+  - name: Replication Protocol & Discussion
+    url: https://github.com/0thernes/glitchling-jam/blob/main/REPLICATION.md
+    about: Clean-clone verification steps and independent replication log.

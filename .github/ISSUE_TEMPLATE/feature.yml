@@ -1,0 +1,19 @@
+name: Feature, Experiment, or Replication Log Entry
+description: Propose an improvement, new falsifiable experiment, or submit an independent replication result
+title: "[enhancement]: "
+labels: ["gap"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the proposal or independent replication run clearly.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Proposed falsification test or verification output
+      description: How will we measure success or catch regressions?
+    validations:
+      required: true

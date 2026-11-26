@@ -1,0 +1,20 @@
+# Glitchling (`0thernes/glitchling-jam`, v2.2.0)
+
+> A deliberately broken baby clone of A-Life Creature #1, featuring a repeatable TypeScript reference simulation (`glitchling.ts`), a 3D spiking-brain Geodesic Biodome (`live/`), a pure zero-Mathlib Lean 4.35.0 formal core (`lean/`, 59 audited declarations), an independent exact Python reference oracle (`reference/`), and an AMS-LaTeX scientific preprint (`paper/`, `dist/`).
+
+## Author & Identity
+- Author: Alexander Stephen Donahue (Independent Researcher, Spokane, WA, USA; ORCID 0009-0006-8168-9648)
+- Repository: https://github.com/0thernes/glitchling-jam
+- Live Pages: https://0thernes.github.io/glitchling-jam/
+- License: Cosmogonic License — Non-Commercial Research & Play (`LICENSE`)
+
+## Key Documents
+- [README.md](README.md): Project overview, Quickstart, Usage, verbatim Lean 4 `#print axioms`, and live links
+- [CLAIMS.md](CLAIMS.md): Numbered claims ledger (`C1–C10`) with verification tiers and falsification criteria
+- [LIMITATIONS.md](LIMITATIONS.md): Honest real-vs-metaphor table and epistemic boundaries (no consciousness/AGI/physical-QM claims)
+- [REPLICATION.md](REPLICATION.md): Clean-clone reproduction protocol and dated replication log
+- [VERIFICATION.md](VERIFICATION.md): 5-tier verification architecture (Lean 4 -> Python oracle -> JS ladder -> CI -> statistics)
+- [AGENTS.md](AGENTS.md): Canonical engineering and hard-rule guide for AI/human contributors
+- [docs/MEGA_ATLAS_CROSSCHECK.md](docs/MEGA_ATLAS_CROSSCHECK.md): Honest 1,900-problem cross-check verdict (`0 / 1,900` solved)
+- [docs/reviews/2026-11-25-3cycle-hardening-audit.md](docs/reviews/2026-11-25-3cycle-hardening-audit.md): 3-cycle deep hardening audit report
+- [paper/WHITE_PAPER.md](paper/WHITE_PAPER.md) & [dist/Donahue_2026_glitchling_alife_verification.pdf](dist/Donahue_2026_glitchling_alife_verification.pdf): Full research manuscript

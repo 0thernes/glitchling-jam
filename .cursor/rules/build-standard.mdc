@@ -1,0 +1,12 @@
+---
+description: Glitchling v2.2.0 Build Standard v1.2.0 & Verification Rules (canonical source: AGENTS.md)
+globs: ["**/*"]
+alwaysApply: true
+---
+
+Follow `AGENTS.md` in the repository root as the canonical specification:
+- Never modify `core/` (frozen Creature #1 copy) or `LICENSE` (Cosmogonic License).
+- Commit and push directly to `main` (Hard Rules R1-R2); no git hooks, branch protection, or blocking lint gates.
+- Tag all audit findings with the 10 classes (`bug`, `error`, `issue`, `problem`, `concern`, `dilemma`, `conflict`, `gap`, `hole`, `blindspot`).
+- Maintain zero `sorry`/forbidden axioms in `lean/GlitchlingProofs*.lean` and `lean/Solution.lean`.
+- Never claim consciousness, sentience, AGI, physical quantum effects, or solved Mega-Atlas open problems (`0/1,900`).

@@ -1,4 +1,4 @@
-name: CI
+name: CI — Cross-Platform Verification, Exact Oracle, Lean 4.35.0 & AMS-LaTeX
 
 on:
   push:
@@ -8,22 +8,146 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  cross-platform-check:
+    name: Repo Health, JS Ladder, Examples & Python Oracle (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: "22"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - name: Repository health check (syntax, links, secrets, honesty guard, live/ sim smoke + determinism, reference-sim reproduction)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Python test/oracle dependencies
+        run: python -m pip install --quiet numpy pytest hypothesis
+      - name: Repository health check (9/9 syntax, links, secrets, honesty guard, determinism, Bun ref-sim)
         run: node tools/check.mjs
+      - name: JS Verification Ladder (1,200 properties + negative + regressions + metamorphic + 8/8 killed mutants)
+        run: npm run verify:ladder
+      - name: Runnable examples smoke test
+        run: npm run examples
+      - name: Independent exact Python oracle, JS differential check & Lean static audit
+        run: python scripts/verify_exact.py
+      - name: Pytest + Hypothesis property-based oracle suite
+        run: python -m pytest tests/test_oracle.py -v
+      - name: Verbatim README #print axioms drift check
+        run: python scripts/check_readme_axioms.py
+      - name: Verify cryptographic SHA-256 manifests (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sha256sum -c CHECKSUMS.sha256
+          sha256sum -c data/MANIFEST.sha256
+
+  report-only-static:
+    name: Report-Only Static Analysis, Secret Scan & Build Standard Audit (R1/R3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Python static analyzers (report-only)
+        continue-on-error: true
+        run: python -m pip install --quiet ruff mypy numpy pytest hypothesis
+      - name: Ruff static lint (report-only)
+        continue-on-error: true
+        run: ruff check reference scripts tests
+      - name: Strict mypy type check (report-only)
+        continue-on-error: true
+        run: mypy --config-file pyproject.toml reference scripts tests
+      - name: Secret scan via gitleaks (report-only)
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Standard v1.2.0 90-item repo audit (report-only)
+        continue-on-error: true
+        run: bash scripts/audit-repo.sh .
+
+  lean4-formal-audit:
+    name: Lean 4 (v4.35.0) 59-Decl Audit, leanchecker & lake comparator --paranoid
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install elan, Lean 4.35.0 & bubblewrap
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          toolchain="$(tr -d '[:space:]' < lean/lean-toolchain)"
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain "$toolchain"
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Clean-build GlitchlingProofs, Challenge & Solution + audit 59 axioms + leanchecker
+        working-directory: lean
+        shell: bash
+        run: |
+          set -o pipefail
+          lake clean
+          lake build GlitchlingProofs Challenge Solution
+          lake env lean VerifyAxioms.lean | tee ../results/lean-audit-ci.log
+          lake env leanchecker --fresh GlitchlingProofs
+          lake env leanchecker --fresh Solution
+          python3 - <<'PY'
+          allowed = {"propext", "Classical.choice", "Quot.sound"}
+          count = 0
+          for line in open("../results/lean-audit-ci.log", encoding="utf-8"):
+              line = line.strip()
+              if any(bad in line for bad in ("sorryAx", "Lean.ofReduceBool", "_native")):
+                  raise SystemExit(f"ERROR: Forbidden axiom detected: {line}")
+              if "depends on axioms:" in line:
+                  count += 1
+                  used = {t.strip() for t in line.split("[", 1)[1].rsplit("]", 1)[0].split(",") if t.strip()}
+                  if not used.issubset(allowed):
+                      raise SystemExit(f"ERROR: Forbidden axiom {used - allowed} in: {line}")
+              elif "does not depend on any axioms" in line:
+                  count += 1
+          assert count >= 59, f"Expected >= 59 audited declarations, got {count}"
+          print(f"PASS: All {count} Lean 4 declarations strictly within {sorted(allowed)} (or zero axioms).")
+          PY
+      - name: Run Palomar lake comparator --paranoid (if supported on toolchain)
+        working-directory: lean
+        continue-on-error: true
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          lake comparator --config comparator.json --paranoid
+
+  latex-manuscript-check:
+    name: AMS-LaTeX Zero-Warning PDF & Standalone arXiv Tarball Check (Tectonic)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Tectonic
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh
+          sudo mv tectonic /usr/local/bin/tectonic
+          tectonic --version
+      - name: Compile paper/main.tex & verify standalone arXiv tarball
+        run: python scripts/package_dist.py --verify-only
+      - name: Upload compiled manuscript PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Donahue_2026_glitchling_alife_verification
+          path: dist/Donahue_2026_glitchling_alife_verification.pdf

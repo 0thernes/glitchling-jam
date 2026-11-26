@@ -1,0 +1,13 @@
+# Errata & Corrections Log
+
+All material corrections made after initial publication are logged transparently here rather than silently rewritten.
+
+| Date | Scope | Prior Statement / Defect | Correction Applied | Audit ID |
+|---|---|---|---|---|
+| 2026-11-24 | `results/summary.csv`, `site/`, `WRITEUP.md` | Results v2 (`n=2`, seeds 1–2) claimed within-life hit-rate improvement under all flaws and showed a misfire jump to `0.419`; default Bun JIT was nondeterministic across CPU load. | Re-ran `n=30` seeds (`500–529`) with `BUN_JSC_useConcurrentJIT=0` (Results v3). Withdrew within-life compensation (`-0.016 [-0.042, +0.009]`) and misfire jump (`p = 0.477`). | `F31/D9` |
+| 2026-11-24 | `live/js/sim/brain.js`, `live/js/honesty.js`, `README.md` | `MEGA` (`16.78M`) and `GIGA` (`1.13B`) synapse totals were listed under "Real". | Relabeled everywhere as **nominal** (formula-computed); explicitly reported measured stored counts (`30,554` / `28,131` explicit + `113,248,384` Int8 cluster weights). | `F01/D2` |
+| 2026-11-24 | `live/test/nobel_rigor_suite.mjs` | Suite named "nobel" and called statistical lesion contrasts "theorems". | Renamed to `live/test/lesion_experiments.mjs` and "experiment" across suite and docs (`npm run lesion`). | `F02/D1` |
+| 2026-11-24 | `play/sim.js`, `live/js/sim/world.js` | `arr.sort(() => r() - 0.5)` produced biased, engine-dependent shuffles (V8 vs JSC differed on 186/200 seeds). | Replaced with seeded Fisher–Yates shuffle; re-measured pre/post impacts. | `F03/D3` |
+| 2026-11-24 | `research/img/alex/` | 26 figures lacked verified source/license provenance. | Removed from HEAD (`git rm`); notes retained and marked `(image removed)`. | `F05/D5` |
+| 2026-11-25 | `live/test/lesion_experiments.mjs:418` | Ad-hoc finite-sample no-signaling threshold `maxEmpNoSig < 0.11` failed (`0.1376`) after `F03` world shuffle despite exact marginal bias `0.0`. | Replaced with exact analytical Bonferroni $\alpha = 0.001$ two-proportion binomial critical bound `maxNoSigZ < 4.26`; recorded transparently as post-F03 methodological fix (`Z_max = 3.21` Cohort A, `2.39` Cohort B). | `F33/D10` |
+| 2026-11-25 | `tools/check.mjs`, `live/index.html`, `heptarch.js`, `qgtl.js`, `README.md`, `site/index.html` | Windows `URL.pathname` crash (`F34`), unused `Math.random` default fallbacks (`F30`), "photonic QRNG" button label (`F24`), stale `Results v2` text (`F35`), and five >5 MB media assets (`F36`). | Fixed `fileURLToPath`, required explicit seeded RNG (`TypeError` otherwise), relabeled button to "Fetch public randomness beacons", updated `Results v3` prose, and optimized the 5 media files below 5 MB (`2560×1440` PNGs / H.264 `2.71 MB` MP4). | `F24`, `F30`, `F34–F36` |

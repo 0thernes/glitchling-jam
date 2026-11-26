@@ -1,11 +1,16 @@
 node_modules/
-*.log
-.DS_Store
-Thumbs.db
-# local tooling / caches
 .venv/
 __pycache__/
 *.pyc
-.env
-.env.*
-live-shots/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+Thumbs.db
+*.log
+/tmp/
+lean/.lake/
+paper/build/
+dist/tmp_arxiv_check/
+results/live_shots/
+live/shots/

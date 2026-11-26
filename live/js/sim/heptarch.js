@@ -423,11 +423,12 @@ export const NESTOR_RUNG_BITS = Float64Array.of(
 /**
  * Bit-accurate NESTOR 23-Rung Quantizer (R0..R22) with provably unbiased Stochastic Rounding (E[Q_r(x)] == x).
  */
-export function quantizeNestorRung(val, rung = 22, rng = Math.random, scale = 1.0) {
+export function quantizeNestorRung(val, rung = 22, rng = null, scale = 1.0) {
   const r = clamp(Math.round(rung), 0, 22);
   if (r === 0 || !Number.isFinite(val)) return 0.0;
   if (r >= 22) return val;
   if (r === 20) return Math.fround(val);
+  if (typeof rng !== 'function') throw new TypeError('quantizeNestorRung requires a seeded rng function for stochastic rungs (F30)');
   const sc = Math.max(1e-6, scale);
 
   // R1..R2: 1-bit binary {-sc, +sc} with unbiased stochastic rounding over [-sc, +sc]

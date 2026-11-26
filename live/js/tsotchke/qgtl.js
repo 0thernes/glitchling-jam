@@ -541,7 +541,7 @@ export function evalCospectralTwins() {
  *  - If `useJordanCompletion === false` (1st-order classical spectral sensor), diagonalizes leftA and rightA; since
  *    ||eig(leftA) - eig(rightA)||_inf < 1e-12, their spectra are indistinguishable and choice falls back to rngCoin().
  */
-export function chooseSafeCospectralObelisk(leftA, rightA, useJordanCompletion = true, rngCoin = Math.random) {
+export function chooseSafeCospectralObelisk(leftA, rightA, useJordanCompletion = true, rngCoin = null) {
   const s = buildStaticContextualityCache();
   if (useJordanCompletion) {
     const tr3L = s.jordanCompletionMoments(leftA).tr3;
@@ -553,6 +553,7 @@ export function chooseSafeCospectralObelisk(leftA, rightA, useJordanCompletion =
   let maxDiff = 0;
   for (let i = 0; i < 16; i++) maxDiff = Math.max(maxDiff, Math.abs(eL[i] - eR[i]));
   if (maxDiff > 1e-6) return eL[0] >= eR[0] ? 0 : 1; // never triggered on exact cospectral twins!
+  if (typeof rngCoin !== 'function') throw new TypeError('chooseSafeCospectralObelisk requires a seeded rngCoin function when useJordanCompletion is false (F30)');
   return rngCoin() < 0.5 ? 0 : 1;
 }
 
