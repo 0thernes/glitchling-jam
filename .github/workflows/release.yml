@@ -1,4 +1,4 @@
-name: Release Frozen Artifacts, SHA256SUMS, RFC 3161 TSA & SLSA Provenance
+name: Release Frozen Artifacts, SHA256SUMS, Dual Timestamps & SLSA Provenance
 
 on:
   push:
@@ -24,9 +24,11 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install Python verification deps
-        run: python -m pip install --quiet numpy pytest hypothesis
-      - name: Verify JS ladder, examples, Python oracle, citations, RFC 3161 TSA & checksums prior to release
+        run: python -m pip install --quiet numpy pytest hypothesis pyyaml jsonschema
+      - name: Verify schema, versions, blueprint, JS ladder, examples, oracle, citations, dual timestamps & checksums
         run: |
+          python scripts/check_versions.py
+          python scripts/check_blueprint_decls.py
           npm run verify:ladder
           npm run examples
           python scripts/verify_exact.py
@@ -45,6 +47,9 @@ jobs:
           cp results/summary.csv release-assets/
           cp results/perf-benchmarks.json release-assets/
           cp data/timestamps/CHECKSUMS.sha256.tsr release-assets/
+          cp data/timestamps/CHECKSUMS.sha256.ots release-assets/
+          cp formalization.yaml release-assets/
+          cp codemeta.json release-assets/
           cp CHECKSUMS.sha256 release-assets/
           (cd release-assets && sha256sum * > SHA256SUMS)
           cat release-assets/SHA256SUMS
@@ -56,6 +61,7 @@ jobs:
             release-assets/arxiv_submission.tar.gz
             release-assets/lean_axioms.txt
             release-assets/CHECKSUMS.sha256.tsr
+            release-assets/CHECKSUMS.sha256.ots
             release-assets/SHA256SUMS
       - name: Create or update GitHub Release for tag
         if: startsWith(github.ref, 'refs/tags/v')

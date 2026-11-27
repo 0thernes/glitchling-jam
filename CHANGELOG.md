@@ -2,6 +2,18 @@
 
 The detailed per-pass history of the live 3D sim is in [`live/CHANGELOG.md`](live/CHANGELOG.md). This file records repository-wide changes. Dates are US Pacific.
 
+## [2.4.0] - 2026-11-26: 10-Pass Playbook v1.3 Hardening, Palomar Module Core (76 Audited Decls), Interactive Blueprint, Dual RFC 3161 + OTS Receipts & Privacy Hygiene
+
+### Added
+- **Palomar `module` Headers & `formalization.yaml` (`F45`):** Converted all 11 Lean 4.35.0 proof files to Palomar `module` syntax (`public import`, `@[expose] public def`, `public theorem`), added `formalization.yaml`, enabled `linter.unusedVariables` / `linter.deprecated`, and added `lake check --paranoid` + live false-theorem rejection in CI (`76` audited declarations strictly within `[propext, Classical.choice, Quot.sound]`).
+- **Interactive Lean Proof Blueprint (`F46`):** Added zero-CDN interactive DAG & declaration registry in `blueprint/index.html` + `blueprint/blueprint.json`, guarded by `scripts/check_blueprint_decls.py`.
+- **FAIR & Playbook v1.3 Governance Artifacts (`F47`):** Added `DEVIATIONS.md`, `DATASHEET.md`, `codemeta.json`, `.zenodo.json`, `docs/NEURIPS_CHECKLIST.md`, `docs/LITERATURE_SEARCH.md`, and `docs/reviews/2026-11-26-10-pass-playbook-review.md`.
+- **Single-Version & Schema Guard (`F42`/`F44`) + Dual RFC 3161/OTS Timestamps (`F48`):** Added `scripts/check_versions.py` validating `repo.yaml` against Draft 2020-12 JSON Schema (`0` errors) and synchronizing `2.4.0` across 13 manifests/docs; upgraded `scripts/timestamp_checksums.py` to mint & verify both DigiCert RFC 3161 `.tsr` and Bitcoin OpenTimestamps `.ots` proofs.
+
+### Fixed
+- **Privacy Firewall Hygiene:** Replaced all private repository name references in public documentation and showcase files (`AUTHORS.md`, `HANDOFF_GEMINI_ARGON_ANTIGRAVITY.md`, `NOTES.md`, `docs/05_EMBODIED_CORTEX_CQM_DOME_VERIFICATION.md`, `docs/architecture.md`, `site/index.html`) with clean non-identifying wording (`0` privacy leaks).
+- **Strict HTML CSP & Determinism (`F50`–`F52`):** Added explicit Content-Security-Policy meta headers across all 6 static HTML entrypoints, replaced unseeded `Math.random()` in `live/test/evolve_gait.mjs` with seeded `mulberry32`, and added clickable `plainurl` DOIs plus Threats/Export-Control/Withdrawal sections to `paper/main.tex` (`F49`).
+
 ## 2026-11-26: Statement-audit corrections (documentation only, no version change)
 
 - Narrowed claims in `README.md`, `CLAIMS.md` (C2–C7, C10), `LIMITATIONS.md` and `docs/` to match the Lean statements: `RS[15,11]` `d = 5`, `t = 2` and the `C_3` trace gap are literal arithmetic in Lean; the Bell-diagonal theorem is definitional; the Clausius numerator result needs non-negative fluxes; the N/C mass ledger has single-step lemmas only; Möbius containment covers rational points; NESTOR results are polynomial identities.

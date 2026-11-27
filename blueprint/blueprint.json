@@ -1,0 +1,360 @@
+{
+  "title": "Glitchling v2.4.0 — Interactive Pure Lean 4.35.0 Proof Blueprint",
+  "version": "2.4.0",
+  "lean_toolchain": "leanprover/lean4:v4.35.0",
+  "palomar_module_headers": true,
+  "mathlib_dependencies": "none",
+  "kernels": [
+    "Lean 4.35.0 official C++ default kernel",
+    "Lean 4.35.0 paranoid kernel (leanchecker-paranoid)",
+    "lean4lean (v4.35.0)",
+    "nanoda (v4.35.0)",
+    "con-leche (v4.35.0)",
+    "con-ron (v4.35.0)"
+  ],
+  "total_audited_declarations": 72,
+  "comparator_targets": 9,
+  "permitted_axioms": ["propext", "Classical.choice", "Quot.sound"],
+  "nodes": [
+    {
+      "id": "spec-energy-mass",
+      "title": "11-Pool Energy, Closed N/C Mass & Clausius Spec",
+      "kind": "definition",
+      "module": "GlitchlingProofs.Spec",
+      "paper_ref": "Theorem 3.1 / Eq. (3.1)",
+      "layer": 0,
+      "uses": [],
+      "lean_decls": [
+        "Glitchling.Spec.EnergyLedger",
+        "Glitchling.Spec.firstLawBalanced",
+        "Glitchling.Spec.runEnergyOps",
+        "Glitchling.Spec.MassLedger",
+        "Glitchling.Spec.massBalanced",
+        "Glitchling.Spec.clausiusEntropyNum"
+      ],
+      "statement": "Pure statement-only definitions for 11-pool Dome energy transfers/fluxes, closed soil+reservoir N/C mass ledgers, and exact Clausius numerator.",
+      "status": "defined"
+    },
+    {
+      "id": "spec-quantum",
+      "title": "CEGA-18 Rays/Contexts, CHSH & Bell-Diagonal Spec",
+      "kind": "definition",
+      "module": "GlitchlingProofs.Spec",
+      "paper_ref": "Theorems 3.2 & 3.3",
+      "layer": 0,
+      "uses": [],
+      "lean_decls": [
+        "Glitchling.Spec.cegaRay",
+        "Glitchling.Spec.cegaContexts",
+        "Glitchling.Spec.isCEGAKSColoring",
+        "Glitchling.Spec.chshExpr",
+        "Glitchling.Spec.BellDiagState"
+      ],
+      "statement": "Literal 18 rays and 9 four-ray orthonormal contexts of CEGA-18 (Cabello et al. 1996), CHSH LHV expression, and Bell-diagonal reduced density state.",
+      "status": "defined"
+    },
+    {
+      "id": "spec-coding-gov",
+      "title": "GF(2^4) (0x13), HEPTARCH 7×7 Mode Caps & NESTOR SR Spec",
+      "kind": "definition",
+      "module": "GlitchlingProofs.Spec",
+      "paper_ref": "Theorems 3.4, 3.5 & 3.6",
+      "layer": 0,
+      "uses": [],
+      "lean_decls": [
+        "Glitchling.Spec.gf16Add",
+        "Glitchling.Spec.gf16Mul",
+        "Glitchling.Spec.heptarchModeCaps",
+        "Glitchling.Spec.nestorSRExpectNum",
+        "Glitchling.Spec.nestorSRVarFactor"
+      ],
+      "statement": "Carry-less GF(2^4) multiplication mod 0x13, literal 7×7 HEPTARCH v0.2 mode cap matrix, and NESTOR stochastic-rounding expectation/variance numerators.",
+      "status": "defined"
+    },
+    {
+      "id": "spec-hyperbolic-flaws",
+      "title": "Ungar Poincaré Möbius Addition & Glitchling Flaw Spec",
+      "kind": "definition",
+      "module": "GlitchlingProofs.Spec",
+      "paper_ref": "Theorems 3.7 & 3.8",
+      "layer": 0,
+      "uses": [],
+      "lean_decls": [
+        "Glitchling.Spec.mobiusDen",
+        "Glitchling.Spec.mobiusNumX",
+        "Glitchling.Spec.mobiusNumY",
+        "Glitchling.Spec.mirrorSite",
+        "Glitchling.Spec.leakyNextNum"
+      ],
+      "statement": "Exact scaled integer denominator/numerators for Poincaré-disk Möbius addition, site mirror k -> 15 - k, and leaky memory update.",
+      "status": "defined"
+    },
+    {
+      "id": "thm-energy-helpers",
+      "title": "11-Pool & 4-Reservoir Coordinate-Update Sum Lemmas",
+      "kind": "lemma",
+      "module": "GlitchlingProofs.EnergyMassConservation",
+      "paper_ref": "Theorem 3.1",
+      "layer": 1,
+      "uses": ["spec-energy-mass"],
+      "lean_decls": [
+        "Glitchling.sumFin11_add_at",
+        "Glitchling.sumFin11_sub_at",
+        "Glitchling.sumInt_listAddAt",
+        "Glitchling.length_listAddAt",
+        "Glitchling.sumFin4_sub_at"
+      ],
+      "statement": "Single-coordinate integer updates shift sumFin11, sumInt, and sumFin4 by exact +-delta while preserving soil list length.",
+      "status": "proved"
+    },
+    {
+      "id": "thm-first-law-trace",
+      "title": "Inductive 11-Pool First-Law Energy Conservation",
+      "kind": "theorem",
+      "module": "GlitchlingProofs.EnergyMassConservation",
+      "paper_ref": "Theorem 3.1 / Claim C2",
+      "layer": 2,
+      "uses": ["thm-energy-helpers"],
+      "lean_decls": [
+        "Glitchling.transferEnergy_preserves_sum",
+        "Glitchling.transferEnergy_preserves_firstLaw",
+        "Glitchling.injectSolar_preserves_firstLaw",
+        "Glitchling.injectGeothermal_preserves_firstLaw",
+        "Glitchling.radiateHeat_preserves_firstLaw",
+        "Glitchling.runEnergyOps_preserves_firstLaw"
+      ],
+      "statement": "Every finite trace of internal transfers, solar/geothermal influxes, and radiative rejections preserves exact First-Law boundary closure.",
+      "status": "proved"
+    },
+    {
+      "id": "thm-mass-clausius",
+      "title": "Closed N/C Mass Ledger & Second-Law Clausius Non-Negativity",
+      "kind": "theorem",
+      "module": "GlitchlingProofs.EnergyMassConservation",
+      "paper_ref": "Theorem 3.1 / Eq. (3.1) / Claim C2",
+      "layer": 2,
+      "uses": ["thm-energy-helpers"],
+      "lean_decls": [
+        "Glitchling.fluxSoil_preserves_mass",
+        "Glitchling.transferSoil_preserves_mass",
+        "Glitchling.clausius_entropy_nonneg",
+        "Glitchling.clausius_entropy_strict_pos"
+      ],
+      "statement": "Soil-reservoir and lateral mycelial exchanges conserve exact N/C mass; 0 < T_sky <= T_amb <= T_geo forces Clausius entropy numerator >= 0 (> 0 when qDiss > 0).",
+      "status": "proved"
+    },
+    {
+      "id": "thm-cega18-ks",
+      "title": "Constructive CEGA-18 Kochen–Specker Uncolorability (8 < 9)",
+      "kind": "theorem",
+      "module": "GlitchlingProofs.QuantumContextuality",
+      "paper_ref": "Theorem 3.2 / Claim C3",
+      "layer": 2,
+      "uses": ["spec-quantum"],
+      "lean_decls": [
+        "Glitchling.cega18_rays_nonzero",
+        "Glitchling.cega18_contexts_orthogonal",
+        "Glitchling.cega18_every_ray_in_two_contexts",
+        "Glitchling.cega18_double_counting",
+        "Glitchling.cega18_valid_sum_eq_nine",
+        "Glitchling.cega18_kochen_specker_uncolorable",
+        "Glitchling.cega18_classical_max_eight",
+        "Glitchling.cega18_classical_eight_achievable"
+      ],
+      "statement": "All 18 CEGA rays are nonzero, all 9 contexts are pairwise orthogonal with exact ray multiplicity 2; double-counting (9 odd vs 2k even) proves no KS {0,1}-coloring exists and proves exact classical maximum 8 < 9.",
+      "status": "proved"
+    },
+    {
+      "id": "thm-chsh-nosig-c3",
+      "title": "CHSH LHV Ceiling (|S| <= 2), Bell-Diagonal No-Signaling & C3 Gap",
+      "kind": "theorem",
+      "module": "GlitchlingProofs.QuantumContextuality",
+      "paper_ref": "Theorem 3.3 / Claims C3 & C4",
+      "layer": 2,
+      "uses": ["spec-quantum"],
+      "lean_decls": [
+        "Glitchling.chsh_lhv_bound",
+        "Glitchling.chsh_game_classical_max_three",
+        "Glitchling.bell_diagonal_exact_no_signaling",
+        "Glitchling.c3_cubic_trace_gap"
+      ],
+      "statement": "Every deterministic +-1 local strategy obeys |S| <= 2 and wins <= 3/4 CHSH rounds; normalized Bell-diagonal states have Alice reduced density (1/2)I_2 identically; C3 cubic split = 384/15360 = 1/40.",
+      "status": "proved"
+    },
+    {
+      "id": "thm-gf16-rs",
+      "title": "Complete GF(2^4) Finite Field Axioms & RS[15,11,d=5] Radius",
+      "kind": "theorem",
+      "module": "GlitchlingProofs.CodingAndGovernance",
+      "paper_ref": "Theorem 3.4 / Claim C5",
+      "layer": 2,
+      "uses": ["spec-coding-gov"],
+      "lean_decls": [
+        "Glitchling.gf16_add_self",
+        "Glitchling.gf16_add_comm",
+        "Glitchling.gf16_mul_comm",
+        "Glitchling.gf16_mul_assoc",
+        "Glitchling.gf16_left_distrib",
+        "Glitchling.gf16_mul_one",
+        "Glitchling.gf16_exists_inv",
+        "Glitchling.gf16_alpha_primitive_order_15",
+        "Glitchling.rs15_11_mds_radius"
+      ],
+      "statement": "Exhaustive kernel verification of all finite-field axioms for F_2[x]/(x^4+x+1) (0x13), primitive generator order 15 for alpha=2, and RS[15,11] MDS distance d=5, error-correction radius t=2.",
+      "status": "proved"
+    },
+    {
+      "id": "thm-heptarch-gov",
+      "title": "HEPTARCH v0.2 Anti-Monarchy (<50%), Anti-Duopoly (>=3 Seats) & Feasibility",
+      "kind": "theorem",
+      "module": "GlitchlingProofs.CodingAndGovernance",
+      "paper_ref": "Theorem 3.5 / Claim C6",
+      "layer": 2,
+      "uses": ["spec-coding-gov"],
+      "lean_decls": [
+        "Glitchling.heptarch_anti_monarchy",
+        "Glitchling.heptarch_anti_duopoly",
+        "Glitchling.heptarch_all_modes_feasible",
+        "Glitchling.ipd_sanctioned_cooperation_dominates"
+      ],
+      "statement": "Any 7-seat simplex with per-seat cap <= 46% forbids single-seat majority (<50%) and any two-seat duopoly (constructively exhibiting a 3rd active seat), and all 7 literal MODE_CAPS rows are feasible.",
+      "status": "proved"
+    },
+    {
+      "id": "thm-nestor-sr",
+      "title": "NESTOR Unbiased Stochastic Rounding & Popoviciu Variance <= Delta^2/4",
+      "kind": "theorem",
+      "module": "GlitchlingProofs.CodingAndGovernance",
+      "paper_ref": "Theorem 3.6 / Eq. (3.2) / Claim C6",
+      "layer": 2,
+      "uses": ["spec-coding-gov"],
+      "lean_decls": [
+        "Glitchling.nestor_sr_unbiased",
+        "Glitchling.nestor_sr_variance_bound"
+      ],
+      "statement": "Exact integer identity (Delta-r)*q + r*(q+Delta) = Delta*(q+r) and exact slack identity 4*r*(Delta-r) + (Delta-2r)^2 = Delta^2.",
+      "status": "proved"
+    },
+    {
+      "id": "thm-poincare-mobius",
+      "title": "Universal Ungar K=-1 Poincaré-Disk Möbius Containment",
+      "kind": "theorem",
+      "module": "GlitchlingProofs.HyperbolicAndFlaws",
+      "paper_ref": "Theorem 3.7 / Eqs. (3.3)-(3.4) / Claim C7",
+      "layer": 2,
+      "uses": ["spec-hyperbolic-flaws"],
+      "lean_decls": [
+        "Glitchling.poincare_mobius_den_sum_of_squares",
+        "Glitchling.cauchy_schwarz_dot_lower",
+        "Glitchling.poincare_mobius_den_pos",
+        "Glitchling.poincare_mobius_norm_identity",
+        "Glitchling.poincare_mobius_preserves_disk"
+      ],
+      "statement": "Exact polynomial identity D^2 - (Nx^2 + Ny^2) = (S^2 - |u|^2)(S^2 - |v|^2)D with D = (S^2 + <u,v>)^2 + (u x v)^2 > 0, proving strict open unit-disk containment |u (+) v| < 1.",
+      "status": "proved"
+    },
+    {
+      "id": "thm-glitchling-flaws",
+      "title": "Glitchling backwards Mirror Involution & leaky Memory Contraction",
+      "kind": "theorem",
+      "module": "GlitchlingProofs.HyperbolicAndFlaws",
+      "paper_ref": "Theorem 3.8 / Claim C9",
+      "layer": 2,
+      "uses": ["spec-hyperbolic-flaws"],
+      "lean_decls": [
+        "Glitchling.mirrorSite_properties",
+        "Glitchling.leaky_contraction_identity",
+        "Glitchling.leaky_preserves_prior",
+        "Glitchling.leaky_strict_contraction_above"
+      ],
+      "statement": "Site mirror k -> 15 - k is a fixed-point-free involution on Fin 16; leaky decay preserves prior p and strictly contracts |v' - p| < |v - p| for 0 < lam < S.",
+      "status": "proved"
+    },
+    {
+      "id": "nonvacuity-suite",
+      "title": "Constructive Non-Vacuity Witnesses (NV01–NV06)",
+      "kind": "nonvacuity",
+      "module": "GlitchlingProofs.NonVacuity",
+      "paper_ref": "Section 3",
+      "layer": 3,
+      "uses": [
+        "thm-first-law-trace",
+        "thm-mass-clausius",
+        "thm-cega18-ks",
+        "thm-gf16-rs",
+        "thm-heptarch-gov",
+        "thm-poincare-mobius"
+      ],
+      "lean_decls": [
+        "Glitchling.nv01_energy_mass_balanced_witness",
+        "Glitchling.nv02_clausius_strict_pos_witness",
+        "Glitchling.nv03_cega18_eight_of_nine_witness",
+        "Glitchling.nv04_gf16_inverse_and_primitive_witness",
+        "Glitchling.nv05_heptarch_valid_simplex_witness",
+        "Glitchling.nv06_poincare_interior_witness"
+      ],
+      "statement": "Explicit non-trivial concrete inhabitants proving all six theorem families have satisfiable hypotheses (ruling out vacuous truth False -> P).",
+      "status": "proved"
+    },
+    {
+      "id": "adversarial-suite",
+      "title": "Adversarial False-Variant Refutations (AT01–AT06)",
+      "kind": "adversarial",
+      "module": "GlitchlingProofs.AdversarialTests",
+      "paper_ref": "Section 3",
+      "layer": 3,
+      "uses": [
+        "thm-first-law-trace",
+        "thm-cega18-ks",
+        "thm-chsh-nosig-c3",
+        "thm-heptarch-gov",
+        "thm-poincare-mobius",
+        "thm-glitchling-flaws"
+      ],
+      "lean_decls": [
+        "Glitchling.at01_refute_unlogged_energy_creation",
+        "Glitchling.at02_refute_cega18_noncontextual_nine",
+        "Glitchling.at03_refute_chsh_local_exceeds_two",
+        "Glitchling.at04_refute_heptarch_monopoly_or_duopoly",
+        "Glitchling.at05_refute_poincare_boundary_escape",
+        "Glitchling.at06_refute_mirror_fixed_point"
+      ],
+      "statement": "Machine-checked negations proving corrupted or strengthened-beyond-truth variants (unlogged energy, 9/9 CEGA coloring, CHSH > 2, HEPTARCH monopoly/duopoly, Poincaré boundary escape, mirror fixed point) are provably False.",
+      "status": "proved"
+    },
+    {
+      "id": "comparator-targets",
+      "title": "9 Isolated Challenge/Solution Palomar 6-Kernel Comparator Targets",
+      "kind": "comparator_target",
+      "module": "Solution",
+      "paper_ref": "Section 3 (lake comparator --paranoid)",
+      "layer": 4,
+      "uses": [
+        "thm-first-law-trace",
+        "thm-mass-clausius",
+        "thm-cega18-ks",
+        "thm-chsh-nosig-c3",
+        "thm-gf16-rs",
+        "thm-heptarch-gov",
+        "thm-nestor-sr",
+        "thm-poincare-mobius",
+        "thm-glitchling-flaws",
+        "nonvacuity-suite",
+        "adversarial-suite"
+      ],
+      "lean_decls": [
+        "Glitchling.ComparatorTarget.target_thm1_energy_mass_clausius",
+        "Glitchling.ComparatorTarget.target_thm2_cega18_kochen_specker",
+        "Glitchling.ComparatorTarget.target_thm3_chsh_and_nosignaling",
+        "Glitchling.ComparatorTarget.target_thm4_gf16_and_rs15_11",
+        "Glitchling.ComparatorTarget.target_thm5_heptarch_anti_monarchy",
+        "Glitchling.ComparatorTarget.target_thm6_nestor_stochastic_rounding",
+        "Glitchling.ComparatorTarget.target_thm7_poincare_mobius_containment",
+        "Glitchling.ComparatorTarget.target_thm8_flaws_and_nonvacuity",
+        "Glitchling.ComparatorTarget.target_thm9_adversarial_and_nonvacuity"
+      ],
+      "statement": "Nine bundled comparator targets matching isolated statement-only Challenge.lean against sorry-free Solution.lean across all 6 independent kernels (Lean paranoid, lean4lean, nanoda, con-leche, con-ron, Lean default).",
+      "status": "proved"
+    }
+  ]
+}

@@ -1,12 +1,14 @@
+module
+
 /-
-  GLITCHLING (v2.3.0) — Root Formal Library (`GlitchlingProofs`)
-  Pure Lean 4.35.0 (zero Mathlib, zero `sorry`, zero `native_decide`, `autoImplicit = false`).
+  GLITCHLING (v2.4.0) — Root Formal Library (`GlitchlingProofs`)
+  Pure Lean 4.35.0 Palomar module (zero Mathlib, zero `sorry`, zero `native_decide`, `autoImplicit = false`).
 -/
 
-import GlitchlingProofs.Spec
-import GlitchlingProofs.EnergyMassConservation
-import GlitchlingProofs.QuantumContextuality
-import GlitchlingProofs.CodingAndGovernance
-import GlitchlingProofs.HyperbolicAndFlaws
-import GlitchlingProofs.NonVacuity
-import GlitchlingProofs.AdversarialTests
+public import GlitchlingProofs.Spec
+public import GlitchlingProofs.EnergyMassConservation
+public import GlitchlingProofs.QuantumContextuality
+public import GlitchlingProofs.CodingAndGovernance
+public import GlitchlingProofs.HyperbolicAndFlaws
+public import GlitchlingProofs.NonVacuity
+public import GlitchlingProofs.AdversarialTests

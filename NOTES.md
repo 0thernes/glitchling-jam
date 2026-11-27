@@ -1,6 +1,6 @@
 # Glitchling: one-day jam coordination doc
 
-**What it is:** Glitchling is a deliberately broken baby clone of Creature #1. `core/` is a copy of the Creature #1 organism code from `Asmodensius-v40/creatures/001/organism` (organism, affect, develop, v40mods, substrate, tsotchke, fp/). The only change is that the copies' absolute imports were rewritten to relative paths, and the diag/trace files that needed the test suite were dropped. `glitchling.ts` subclasses `Organism` and adds four flaws you can switch on and off. The original repos are untouched.
+**What it is:** Glitchling is a deliberately broken baby clone of Creature #1. `core/` is a copy of the Creature #1 organism code from the private parent Creature #1 repository (`creatures/001/organism`: organism, affect, develop, v40mods, substrate, tsotchke, fp/). The only change is that the copies' absolute imports were rewritten to relative paths, and the diag/trace files that needed the test suite were dropped. `glitchling.ts` subclasses `Organism` and adds four flaws you can switch on and off. The original repos are untouched.
 
 ## Run it (exact commands)
 ```

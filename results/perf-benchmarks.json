@@ -1,6 +1,6 @@
 {
-  "version": "2.2.0",
-  "timestamp_utc": "2026-11-26T02:49:26.501Z",
+  "version": "2.4.0",
+  "timestamp_utc": "2026-11-26T23:52:10.634Z",
   "environment": {
     "node": "v25.8.2",
     "platform": "win32-x64",
@@ -13,37 +13,37 @@
       "name": "live_creature_M_step",
       "batch": 5,
       "n": 30,
-      "median_ms": 18.6189,
-      "q25_ms": 15.4574,
-      "q75_ms": 21.8829,
-      "iqr_ms": 6.4254,
-      "p95_ms": 27.7788,
-      "min_ms": 12.3085,
-      "max_ms": 33.1265
+      "median_ms": 22.6761,
+      "q25_ms": 20.3488,
+      "q75_ms": 25.6805,
+      "iqr_ms": 5.3317,
+      "p95_ms": 31.4635,
+      "min_ms": 12.6024,
+      "max_ms": 37.2629
     },
     {
       "name": "live_creature_S_headless_step",
       "batch": 10,
       "n": 30,
-      "median_ms": 16.2066,
-      "q25_ms": 13.8847,
-      "q75_ms": 17.7722,
-      "iqr_ms": 3.8875,
-      "p95_ms": 21.2734,
-      "min_ms": 11.1093,
-      "max_ms": 22.4748
+      "median_ms": 14.7781,
+      "q25_ms": 13.3967,
+      "q75_ms": 16.4421,
+      "iqr_ms": 3.0454,
+      "p95_ms": 19.2485,
+      "min_ms": 11.1241,
+      "max_ms": 25.5145
     },
     {
       "name": "fmo_gksl_49x49_exact",
       "batch": 1,
       "n": 25,
-      "median_ms": 0.1342,
-      "q25_ms": 0.127,
-      "q75_ms": 0.1798,
-      "iqr_ms": 0.0528,
-      "p95_ms": 0.2747,
-      "min_ms": 0.1187,
-      "max_ms": 2.5662
+      "median_ms": 0.077,
+      "q25_ms": 0.0722,
+      "q75_ms": 0.0783,
+      "iqr_ms": 0.0061,
+      "p95_ms": 0.0851,
+      "min_ms": 0.069,
+      "max_ms": 0.1815
     },
     {
       "name": "fmo_forster_7x7_exact",
@@ -51,35 +51,35 @@
       "n": 30,
       "median_ms": 0.0011,
       "q25_ms": 0.001,
-      "q75_ms": 0.0016,
-      "iqr_ms": 0.0006,
-      "p95_ms": 0.0047,
+      "q75_ms": 0.0011,
+      "iqr_ms": 0.0002,
+      "p95_ms": 0.0014,
       "min_ms": 0.0009,
-      "max_ms": 0.0068
+      "max_ms": 0.0016
     },
     {
       "name": "cry4_haberkorn_64x64_exact",
       "batch": 1,
       "n": 20,
-      "median_ms": 0.8558,
-      "q25_ms": 0.5376,
-      "q75_ms": 1.5113,
-      "iqr_ms": 0.9737,
-      "p95_ms": 3.175,
-      "min_ms": 0.3446,
-      "max_ms": 3.4167
+      "median_ms": 0.2245,
+      "q25_ms": 0.1876,
+      "q75_ms": 0.741,
+      "iqr_ms": 0.5534,
+      "p95_ms": 1.17,
+      "min_ms": 0.184,
+      "max_ms": 4.2113
     },
     {
       "name": "rs15_11_encode_corrupt2_decode",
       "batch": 200,
       "n": 30,
-      "median_ms": 0.0035,
-      "q25_ms": 0.0031,
-      "q75_ms": 0.0044,
-      "iqr_ms": 0.0012,
-      "p95_ms": 0.006,
-      "min_ms": 0.0026,
-      "max_ms": 0.0141
+      "median_ms": 0.0026,
+      "q25_ms": 0.0025,
+      "q75_ms": 0.0032,
+      "iqr_ms": 0.0007,
+      "p95_ms": 0.0045,
+      "min_ms": 0.0021,
+      "max_ms": 0.008
     },
     {
       "name": "poincare_mobius_add",
@@ -87,11 +87,11 @@
       "n": 30,
       "median_ms": 0,
       "q25_ms": 0,
-      "q75_ms": 0.0001,
+      "q75_ms": 0,
       "iqr_ms": 0,
       "p95_ms": 0.0001,
       "min_ms": 0,
-      "max_ms": 0.0002
+      "max_ms": 0.0001
     },
     {
       "name": "c3_cospectral_cached",
@@ -100,10 +100,10 @@
       "median_ms": 0.0001,
       "q25_ms": 0,
       "q75_ms": 0.0001,
-      "iqr_ms": 0.0001,
+      "iqr_ms": 0,
       "p95_ms": 0.0002,
       "min_ms": 0,
-      "max_ms": 0.0003
+      "max_ms": 0.0002
     }
   ]
 }

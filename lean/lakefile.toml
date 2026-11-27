@@ -1,10 +1,12 @@
 name = "GlitchlingProofs"
-version = "2.3.0"
+version = "2.4.0"
 defaultTargets = ["GlitchlingProofs", "Solution"]
 
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+linter.unusedVariables = true
+linter.deprecated = true
 
 [[lean_lib]]
 name = "GlitchlingProofs"

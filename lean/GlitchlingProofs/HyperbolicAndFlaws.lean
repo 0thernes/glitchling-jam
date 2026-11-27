@@ -1,12 +1,14 @@
+module
+
 /-
-  GLITCHLING (v2.2.0) — Module 4: Ungar K = -1 Poincaré-Disk Möbius Addition
+  GLITCHLING (v2.4.0) — Module 4: Ungar K = -1 Poincaré-Disk Möbius Addition
   Containment Theorem (`T6`), Glitchling `backwards` Mirror Involution, and
   Glitchling `leaky` Memory Geometric Contraction (`glitchling.ts`).
 
   Zero Mathlib, zero `sorry`, zero `native_decide`, strict `autoImplicit = false`.
 -/
 
-import GlitchlingProofs.Spec
+public import GlitchlingProofs.Spec
 
 namespace Glitchling
 
@@ -27,7 +29,7 @@ private theorem sq_nonneg (x : Int) : 0 ≤ x * x := by
 /-- Theorem 4.1 (Exact Sum-of-Squares Identity for Poincaré Möbius Denominator):
     S^4 + 2 S^2 (ux*vx + uy*vy) + (ux^2 + uy^2)(vx^2 + vy^2)
       = (S^2 + ux*vx + uy*vy)^2 + (ux*vy - uy*vx)^2 >= 0. -/
-theorem poincare_mobius_den_sum_of_squares (ux uy vx vy S : Int) :
+public theorem poincare_mobius_den_sum_of_squares (ux uy vx vy S : Int) :
     mobiusDen ux uy vx vy S =
       (S * S + ux * vx + uy * vy) * (S * S + ux * vx + uy * vy) +
       (ux * vy - uy * vx) * (ux * vy - uy * vx) := by
@@ -79,7 +81,7 @@ theorem poincare_mobius_den_sum_of_squares (ux uy vx vy S : Int) :
   omega
 
 /-- Helper: Cauchy-Schwarz `2*(ux*vx + uy*vy) >= -(ux^2 + uy^2 + vx^2 + vy^2)`. -/
-theorem cauchy_schwarz_dot_lower (ux uy vx vy : Int) :
+public theorem cauchy_schwarz_dot_lower (ux uy vx vy : Int) :
     -(ux * ux + uy * uy + vx * vx + vy * vy) ≤ 2 * (ux * vx + uy * vy) := by
   have hx : 0 ≤ (ux + vx) * (ux + vx) := sq_nonneg (ux + vx)
   have hy : 0 ≤ (uy + vy) * (uy + vy) := sq_nonneg (uy + vy)
@@ -95,7 +97,7 @@ theorem cauchy_schwarz_dot_lower (ux uy vx vy : Int) :
 
 /-- Theorem 4.2 (Strict Positivity of Möbius Denominator Inside Open Unit Disk):
     Whenever `ux^2 + uy^2 < S^2` and `vx^2 + vy^2 < S^2`, the denominator `mobiusDen > 0` strictly. -/
-theorem poincare_mobius_den_pos (ux uy vx vy S : Int)
+public theorem poincare_mobius_den_pos (ux uy vx vy S : Int)
     (hu : ux * ux + uy * uy < S * S) (hv : vx * vx + vy * vy < S * S) :
     0 < mobiusDen ux uy vx vy S := by
   rw [poincare_mobius_den_sum_of_squares]
@@ -234,7 +236,7 @@ private theorem mobius_poly_core (s a b c : Int) :
       D^2 - (Nx^2 + Ny^2) = (S^2 - |u|^2) * (S^2 - |v|^2) * D.
     Dividing by `D^2 > 0` yields the exact hyperbolic containment law:
       1 - |u (+) v|^2 = (1 - |u|^2)(1 - |v|^2) / (1 + 2<u,v> + |u|^2|v|^2). -/
-theorem poincare_mobius_norm_identity (ux uy vx vy S : Int) :
+public theorem poincare_mobius_norm_identity (ux uy vx vy S : Int) :
     mobiusDen ux uy vx vy S * mobiusDen ux uy vx vy S -
       (mobiusNumX ux uy vx vy S * mobiusNumX ux uy vx vy S +
        mobiusNumY ux uy vx vy S * mobiusNumY ux uy vx vy S) =
@@ -309,10 +311,11 @@ theorem poincare_mobius_norm_identity (ux uy vx vy S : Int) :
   rw [hDen, hNumSq]
   exact mobius_poly_core s a b c
 
-/-- Theorem 4.4 (Strict Open Unit-Disk Containment of Ungar's Möbius Addition):
-    For ALL points u, v strictly inside the unit Poincaré disk (`|u|^2 < S^2`, `|v|^2 < S^2`),
-    the Möbius sum u (+) v strictly remains inside the unit disk (`Nx^2 + Ny^2 < D^2`)! -/
-theorem poincare_mobius_preserves_disk (ux uy vx vy S : Int)
+/-- Theorem 4.4 (Strict Open Unit-Disk Containment of Ungar's Möbius Addition on Rational Points):
+    For ALL rational (integer-scaled) points `u = (ux,uy)/S, v = (vx,vy)/S` strictly inside the
+    unit Poincaré disk (`|u|^2 < S^2`, `|v|^2 < S^2`), the Möbius sum strictly remains inside the
+    unit disk (`Nx^2 + Ny^2 < D^2`). Real and IEEE-754 floating-point inputs are not covered in Lean. -/
+public theorem poincare_mobius_preserves_disk (ux uy vx vy S : Int)
     (hu : ux * ux + uy * uy < S * S) (hv : vx * vx + vy * vy < S * S) :
     mobiusNumX ux uy vx vy S * mobiusNumX ux uy vx vy S +
     mobiusNumY ux uy vx vy S * mobiusNumY ux uy vx vy S <
@@ -329,7 +332,7 @@ theorem poincare_mobius_preserves_disk (ux uy vx vy S : Int)
 
 /-- Theorem 4.5 (`backwards` Site Mirror Involution, `glitchling.ts:23`):
     `k ↦ 15 - k` maps `[0, 15]` into `[0, 15]`, is an exact involution, and has NO fixed point! -/
-theorem mirrorSite_properties (k : Nat) (hk : k < 16) :
+public theorem mirrorSite_properties (k : Nat) (hk : k < 16) :
     mirrorSite k < 16 ∧ mirrorSite (mirrorSite k) = k ∧ mirrorSite k ≠ k := by
   unfold mirrorSite
   omega
@@ -337,21 +340,21 @@ theorem mirrorSite_properties (k : Nat) (hk : k < 16) :
 /-- Theorem 4.6 (`leaky` Memory Geometric Contraction Toward Prior, `glitchling.ts:29`):
     Exact scaled identity `S * v' - S * p = (S - lam) * (v - p)` and strict contraction
     toward prior `p` whenever `0 < lam < S` and `v ≠ p`. -/
-theorem leaky_contraction_identity (v p lam S : Int) :
+public theorem leaky_contraction_identity (v p lam S : Int) :
     leakyNextNum v p lam S - S * p = (S - lam) * (v - p) := by
   unfold leakyNextNum
   have h1 : (S - lam) * (v - p) = (S - lam) * v - (S - lam) * p := Int.mul_sub (S - lam) v p
   have h2 : (S - lam) * p = S * p - lam * p := Int.sub_mul S lam p
   omega
 
-theorem leaky_preserves_prior (p lam S : Int) :
+public theorem leaky_preserves_prior (p lam S : Int) :
     leakyNextNum p p lam S = S * p := by
   have h := leaky_contraction_identity p p lam S
   have hz : p - p = 0 := by omega
   rw [hz, Int.mul_zero] at h
   omega
 
-theorem leaky_strict_contraction_above (v p lam S : Int)
+public theorem leaky_strict_contraction_above (v p lam S : Int)
     (hlam0 : 0 < lam) (hlamS : lam < S) (hgt : p < v) :
     S * p < leakyNextNum v p lam S ∧ leakyNextNum v p lam S < S * v := by
   have hid := leaky_contraction_identity v p lam S

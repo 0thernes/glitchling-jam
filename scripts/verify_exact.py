@@ -1,5 +1,5 @@
 """End-to-end exact verification, differential JS-vs-Python oracle check, Lean static audit,
-and results/summary.csv consistency audit for Glitchling v2.2.0.
+and results/summary.csv consistency audit for Glitchling v2.4.0.
 """
 
 from __future__ import annotations
@@ -87,8 +87,12 @@ def audit_lean_static() -> dict[str, int]:
         text = path.read_text(encoding="utf-8")
         cleaned = strip_lean_comments_and_strings(text)
         if path.name == "Challenge.lean":
-            imports = [ln.strip() for ln in cleaned.splitlines() if ln.strip().startswith("import ")]
-            if imports != ["import GlitchlingProofs.Spec"]:
+            imports = [
+                ln.strip()
+                for ln in cleaned.splitlines()
+                if ln.strip().startswith("import ") or ln.strip().startswith("public import ")
+            ]
+            if imports not in (["import GlitchlingProofs.Spec"], ["public import GlitchlingProofs.Spec"]):
                 raise AssertionError(f"Challenge.lean must import ONLY GlitchlingProofs.Spec, got {imports}")
             continue
         for tok in forbidden:

@@ -16,7 +16,7 @@ flowchart TD
 ```
 
 ## Module Boundaries
-1. **Frozen Core (`core/`):** Read-only copy of Creature #1 (`Asmodensius-v40/creatures/001/organism`). Never modified in this repository (`F18/D8`).
+1. **Frozen Core (`core/`):** Read-only copy of Creature #1 (private parent organism `creatures/001/organism`). Never modified in this repository (`F18/D8`).
 2. **Reference Subclass (`glitchling.ts`):** Adds four toggleable flaws (`scramble`, `leaky`, `backwards`, `misfire`) and repeatable CSV/JSON output (`results/summary.csv`, `results/results.json`).
 3. **2D Browser Port (`play/`):** Self-contained HTML/JS/CSS educational explorer with Fisher–Yates world generation (`F03`) and clamped URL parameters (`F15`).
 4. **3D Bio-Observatory (`live/`):** Modular zero-build ES modules (`live/js/sim/*.js`, `live/js/tsotchke/*.js`) rendered via vendored Three.js r170 and p5.js v1.11.3, verified by `live/test/{verification_ladder,lesion_experiments,dome_heptarch_probe,dome_ui_check}.mjs`.

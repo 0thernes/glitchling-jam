@@ -31,15 +31,21 @@ python -m pytest tests/test_oracle.py -v
 # Step 5: Warmed micro-benchmarks (~15 s)
 npm run bench
 
-# Step 6: Pure Lean 4.35.0 formal build, 59-declaration axiom audit, and leanchecker (~45 s)
+# Step 6: Pure Lean 4.35.0 formal build, 72-declaration axiom audit, leanchecker, 6-kernel check & negative tamper (~60 s)
 cd lean
 lake build GlitchlingProofs Challenge Solution
 lake env lean VerifyAxioms.lean
 lake env leanchecker --fresh GlitchlingProofs
 lake env leanchecker --fresh Solution
 # On Linux with bubblewrap installed:
+lake check --paranoid
 lake comparator --config comparator.json --paranoid
 cd ..
+python3 scripts/test_lean_negative.py
+python3 scripts/check_versions.py
+python3 scripts/check_blueprint_decls.py
+python3 scripts/audit_citations.py --verify-offline
+python3 scripts/timestamp_checksums.py --verify-only
 
 # Step 7: Results v3 summary statistics (exact recomputation from results/summary.csv, ~1 s)
 npm run stats
@@ -53,7 +59,7 @@ BUN_JSC_useConcurrentJIT=0 bun run glitchling.ts 2 30 500
 ```
 
 ## 3. Acceptance Tolerances
-- **Lean 4.35.0:** Exit code `0`; 0 `sorry` outside `Challenge.lean`; all 59 audited axioms strictly inside `[propext, Classical.choice, Quot.sound]`; `leanchecker --fresh` exit `0`.
+- **Lean 4.35.0:** Exit code `0`; 0 `sorry` outside `Challenge.lean`; all 72 audited axioms strictly inside `[propext, Classical.choice, Quot.sound]`; `leanchecker --fresh`, `lake check --paranoid`, and 6-kernel `lake comparator --paranoid` exit `0`; live negative tamper rejects injected `sorry`.
 - **Differential JS vs Python Oracle:** `max_fmo_err < 1e-12` (observed `3.44e-15`), `max_cry4_err < 1e-12` (observed `9.99e-16`), `max_poincare_err < 1e-14` (observed `9.71e-17`), exact integer match on `RS[15,11]`, `CEGA-18`, `Hoggar`, and `C3`.
 - **Determinism:** Identical `live/` 10-second trajectories across fresh processes; byte-identical `summary.csv` across simultaneous Bun runs with `BUN_JSC_useConcurrentJIT=0`.
 - **T5 No-Signaling:** Exact `maxExactMargBias < 1e-15` (observed `0.0e+0`) and `maxNoSigZ < 4.26` (analytical Bonferroni $\alpha=0.001$ bound).

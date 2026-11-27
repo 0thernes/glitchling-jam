@@ -49,8 +49,8 @@ def main() -> None:
         raise SystemExit(f"Missing {axioms_path}")
     raw = axioms_path.read_text(encoding="utf-8")
     entries = parse_axioms(raw)
-    if len(entries) < 72:
-        raise SystemExit(f"Expected >= 72 audited Lean declarations, got {len(entries)}")
+    if len(entries) < 76:
+        raise SystemExit(f"Expected >= 76 audited Lean declarations, got {len(entries)}")
 
     for name, axs in entries:
         bad = set(axs) - ALLOWED

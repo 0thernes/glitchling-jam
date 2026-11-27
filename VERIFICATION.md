@@ -1,10 +1,10 @@
 # Verification Architecture (`VERIFICATION.md`)
 
-`glitchling-jam` (`v2.2.0`) implements a five-tier verification pyramid separating kernel-checked mathematics from differential numerical checks and multi-cohort statistical tests:
+`glitchling-jam` (`v2.4.0`) implements a five-tier verification pyramid separating kernel-checked mathematics from differential numerical checks and multi-cohort statistical tests:
 
-1. **Tier 1 — Kernel-Checked Formal Proofs (`lean/`, Lean `v4.35.0`, zero Mathlib):**
-   - `GlitchlingProofs/{Spec,EnergyMassConservation,QuantumContextuality,CodingAndGovernance,HyperbolicAndFlaws}.lean`
-   - 59 exported theorems audited via `lean/VerifyAxioms.lean` (`results/lean_axioms.txt`) + independent `leanchecker --fresh` + isolated `Challenge.lean` / `Solution.lean` (`lake comparator --config comparator.json --paranoid`).
+1. **Tier 1 — Kernel-Checked Formal Proofs (`lean/`, Lean `v4.35.0`, zero Mathlib, Palomar `module` headers):**
+   - `GlitchlingProofs/{Spec,EnergyMassConservation,QuantumContextuality,CodingAndGovernance,HyperbolicAndFlaws,NonVacuity,AdversarialTests}.lean`
+   - 72 exported declarations (`63` library theorems incl. `6` constructive `NonVacuity` witnesses and `6` `AdversarialTests` false-variant refutations + `9` isolated `Challenge`/`Solution` targets) audited via `lean/VerifyAxioms.lean` (`results/lean_axioms.txt`), `lake env leanchecker --fresh`, `lake check --paranoid`, **all 6 independent Lean kernels** (`Lean paranoid`, `lean4lean`, `nanoda`, `con-leche`, `con-ron`, `Lean default`) via `lake comparator --config comparator.json --paranoid`, live `sorry`-tamper rejection (`scripts/test_lean_negative.py`), and interactive Blueprint `checkdecls` (`blueprint/`, `scripts/check_blueprint_decls.py`).
    - Enforces `autoImplicit = false`, `relaxedAutoImplicit = false`, zero `sorry`, zero `admit`, zero `native_decide`, zero custom axioms (`[propext, Classical.choice, Quot.sound]` only).
 2. **Tier 2 — Independent Exact-Arithmetic & Complex-Kronecker Reference Oracle (`reference/glitchling_oracle.py`, `scripts/verify_exact.py`, `tests/test_oracle.py`):**
    - Zero shared code with `live/js/`; verifies `GF(16)`/`RS[15,11]`, `CEGA-18`, `Hoggar 63/315`, `C3` (`14976` vs `15360`), `FMO` (`49×49` complex Kronecker vs JS real-basis, diff `3.44e-15`), `Cry4` (`64×64` complex Kronecker vs JS real-basis, diff `9.99e-16`), and `Poincaré` exact `Fraction` Möbius law (diff `9.71e-17`).

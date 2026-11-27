@@ -1,19 +1,17 @@
+# yaml-language-server: $schema=./repo-standard.schema.json
 # Glitchling — Build Standard v1.2.0 Compliance Manifest (repo.yaml)
-# Audited automatically by scripts/Audit-Repo.ps1 and scripts/audit-repo.sh
+# Validated strictly against repo-standard.schema.json (Draft 2020-12) and audited by Audit-Repo.ps1 / audit-repo.sh.
 
 standard: "1.2.0"
 name: "glitchling-jam"
-version: "2.3.0"
-project_type: "research"
+description: "Glitchling: engineered flaw resilience, 3D spiking-brain biodome, 72-decl 6-kernel pure Lean 4.35.0 formal core, independent exact oracles, interactive Blueprint, and AMS-LaTeX preprint."
 owner: "Alexander Stephen Donahue (0thernes)"
-orcid: "0009-0006-8168-9648"
-license: "COSMOGONIC-NONCOMMERCIAL"
+year: 2026
+project_type: "research"
 stack:
   - node
-  - bun
   - python
-  - lean
-  - latex
+  - other
 
 flags:
   public: true
@@ -34,15 +32,15 @@ flags:
   formal: true
 
 items:
-  A01: { status: done, evidence: "README.md with clear one-line purpose and scope" }
-  A02: { status: done, evidence: "README.md badge ribbon (CI, Pages, Build Standard, Honesty)" }
+  A01: { status: done, evidence: "README.md with clear one-line purpose, scope, and Blueprint/PDF links" }
+  A02: { status: done, evidence: "README.md badge ribbon (CI, Pages, Lean 4.35.0 72 decls / 6 kernels, Build Standard 100%, Honesty)" }
   A03: { status: done, evidence: "README.md ## Quickstart working from clean clone" }
   A04: { status: done, evidence: "README.md ## Usage + examples/ scripts" }
   A05: { status: done, evidence: "README.md embeds real Results v3 chart (results/glitchling.png)" }
-  A06: { status: done, evidence: "LICENSE (Cosmogonic Non-Commercial, byte-identical to 0thernes/CQM2)" }
+  A06: { status: done, evidence: "LICENSE (Cosmogonic Non-Commercial, byte-identical to 0thernes/CQM2, frozen per F04/D4)" }
   A07: { status: done, evidence: "CHANGELOG.md + live/CHANGELOG.md" }
-  A08: { status: done, evidence: "VERSION (2.2.0) synced across package.json, package-lock.json, CITATION.cff, repo.yaml, lean/lakefile.toml, paper/main.tex" }
-  A09: { status: done, evidence: "npm test (9/9), npm run verify:ladder (1,200 props + 8/8 mutants), pytest (9/9), verify_exact.py" }
+  A08: { status: done, evidence: "VERSION (2.4.0) enforced across package.json, package-lock.json, pyproject.toml, CITATION.cff, CITATION.bib, lean/lakefile.toml, formalization.yaml, codemeta.json, .zenodo.json, paper/main.tex via scripts/check_versions.py" }
+  A09: { status: done, evidence: "npm test (9/9), npm run verify:ladder (1,200 props + 8/8 mutants), pytest (9/9), verify_exact.py, FULL=1 (20/20 gates)" }
   A10: { status: done, evidence: ".github/workflows/ci.yml runs on every push to main" }
   A11: { status: done, evidence: ".github/workflows/release.yml triggered on tags: ['v*']" }
   A12: { status: done, evidence: ".gitignore covering .lake, paper/build, caches, OS artifacts" }
@@ -52,76 +50,76 @@ items:
   A16: { status: done, evidence: "SECURITY.md (disclosure contact 0_0@0thernes.art)" }
   A17: { status: done, evidence: "SUPPORT.md" }
   A18: { status: done, evidence: ".github/ISSUE_TEMPLATE/{bug.yml,feature.yml,config.yml} with 10-class dropdown" }
-  A19: { status: done, evidence: "GitHub About description, Pages URL https://0thernes.github.io/glitchling-jam/, and topics configured" }
-  A20: { status: done, evidence: "docs/architecture.md with Mermaid system diagram + docs/ compendium" }
+  A19: { status: done, evidence: "GitHub About description, Pages URL https://0thernes.github.io/glitchling-jam/, and 8 topics configured" }
+  A20: { status: done, evidence: "docs/architecture.md with Mermaid system diagram + docs/ compendium + NeurIPS/literature/fidelity logs" }
   A21: { status: done, evidence: "docs/adr/README.md + ADR-0001..ADR-0005" }
-  A22: { status: done, evidence: "CITATION.cff (v2.2.0, ORCID 0009-0006-8168-9648) + CITATION.bib" }
+  A22: { status: done, evidence: "CITATION.cff (v2.4.0, ORCID 0009-0006-8168-9648) + CITATION.bib + codemeta.json + .zenodo.json" }
   A23: { status: done, evidence: "Clean git identity and linear direct-to-main history" }
   A24: { status: done, evidence: "Zero secrets, zero build outputs, zero tracked files >5 MB (5 media files optimized in F36)" }
   A25: { status: done, evidence: ".github/workflows/ci.yml matrix: ubuntu-latest, windows-latest, macos-latest" }
   A26: { status: done, evidence: "docs/media/social-preview.png (1280x640, < 500 KB)" }
-  A27: { status: done, evidence: ".github/workflows/pages.yml (deploy-pages) + live GitHub Pages site" }
+  A27: { status: done, evidence: ".github/workflows/pages.yml (deploy-pages) + live GitHub Pages site + interactive /blueprint/" }
   A28: { status: done, evidence: "package.json + pyproject.toml" }
   A29: { status: done, evidence: "ROADMAP.md" }
   A30: { status: done, evidence: ".github/labels.tsv containing all 10 finding classes" }
   A31: { status: done, evidence: "justfile + Makefile with one-word commands" }
   A32: { status: done, evidence: "AGENTS.md canonical + CLAUDE.md + GEMINI.md + .cursor/rules/build-standard.mdc + llms.txt + llms-full.txt" }
   A33: { status: done, evidence: "docs/configuration.md documenting all CLI, env, and clamped URL parameters" }
-  A34: { status: n/a, reason: "Static client-side site + offline CLI sims; no backend service (service: false)" }
-  A35: { status: done, evidence: "docs/operations.md documenting git bundle backup, 0thernes-research-archive pin, and Software Heritage offsite mirror" }
+  A34: { status: n/a, note: "Static client-side site + offline CLI sims; no backend service (service: false)" }
+  A35: { status: done, evidence: "docs/operations.md documenting git bundle backup, 0thernes-research-archive pin (0TH-BUILD-015), and Software Heritage manual archive" }
   A36: { status: done, evidence: "justfile rollback target + docs/operations.md safe forward-revert runbook" }
   A37: { status: done, evidence: "docs/benchmarks.md + results/perf-benchmarks.json with explicit step/solver budgets" }
-  A38: { status: done, evidence: "Accessible static pages verified in AUDIT P04/P15/P21 (lang, viewport, aria-label, role='img', no horizontal overflow at 390px)" }
+  A38: { status: done, evidence: "Accessible static pages with lang, viewport, CSP headers, aria-label, role='img', and mobile responsiveness" }
   A39: { status: done, evidence: "THIRD_PARTY_NOTICES.md + research/img/SOURCES.md" }
-  A40: { status: n/a, reason: "No LLM/AI API inference calls at runtime (ai: false); AI engineering assistance disclosed honestly" }
-  A41: { status: done, evidence: "UPGRADING.md covering v2.0 -> v2.1 -> v2.2 breaking changes" }
+  A40: { status: n/a, note: "No LLM/AI API inference calls at runtime (ai: false); AI engineering assistance disclosed honestly" }
+  A41: { status: done, evidence: "UPGRADING.md covering v2.0 -> v2.1 -> v2.2 -> v2.4 breaking changes" }
   A42: { status: done, evidence: "Status: active declared in README.md and ROADMAP.md" }
   A43: { status: done, evidence: "examples/{README.md,01_flaw_invariants.mjs,02_biodome_conservation.mjs,03_rs15_11_burst_repair.mjs} smoke-tested in CI" }
   A44: { status: done, evidence: "docs/faq.md and docs/glossary.md" }
-  A45: { status: n/a, reason: "Zero personal data collected, stored, or transmitted (personal_data: false)" }
+  A45: { status: n/a, note: "Zero personal data collected, stored, or transmitted (personal_data: false)" }
 
-  B01: { status: done, evidence: "justfile reproduce target runs full test, ladder, examples, oracle, bench, stats, lean, paper pipeline" }
+  B01: { status: done, evidence: "justfile reproduce target runs full test, ladder, examples, oracle, bench, stats, lean, blueprint, paper pipeline" }
   B02: { status: done, evidence: "package-lock.json + lean/lean-toolchain (v4.35.0) + lean/lake-manifest.json" }
-  B03: { status: done, evidence: "tools/check.mjs verifies identical live/ 10s trajectory and dual BUN_JSC_useConcurrentJIT=0 Bun runs" }
+  B03: { status: done, evidence: "tools/check.mjs verifies identical live/ 10s trajectory, dual BUN_JSC_useConcurrentJIT=0 Bun runs, and seeded evolve_gait.mjs (F52)" }
   B04: { status: done, evidence: "CLAIMS.md mapping C1..C10 to tiers, artifacts, commands, and falsification criteria" }
   B05: { status: done, evidence: "Each claim C1..C10 maps to executable falsification checks across check.mjs, verification_ladder.mjs, verify_exact.py, lesion_experiments.mjs, and lean/" }
-  B06: { status: done, evidence: "Negative/boundary tests in live/test/verification_ladder.mjs and tests/test_oracle.py" }
-  B07: { status: done, evidence: "Regression test suite in live/test/verification_ladder.mjs covering F03, F15, F16, F27, F30, F33, F34" }
-  B08: { status: done, evidence: "Golden checks against committed Results v3 seeds 500-501 (tools/check.mjs) and verbatim Lean axioms (scripts/check_readme_axioms.py)" }
-  B09: { status: n/a, reason: "No external HTTP/RPC API exposed or consumed (api: false)" }
-  B10: { status: done, evidence: "1,200 seeded property tests (prop_check in verification_ladder.mjs) + Hypothesis suites in tests/test_oracle.py" }
+  B06: { status: done, evidence: "Negative/boundary tests in live/test/verification_ladder.mjs, tests/test_oracle.py, and live sorry-tamper scripts/test_lean_negative.py" }
+  B07: { status: done, evidence: "Regression test suite in live/test/verification_ladder.mjs covering F03, F15, F16, F27, F30, F33, F34 + live Crossref F41 guard" }
+  B08: { status: done, evidence: "Golden checks against committed Results v3 seeds 500-501 (tools/check.mjs), verbatim 72-decl Lean axioms (scripts/check_readme_axioms.py), and Blueprint checkdecls (scripts/check_blueprint_decls.py)" }
+  B09: { status: n/a, note: "No external HTTP/RPC API exposed or consumed (api: false)" }
+  B10: { status: done, evidence: "1,200 seeded property tests (verification_ladder.mjs) + Hypothesis suites in tests/test_oracle.py" }
   B11: { status: done, evidence: "Differential JS-vs-Python verification in scripts/verify_exact.py (max diff 3.44e-15 FMO, 9.99e-16 Cry4, 9.71e-17 Poincare)" }
   B12: { status: done, evidence: "Independent textbook exact-arithmetic & Kronecker oracle in reference/glitchling_oracle.py" }
   B13: { status: done, evidence: "8/8 semantic mutants killed (M1..M8) in live/test/verification_ladder.mjs" }
   B14: { status: done, evidence: "Metamorphic relations verified in verification_ladder.mjs and tests/test_oracle.py (Cry4 parity/SO(2), FMO correspondence, Mobius isometry, C3 permutation)" }
-  B15: { status: n/a, reason: "No native C/C++/Rust binary parsers (native: false)" }
-  B16: { status: n/a, reason: "No native C/C++/Rust memory code (native: false)" }
+  B15: { status: n/a, note: "No native C/C++/Rust binary parsers (native: false)" }
+  B16: { status: n/a, note: "No native C/C++/Rust memory code (native: false)" }
   B17: { status: done, evidence: "ruff + node --check configured in pyproject.toml and run report-only in CI" }
   B18: { status: done, evidence: "mypy --disallow-untyped-defs configured in pyproject.toml and run report-only in CI" }
-  B19: { status: n/a, reason: "Single-threaded deterministic simulation cores (concurrent: false)" }
+  B19: { status: n/a, note: "Single-threaded deterministic simulation cores (concurrent: false)" }
   B20: { status: done, evidence: "Kahan FP64 summation (<1e-14), NaN/Inf guards in check.mjs/quantizeNestorRung/lesion_experiments.mjs, and 120s x 4-seed NaN scan (P18)" }
-  B21: { status: n/a, reason: "No long-running server/service (service: false)" }
-  B22: { status: done, evidence: "lean/GlitchlingProofs/ (72 audited Lean 4.35.0 decls incl. 6 NonVacuity & 6 AdversarialTests, zero Mathlib) + 6-kernel lake comparator --paranoid + live negative tamper CI" }
-  B23: { status: n/a, reason: "Formal verification uses Lean 4.35.0 theorem proving (B22) rather than TLA+/Alloy model checking" }
-  B24: { status: n/a, reason: "Formal verification uses Lean 4.35.0 (B22) rather than Dafny/F* verified languages" }
-  B25: { status: n/a, reason: "Zero C/Rust code (native: false); Lean 4 kernel + leanchecker provides formal soundness" }
+  B21: { status: n/a, note: "No long-running server/service (service: false)" }
+  B22: { status: done, evidence: "lean/GlitchlingProofs/ (11 Palomar module files, 72 audited Lean 4.35.0 decls incl. 6 NonVacuity & 6 AdversarialTests, zero Mathlib) + lake check --paranoid + 6-kernel lake comparator --paranoid + live negative tamper CI + formalization.yaml + /blueprint/" }
+  B23: { status: n/a, note: "Formal verification uses Lean 4.35.0 theorem proving (B22) rather than TLA+/Alloy model checking" }
+  B24: { status: n/a, note: "Formal verification uses Lean 4.35.0 (B22) rather than Dafny/F* verified languages" }
+  B25: { status: n/a, note: "Zero C/Rust code (native: false); 6 independent Lean 4 kernels provide formal soundness" }
   B26: { status: done, evidence: "scripts/bench.mjs -> results/perf-benchmarks.json and docs/benchmarks.md with hardware/median/IQR/p95" }
   B27: { status: done, evidence: "docs/benchmarks.md + results/perf-benchmarks.json track medians and document MEGA/GIGA CPU ceilings honestly" }
   B28: { status: done, evidence: "Results v3 (30 seeds 500-529 x 7 conditions) + live/ lesion_experiments.mjs multi-cohort paired controls (SEEDS 1..12, 13..24, 25..36)" }
   B29: { status: done, evidence: "Exact paired sign-flip permutation tests in tools/results_stats.mjs (200k draws) and live/test/lesion_experiments.mjs (exact 2^12)" }
   B30: { status: done, evidence: "Paired Cohen's d_z, 95% t-intervals (results_stats.mjs), and 10,000-resample bootstrap 95% CIs (lesion_experiments.mjs)" }
   B31: { status: done, evidence: "Holm-Bonferroni, full Bonferroni, and Benjamini-Hochberg FDR across all 26 paired contrasts + analytical Bonferroni alpha=0.001 T5 Z-gate" }
-  B32: { status: done, evidence: "docs/preregistration.md documenting locked cohorts, post-F03 T5 disclosure, and pre-registered v2.3 held-out protocol (1001..1030)" }
-  B33: { status: n/a, reason: "No supervised ML model training or dataset split selection (ml: false)" }
-  B34: { status: n/a, reason: "Not a generative AI/LLM inference application (ai: false)" }
+  B32: { status: done, evidence: "docs/preregistration.md + append-only DEVIATIONS.md documenting locked cohorts, post-F03 T5 disclosure, and pre-registered held-out protocol (1001..1030)" }
+  B33: { status: n/a, note: "No supervised ML model training or dataset split selection (ml: false)" }
+  B34: { status: n/a, note: "Not a generative AI/LLM inference application (ai: false)" }
   B35: { status: done, evidence: "Report-only gitleaks scan in .github/workflows/ci.yml + regex secret check in tools/check.mjs" }
-  B36: { status: done, evidence: "docs/threat-model.md STRIDE matrix" }
-  B37: { status: done, evidence: "CHECKSUMS.sha256 + .github/workflows/release.yml SHA256SUMS" }
-  B38: { status: done, evidence: ".github/workflows/release.yml actions/attest-build-provenance@v2" }
-  B39: { status: done, evidence: "data/MANIFEST.sha256 verified in CI" }
-  B40: { status: done, evidence: "docs/run-log.md + AUDIT/PASSES.md append-only chronological audit trail" }
+  B36: { status: done, evidence: "docs/threat-model.md STRIDE matrix + strict CSP meta headers on all HTML pages (F50)" }
+  B37: { status: done, evidence: "CHECKSUMS.sha256 + dual DigiCert RFC 3161 .tsr & Bitcoin OpenTimestamps .ots + .github/workflows/release.yml SHA256SUMS" }
+  B38: { status: done, evidence: ".github/workflows/release.yml actions/attest-build-provenance@v2 (SLSA v4 + Sigstore Rekor)" }
+  B39: { status: done, evidence: "data/MANIFEST.sha256 verified in CI + DATASHEET.md (Gebru et al.)" }
+  B40: { status: done, evidence: "docs/run-log.md + DEVIATIONS.md + AUDIT/PASSES.md append-only chronological audit trail" }
   B41: { status: done, evidence: "LIMITATIONS.md + README.md real-vs-simulated section + automated honesty guard" }
   B42: { status: done, evidence: "CLAIMS.md includes explicit falsification criteria ('What Would Prove Us Wrong') for every claim C1..C10" }
   B43: { status: done, evidence: "REPLICATION.md clean-clone reproduction commands, runtimes, and tolerances" }
-  B44: { status: done, evidence: "REPLICATION.md dated replication log table (2026-11-24 and 2026-11-25)" }
-  B45: { status: done, evidence: "docs/reviews/2026-11-25-3cycle-hardening-audit.md + AUDIT/FINDINGS.md" }
+  B44: { status: done, evidence: "REPLICATION.md dated replication log table (2026-11-24, 2026-11-25, 2026-11-26 3-OS CI)" }
+  B45: { status: done, evidence: "docs/reviews/2026-11-25-3cycle-hardening-audit.md + docs/reviews/2026-11-26-10-pass-playbook-review.md + AUDIT/FINDINGS.md" }

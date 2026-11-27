@@ -1,0 +1,40 @@
+{
+  "title": "Glitchling: Engineered Flaw Resilience, Multi-Cohort Artificial-Life Falsification, Independent Exact Oracles, and 72 Six-Kernel Pure Lean 4.35.0 Formal Proofs",
+  "upload_type": "software",
+  "version": "2.4.0",
+  "publication_date": "2026-11-26",
+  "description": "Glitchling (v2.4.0) is an independent computational-science and formal-verification artificial-life (A-Life) repository pairing a deliberately perturbed clone of Creature #1 (glitchling.ts) and a 3D Geodesic Biodome (live/) with 72 pure zero-Mathlib Lean 4.35.0 Palomar-module formal proofs verified across 6 independent kernels (Lean paranoid, lean4lean, nanoda, con-leche, con-ron, Lean default), independent exact-arithmetic and complex-Kronecker Python reference oracles, a 1,200-property + 8/8-mutant JS verification ladder, an interactive Lean Proof Blueprint, dual DigiCert RFC 3161 + Bitcoin OpenTimestamps cryptographic receipts, and an AMS-LaTeX preprint. Note: Independent preprint (not peer-reviewed); AI-assisted under direct human direction; solves 0/1,900 open problems in 0thernes/unsolved-problems-mega-atlas; distributed under the frozen non-commercial Cosmogonic License.",
+  "creators": [
+    {
+      "name": "Donahue, Alexander Stephen",
+      "affiliation": "Independent Researcher, Spokane, WA, USA",
+      "orcid": "0009-0006-8168-9648"
+    }
+  ],
+  "access_right": "open",
+  "license": "other-nc",
+  "keywords": [
+    "artificial life",
+    "formal verification",
+    "Lean 4",
+    "Kochen-Specker contextuality",
+    "Reed-Solomon coding",
+    "Poincare disk",
+    "open quantum systems",
+    "statistical falsification",
+    "reproducibility"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/0thernes/glitchling-jam",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://0thernes.github.io/glitchling-jam/blueprint/",
+      "relation": "isDocumentedBy",
+      "scheme": "url"
+    }
+  ],
+  "notes": "AI-assistance disclosure: AI coding and research assistants (Claude Code, Grok, Gemini/Antigravity) contributed to code hardening, Lean 4 proof engineering, Python differential oracles, and manuscript drafting under direct human direction and verification responsibility by Alexander Stephen Donahue. Frozen non-commercial Cosmogonic License (LICENSE) preserved intentionally per owner decision D4."
+}

@@ -233,15 +233,15 @@ def fig_lesion_forest() -> None:
 
 
 def fig_verification_pyramid() -> None:
-    """Figure 4: Five-tier Glitchling v2.2.0 Verification Pyramid & Audit Hardening Progression."""
+    """Figure 4: Five-tier Glitchling v2.4.0 Verification Pyramid & Audit Hardening Progression."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10.2, 3.7), gridspec_kw={"width_ratios": [1.25, 1.0]})
 
     # Left: Horizontal stacked verification tiers
     tiers = [
-        ("Tier 1: Lean 4.35.0 Kernel", "59 decls · 0 sorry · 0 Mathlib · leanchecker OK", "#1d4ed8"),
+        ("Tier 1: Lean 4.35.0 (6 Kernels)", "72 decls · 11 module files · 0 sorry · live tamper CI", "#1d4ed8"),
         ("Tier 2: Python Exact Oracle", "Kronecker + Fraction · JS diff < 3.5e-15 · pytest 9/9", "#0f766e"),
-        ("Tier 3: JS Verification Ladder", "1,200 properties · 7 neg · 7 reg · 8/8 mutants killed", "#7c3aed"),
-        ("Tier 4: Repo Health & CI", "9/9 check.mjs · 3-OS matrix · honesty & secret guards", "#b45309"),
+        ("Tier 3: JS Verification Ladder", "1,200 props · 7 reg · 8/8 mutants · 20/20 FULL", "#7c3aed"),
+        ("Tier 4: 3-OS CI & Provenance", "9/9 check.mjs · 18/18 DOIs · RFC 3161 + OTS · SLSA", "#b45309"),
         ("Tier 5: Statistical Cohorts", "Results v3 (n=30) · T1-T15 (N=24+12) · T5 Z<4.26", "#be123c"),
     ]
     ax1.set_xlim(0, 10)
@@ -257,7 +257,7 @@ def fig_verification_pyramid() -> None:
         ax1.text(5.0, idx - 0.15, detail, ha="center", va="center", fontsize=7.6, color="#1e293b")
 
     # Right: Build Standard v1.2.0 compliance progression
-    stages = ["v2.1.0\nBaseline\n(Nov 24)", "v2.2.0\nCycle 1–2\n(Pre-Manifest)", "v2.2.0\nFinal\n(Nov 25)"]
+    stages = ["v2.1.0\nBaseline\n(Nov 24)", "v2.2.0\nCycle 1–2\n(Pre-Manifest)", "v2.4.0\nFinal\n(Nov 26)"]
     scores = [27.3, 98.7, 100.0]
     core_scores = [34.8, 100.0, 100.0]
     x = np.arange(len(stages))

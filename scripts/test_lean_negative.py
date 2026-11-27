@@ -52,17 +52,17 @@ def main() -> None:
         )
         sol_path = work / "Solution.lean"
         sol_src = sol_path.read_text(encoding="utf-8")
-        marker = "theorem target_thm8_flaws_and_nonvacuity :"
+        marker = "public theorem target_thm8_flaws_and_nonvacuity :"
         idx = sol_src.find(marker)
         if idx < 0:
             raise RuntimeError("Could not locate target_thm8_flaws_and_nonvacuity in Solution.lean")
-        end_marker = "theorem target_thm9_adversarial_and_nonvacuity :"
+        end_marker = "public theorem target_thm9_adversarial_and_nonvacuity :"
         idx2 = sol_src.find(end_marker)
         if idx2 < 0:
             raise RuntimeError("Could not locate target_thm9_adversarial_and_nonvacuity in Solution.lean")
 
         tampered_thm8 = (
-            "theorem target_thm8_flaws_and_nonvacuity :\n"
+            "public theorem target_thm8_flaws_and_nonvacuity :\n"
             "    (∀ k : Nat, k < 16 → mirrorSite k < 16 ∧ mirrorSite (mirrorSite k) = k ∧ mirrorSite k ≠ k) ∧\n"
             "    (∀ v p lam S : Int, leakyNextNum v p lam S - S * p = (S - lam) * (v - p)) ∧\n"
             "    (gf16Mul ⟨3, by omega⟩ ⟨5, by omega⟩ = ⟨15, by omega⟩ ∧\n"
@@ -73,14 +73,44 @@ def main() -> None:
         )
         sol_path.write_text(sol_src[:idx] + tampered_thm8 + sol_src[idx2:], encoding="utf-8", newline="\n")
 
-        # Build tampered Solution (succeeds with warning because of sorry)
-        subprocess.run(
-            [lake, "build", "GlitchlingProofs", "Challenge", "Solution"],
+        # 0. Deliberately false theorem MUST be rejected by Lean 4.35.0 kernel (Playbook v1.3 Item 12)
+        false_file = work / "DeliberatelyFalseCheck.lean"
+        false_file.write_text(
+            "module\n"
+            "public theorem deliberately_false_rs_distance : (15 : Nat) - 11 + 1 = 6 := by rfl\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        false_run = subprocess.run(
+            [lake, "env", "lean", "DeliberatelyFalseCheck.lean"],
             cwd=str(work),
             capture_output=True,
             text=True,
-            check=True,
         )
+        if false_run.returncode == 0:
+            raise AssertionError("Negative test failed: Lean 4.35.0 kernel ACCEPTED a deliberately false theorem!")
+        false_file.unlink()
+
+        # Build tampered Solution cleanly (staged sequentially so peak RAM stays bounded on Windows)
+        for target_batch in (
+            ["GlitchlingProofs.Spec"],
+            ["GlitchlingProofs.EnergyMassConservation"],
+            ["GlitchlingProofs.QuantumContextuality"],
+            ["GlitchlingProofs.CodingAndGovernance"],
+            ["GlitchlingProofs.HyperbolicAndFlaws"],
+            ["GlitchlingProofs", "Challenge", "Solution"],
+        ):
+            proc_build = subprocess.run(
+                [lake, "build", *target_batch],
+                cwd=str(work),
+                capture_output=True,
+                text=True,
+            )
+            if proc_build.returncode != 0:
+                raise RuntimeError(
+                    f"Tampered lake build {target_batch} failed ({proc_build.returncode}):\n"
+                    f"{proc_build.stdout}\n{proc_build.stderr}"
+                )
 
         # 1. VerifyAxioms MUST expose sorryAx on target_thm8_flaws_and_nonvacuity
         audit = subprocess.run(

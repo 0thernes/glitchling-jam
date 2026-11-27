@@ -1,23 +1,25 @@
+module
+
 /-
-  GLITCHLING (v2.3.0) — Constructive Non-Vacuity Witnesses (`GlitchlingProofs.NonVacuity`).
+  GLITCHLING (v2.4.0) — Constructive Non-Vacuity Witnesses (`GlitchlingProofs.NonVacuity`).
 
   Proves that the hypotheses of all six theorem families are simultaneously satisfiable
   by concrete, non-trivial inhabitants, ruling out vacuous truth (`False -> P`).
-  Pure Lean 4.35.0, zero Mathlib, zero `sorry`, zero `native_decide`.
+  Pure Lean 4.35.0 Palomar module, zero Mathlib, zero `sorry`, zero `native_decide`.
 -/
 
-import GlitchlingProofs.Spec
-import GlitchlingProofs.EnergyMassConservation
-import GlitchlingProofs.QuantumContextuality
-import GlitchlingProofs.CodingAndGovernance
-import GlitchlingProofs.HyperbolicAndFlaws
+public import GlitchlingProofs.Spec
+public import GlitchlingProofs.EnergyMassConservation
+public import GlitchlingProofs.QuantumContextuality
+public import GlitchlingProofs.CodingAndGovernance
+public import GlitchlingProofs.HyperbolicAndFlaws
 
 namespace Glitchling
 
 open Glitchling.Spec
 
 /-- NV01: Non-trivial balanced 11-pool energy ledger and 3-cell mass ledger survive multi-step traces. -/
-theorem nv01_energy_mass_balanced_witness :
+public theorem nv01_energy_mass_balanced_witness :
     ∃ (L : EnergyLedger) (ops : List EnergyOp) (M : MassLedger),
       firstLawBalanced L ∧
       firstLawBalanced (runEnergyOps L ops) ∧
@@ -48,7 +50,7 @@ theorem nv01_energy_mass_balanced_witness :
     transferSoil_preserves_mass _ 0 1 3 (fluxSoil_preserves_mass M0 0 ⟨0, by omega⟩ 7 hM0)⟩
 
 /-- NV02: Concrete Dome thermal state satisfies all Clausius hypotheses with strictly positive production. -/
-theorem nv02_clausius_strict_pos_witness :
+public theorem nv02_clausius_strict_pos_witness :
     ∃ qD qG qR tS tA tG : Int,
       0 < tS ∧ tS ≤ tA ∧ tA ≤ tG ∧ 0 ≤ qD ∧ 0 ≤ qG ∧ 0 ≤ qR ∧
       clausiusEntropyNum qD qG qR tS tA tG = 1064000 ∧
@@ -57,7 +59,7 @@ theorem nv02_clausius_strict_pos_witness :
   decide
 
 /-- NV03: Concrete CEGA-18 classical {0,1}-assignment saturating 8 of 9 contexts (proving tightness of <= 8). -/
-theorem nv03_cega18_eight_of_nine_witness :
+public theorem nv03_cega18_eight_of_nine_witness :
     ∃ f : Fin 18 → Bool,
       (cegaContexts.filter (fun ctx => ctxTrueCount f ctx == 1)).length = 8 ∧
       ¬ isCEGAKSColoring f := by
@@ -66,14 +68,14 @@ theorem nv03_cega18_eight_of_nine_witness :
   refine ⟨f, by decide, cega18_kochen_specker_uncolorable f⟩
 
 /-- NV04: Explicit GF(2^4) multiplicative inverse pairs (`2 * 9 = 1`, `3 * 14 = 1`) and primitive generator. -/
-theorem nv04_gf16_inverse_and_primitive_witness :
+public theorem nv04_gf16_inverse_and_primitive_witness :
     gf16Mul ⟨2, by omega⟩ ⟨9, by omega⟩ = ⟨1, by omega⟩ ∧
     gf16Mul ⟨3, by omega⟩ ⟨14, by omega⟩ = ⟨1, by omega⟩ ∧
     gf16Mul ⟨3, by omega⟩ ⟨5, by omega⟩ = ⟨15, by omega⟩ := by
   decide
 
 /-- NV05: Explicit feasible HEPTARCH 7-seat simplex obeying sum = 100, every seat <= 46, and >= 3 active seats. -/
-theorem nv05_heptarch_valid_simplex_witness :
+public theorem nv05_heptarch_valid_simplex_witness :
     ∃ w : Fin 7 → Nat,
       w ⟨0, by omega⟩ + w ⟨1, by omega⟩ + w ⟨2, by omega⟩ + w ⟨3, by omega⟩ +
       w ⟨4, by omega⟩ + w ⟨5, by omega⟩ + w ⟨6, by omega⟩ = 100 ∧
@@ -91,7 +93,7 @@ theorem nv05_heptarch_valid_simplex_witness :
     split <;> omega
 
 /-- NV06: Concrete interior unit-disk witness confirming strict positivity of Mobius denominator & norm gap. -/
-theorem nv06_poincare_interior_witness :
+public theorem nv06_poincare_interior_witness :
     ∃ ux uy vx vy S : Int,
       ux * ux + uy * uy < S * S ∧
       vx * vx + vy * vy < S * S ∧

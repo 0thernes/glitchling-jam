@@ -1,19 +1,21 @@
-/-
-  GLITCHLING (v2.2.0) — Sorry-Free Solution Module Matched Against `Challenge.lean`.
+module
 
-  Proves all 8 targets in `Glitchling.ComparatorTarget` with ZERO `sorry`, ZERO `native_decide`,
+/-
+  GLITCHLING (v2.4.0) — Sorry-Free Solution Module Matched Against `Challenge.lean`.
+
+  Proves all 9 targets in `Glitchling.ComparatorTarget` with ZERO `sorry`, ZERO `native_decide`,
   ZERO custom axioms, and ZERO Mathlib dependencies, auditable across independent Lean kernels via:
       lake comparator --config comparator.json --paranoid
 -/
 
-import GlitchlingProofs.Spec
-import GlitchlingProofs
+public import GlitchlingProofs.Spec
+public import GlitchlingProofs
 
 namespace Glitchling.ComparatorTarget
 
 open Glitchling.Spec
 
-theorem target_thm1_energy_mass_clausius :
+public theorem target_thm1_energy_mass_clausius :
     (∀ L ops, firstLawBalanced L → firstLawBalanced (runEnergyOps L ops)) ∧
     (∀ M idx r d, massBalanced M → massBalanced (fluxSoil M idx r d)) ∧
     (∀ M ia ib d, massBalanced M → massBalanced (transferSoil M ia ib d)) ∧
@@ -24,7 +26,7 @@ theorem target_thm1_energy_mass_clausius :
    Glitchling.transferSoil_preserves_mass,
    Glitchling.clausius_entropy_nonneg⟩
 
-theorem target_thm2_cega18_kochen_specker :
+public theorem target_thm2_cega18_kochen_specker :
     (∀ r : Fin 18, dot4 (cegaRay r) (cegaRay r) > 0) ∧
     (cegaContexts.all (fun ctx =>
       ctx.all (fun a => ctx.all (fun b => a == b || dot4 (cegaRay a) (cegaRay b) == 0))) = true) ∧
@@ -33,7 +35,7 @@ theorem target_thm2_cega18_kochen_specker :
    Glitchling.cega18_contexts_orthogonal,
    Glitchling.cega18_kochen_specker_uncolorable⟩
 
-theorem target_thm3_chsh_and_nosignaling :
+public theorem target_thm3_chsh_and_nosignaling :
     (∀ a0 a1 b0 b1 : Int,
       (a0 = 1 ∨ a0 = -1) → (a1 = 1 ∨ a1 = -1) → (b0 = 1 ∨ b0 = -1) → (b1 = 1 ∨ b1 = -1) →
       -2 ≤ chshExpr a0 a1 b0 b1 ∧ chshExpr a0 a1 b0 b1 ≤ 2) ∧
@@ -43,7 +45,7 @@ theorem target_thm3_chsh_and_nosignaling :
    Glitchling.bell_diagonal_exact_no_signaling,
    Glitchling.c3_cubic_trace_gap⟩
 
-theorem target_thm4_gf16_and_rs15_11 :
+public theorem target_thm4_gf16_and_rs15_11 :
     (∀ a b : Fin 16, gf16Mul a b = gf16Mul b a) ∧
     (∀ a b c : Fin 16, gf16Mul (gf16Mul a b) c = gf16Mul a (gf16Mul b c)) ∧
     (∀ a b c : Fin 16, gf16Mul a (gf16Add b c) = gf16Add (gf16Mul a b) (gf16Mul a c)) ∧
@@ -55,7 +57,7 @@ theorem target_thm4_gf16_and_rs15_11 :
    Glitchling.gf16_exists_inv,
    ⟨by omega, by omega⟩⟩
 
-theorem target_thm5_heptarch_anti_monarchy :
+public theorem target_thm5_heptarch_anti_monarchy :
     (∀ w : Fin 7 → Nat,
       w ⟨0, by omega⟩ + w ⟨1, by omega⟩ + w ⟨2, by omega⟩ + w ⟨3, by omega⟩ +
       w ⟨4, by omega⟩ + w ⟨5, by omega⟩ + w ⟨6, by omega⟩ = 100 →
@@ -67,13 +69,13 @@ theorem target_thm5_heptarch_anti_monarchy :
   intro w hsum hcap
   exact ⟨Glitchling.heptarch_anti_monarchy w hsum hcap, (Glitchling.heptarch_anti_duopoly w hsum hcap).2.2⟩
 
-theorem target_thm6_nestor_stochastic_rounding :
+public theorem target_thm6_nestor_stochastic_rounding :
     (∀ q delta r : Int, nestorSRExpectNum q delta r = delta * (q + r)) ∧
     (∀ delta r : Int, 4 * nestorSRVarFactor delta r ≤ delta * delta) :=
   ⟨Glitchling.nestor_sr_unbiased,
    fun d r => (Glitchling.nestor_sr_variance_bound d r).2⟩
 
-theorem target_thm7_poincare_mobius_containment :
+public theorem target_thm7_poincare_mobius_containment :
     (∀ ux uy vx vy S : Int,
       mobiusDen ux uy vx vy S * mobiusDen ux uy vx vy S -
         (mobiusNumX ux uy vx vy S * mobiusNumX ux uy vx vy S +
@@ -88,7 +90,7 @@ theorem target_thm7_poincare_mobius_containment :
   ⟨Glitchling.poincare_mobius_norm_identity,
    Glitchling.poincare_mobius_preserves_disk⟩
 
-theorem target_thm8_flaws_and_nonvacuity :
+public theorem target_thm8_flaws_and_nonvacuity :
     (∀ k : Nat, k < 16 → mirrorSite k < 16 ∧ mirrorSite (mirrorSite k) = k ∧ mirrorSite k ≠ k) ∧
     (∀ v p lam S : Int, leakyNextNum v p lam S - S * p = (S - lam) * (v - p)) ∧
     (gf16Mul ⟨3, by omega⟩ ⟨5, by omega⟩ = ⟨15, by omega⟩ ∧
@@ -99,7 +101,7 @@ theorem target_thm8_flaws_and_nonvacuity :
    Glitchling.leaky_contraction_identity,
    by decide⟩
 
-theorem target_thm9_adversarial_and_nonvacuity :
+public theorem target_thm9_adversarial_and_nonvacuity :
     (¬ ∃ f : Fin 18 → Bool, isCEGAKSColoring f) ∧
     (¬ ∃ a0 a1 b0 b1 : Int,
       (a0 = 1 ∨ a0 = -1) ∧ (a1 = 1 ∨ a1 = -1) ∧ (b0 = 1 ∨ b0 = -1) ∧ (b1 = 1 ∨ b1 = -1) ∧

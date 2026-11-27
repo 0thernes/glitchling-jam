@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none';" />
+  <title>Glitchling v2.4.0 — Interactive Lean 4.35.0 Proof Blueprint</title>
+  <meta name="description" content="Interactive dependency graph and 1-to-1 theorem-to-Lean-4.35.0 blueprint for Glitchling v2.4.0 (72 pure zero-Mathlib declarations across 6 independent kernels)." />
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --panel: #121826;
+      --border: #24304a;
+      --text: #e6edf7;
+      --muted: #93a4be;
+      --accent: #38bdf8;
+      --def: #64748b;
+      --lemma: #a78bfa;
+      --thm: #10b981;
+      --nv: #f59e0b;
+      --adv: #f43f5e;
+      --target: #06b6d4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #0f172a 0%, #0b0f17 100%);
+    }
+    header h1 { margin: 0 0 0.4rem 0; font-size: 1.45rem; }
+    header p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+    nav.top-links {
+      margin-top: 0.8rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      font-size: 0.85rem;
+    }
+    nav.top-links a {
+      color: var(--accent);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+    }
+    nav.top-links a:hover { background: #172033; }
+    main { max-width: 1260px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 0.85rem;
+      margin-bottom: 1.5rem;
+    }
+    .kpi {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+    }
+    .kpi .val { font-size: 1.35rem; font-weight: 700; color: #f8fafc; }
+    .kpi .lbl { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.1rem 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .card h2 { margin: 0 0 0.6rem 0; font-size: 1.1rem; }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .graph-wrap {
+      overflow-x: auto;
+      background: #080c14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem;
+    }
+    svg#dag { width: 100%; min-width: 900px; height: auto; display: block; }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      align-items: center;
+    }
+    .controls input, .controls select {
+      background: #0b1120;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 0.65rem;
+      font-size: 0.88rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.6rem 0.65rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; }
+    .badge {
+      display: inline-block;
+      padding: 0.12rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #0b0f17;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.8rem;
+      background: #0b1120;
+      padding: 0.08rem 0.3rem;
+      border-radius: 4px;
+      color: #bae6fd;
+    }
+    .decls { display: flex; flex-direction: column; gap: 0.25rem; }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.8rem;
+      padding: 1.5rem;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Glitchling v2.4.0 — Interactive Lean 4.35.0 Proof Blueprint</h1>
+    <p>Machine-checked dependency DAG &amp; 1-to-1 declaration map verified by <code>scripts/check_blueprint_decls.py</code> across all 6 independent Lean 4.35.0 kernels (zero Mathlib, Palomar <code>module</code> headers, <code>autoImplicit = false</code>).</p>
+    <nav class="top-links" aria-label="Blueprint navigation">
+      <a href="../index.html">Hub</a>
+      <a href="../site/index.html">Research Overview</a>
+      <a href="../live/index.html">Live 3D Biodome</a>
+      <a href="blueprint.json">Raw blueprint.json</a>
+      <a href="https://github.com/0thernes/glitchling-jam/blob/main/docs/statement-fidelity.md">Statement Fidelity</a>
+      <a href="https://github.com/0thernes/glitchling-jam/blob/main/results/lean_axioms.txt">Verbatim #print axioms</a>
+      <a href="https://github.com/0thernes/glitchling-jam/blob/main/formalization.yaml">formalization.yaml</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="kpi-grid" aria-label="Formal verification metrics">
+      <div class="kpi"><div class="val">72</div><div class="lbl">Audited Lean Declarations</div></div>
+      <div class="kpi"><div class="val">6</div><div class="lbl">Independent Kernels</div></div>
+      <div class="kpi"><div class="val">9</div><div class="lbl">Comparator Targets</div></div>
+      <div class="kpi"><div class="val">6 / 6</div><div class="lbl">Non-Vacuity / Adversarial</div></div>
+      <div class="kpi"><div class="val">0</div><div class="lbl">Mathlib / sorry / native_decide</div></div>
+      <div class="kpi"><div class="val">v4.35.0</div><div class="lbl">Palomar Module Toolchain</div></div>
+    </section>
+
+    <section class="card">
+      <h2>Formal Dependency Graph (Spec → Lemmas → Core Theorems → Non-Vacuity &amp; Adversarial → 6-Kernel Comparator)</h2>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--def)"></i>Pure Spec Definition</span>
+        <span><i class="dot" style="background:var(--lemma)"></i>Helper Lemma</span>
+        <span><i class="dot" style="background:var(--thm)"></i>Core Proved Theorem</span>
+        <span><i class="dot" style="background:var(--nv)"></i>Non-Vacuity Witness (NV01–NV06)</span>
+        <span><i class="dot" style="background:var(--adv)"></i>Adversarial Refutation (AT01–AT06)</span>
+        <span><i class="dot" style="background:var(--target)"></i>6-Kernel Comparator Targets (1–9)</span>
+      </div>
+      <div class="graph-wrap">
+        <svg id="dag" viewBox="0 0 1160 540" role="img" aria-label="Lean 4.35.0 proof dependency graph"></svg>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>1-to-1 Blueprint Node &amp; Declaration Registry</h2>
+      <div class="controls">
+        <label for="kindFilter">Filter kind:</label>
+        <select id="kindFilter">
+          <option value="all">All kinds (17 nodes)</option>
+          <option value="definition">Spec Definitions</option>
+          <option value="lemma">Lemmas</option>
+          <option value="theorem">Core Theorems</option>
+          <option value="nonvacuity">Non-Vacuity Witnesses</option>
+          <option value="adversarial">Adversarial Refutations</option>
+          <option value="comparator_target">Comparator Targets</option>
+        </select>
+        <label for="searchBox">Search declaration:</label>
+        <input id="searchBox" type="search" placeholder="e.g. cega18, mobius, gf16, nv01..." />
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Node / Paper Ref</th>
+            <th>Kind</th>
+            <th>Lean Module</th>
+            <th>Audited Declarations</th>
+            <th>Statement Summary</th>
+          </tr>
+        </thead>
+        <tbody id="nodeRows"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <footer>
+    Alexander Stephen Donahue (ORCID 0009-0006-8168-9648) · Glitchling v2.4.0 · Independent Preprint (Not Peer-Reviewed) · Zero external CDNs
+  </footer>
+
+  <script>
+    (async () => {
+      const KIND_COLORS = {
+        definition: '#64748b',
+        lemma: '#a78bfa',
+        theorem: '#10b981',
+        nonvacuity: '#f59e0b',
+        adversarial: '#f43f5e',
+        comparator_target: '#06b6d4'
+      };
+      const resp = await fetch('blueprint.json');
+      const bp = await resp.json();
+      const nodes = bp.nodes;
+
+      // Layout DAG cleanly by layer (0..4)
+      const layers = {};
+      for (const n of nodes) {
+        layers[n.layer] = layers[n.layer] || [];
+        layers[n.layer].push(n);
+      }
+      const pos = {};
+      const layerX = { 0: 20, 1: 250, 2: 470, 3: 740, 4: 965 };
+      const boxW = 175;
+      const boxH = 44;
+      Object.entries(layers).forEach(([lyr, arr]) => {
+        const step = Math.min(54, Math.floor(500 / Math.max(1, arr.length)));
+        const startY = Math.max(18, Math.floor((520 - step * arr.length) / 2));
+        arr.forEach((n, idx) => {
+          pos[n.id] = { x: layerX[lyr], y: startY + idx * step };
+        });
+      });
+
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const svg = document.getElementById('dag');
+
+      // Edges first
+      for (const n of nodes) {
+        for (const dep of n.uses) {
+          if (!pos[dep]) continue;
+          const p1 = pos[dep];
+          const p2 = pos[n.id];
+          const path = document.createElementNS(svgNS, 'path');
+          const x1 = p1.x + boxW;
+          const y1 = p1.y + boxH / 2;
+          const x2 = p2.x;
+          const y2 = p2.y + boxH / 2;
+          const cx = (x1 + x2) / 2;
+          path.setAttribute('d', `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`);
+          path.setAttribute('fill', 'none');
+          path.setAttribute('stroke', '#334155');
+          path.setAttribute('stroke-width', '1.4');
+          svg.appendChild(path);
+        }
+      }
+
+      // Nodes
+      for (const n of nodes) {
+        const p = pos[n.id];
+        const g = document.createElementNS(svgNS, 'g');
+        g.style.cursor = 'pointer';
+        g.addEventListener('click', () => {
+          document.getElementById('searchBox').value = n.id;
+          renderTable();
+        });
+        const rect = document.createElementNS(svgNS, 'rect');
+        rect.setAttribute('x', p.x);
+        rect.setAttribute('y', p.y);
+        rect.setAttribute('width', boxW);
+        rect.setAttribute('height', boxH);
+        rect.setAttribute('rx', '7');
+        rect.setAttribute('fill', '#111827');
+        rect.setAttribute('stroke', KIND_COLORS[n.kind] || '#38bdf8');
+        rect.setAttribute('stroke-width', '2');
+        g.appendChild(rect);
+
+        const t1 = document.createElementNS(svgNS, 'text');
+        t1.setAttribute('x', p.x + 8);
+        t1.setAttribute('y', p.y + 18);
+        t1.setAttribute('fill', '#f8fafc');
+        t1.setAttribute('font-size', '10.5');
+        t1.setAttribute('font-weight', '600');
+        t1.textContent = n.id;
+        g.appendChild(t1);
+
+        const t2 = document.createElementNS(svgNS, 'text');
+        t2.setAttribute('x', p.x + 8);
+        t2.setAttribute('y', p.y + 33);
+        t2.setAttribute('fill', '#94a3b8');
+        t2.setAttribute('font-size', '9.5');
+        t2.textContent = `${n.lean_decls.length} decls · ${n.status}`;
+        g.appendChild(t2);
+        svg.appendChild(g);
+      }
+
+      const tbody = document.getElementById('nodeRows');
+      const kindFilter = document.getElementById('kindFilter');
+      const searchBox = document.getElementById('searchBox');
+
+      function renderTable() {
+        const kind = kindFilter.value;
+        const q = searchBox.value.trim().toLowerCase();
+        tbody.textContent = '';
+        for (const n of nodes) {
+          if (kind !== 'all' && n.kind !== kind) continue;
+          const hay = `${n.id} ${n.title} ${n.module} ${n.paper_ref} ${n.statement} ${n.lean_decls.join(' ')}`.toLowerCase();
+          if (q && !hay.includes(q)) continue;
+
+          const tr = document.createElement('tr');
+
+          const td1 = document.createElement('td');
+          const strong = document.createElement('strong');
+          strong.textContent = n.title;
+          td1.appendChild(strong);
+          td1.appendChild(document.createElement('br'));
+          const sub = document.createElement('span');
+          sub.style.color = '#93a4be';
+          sub.style.fontSize = '0.78rem';
+          sub.textContent = `${n.id} · ${n.paper_ref}`;
+          td1.appendChild(sub);
+
+          const td2 = document.createElement('td');
+          const badge = document.createElement('span');
+          badge.className = 'badge';
+          badge.style.background = KIND_COLORS[n.kind] || '#38bdf8';
+          badge.textContent = n.kind;
+          td2.appendChild(badge);
+
+          const td3 = document.createElement('td');
+          const modCode = document.createElement('code');
+          modCode.textContent = n.module;
+          td3.appendChild(modCode);
+
+          const td4 = document.createElement('td');
+          const dWrap = document.createElement('div');
+          dWrap.className = 'decls';
+          for (const d of n.lean_decls) {
+            const c = document.createElement('code');
+            c.textContent = d;
+            dWrap.appendChild(c);
+          }
+          td4.appendChild(dWrap);
+
+          const td5 = document.createElement('td');
+          td5.textContent = n.statement;
+
+          tr.append(td1, td2, td3, td4, td5);
+          tbody.appendChild(tr);
+        }
+      }
+
+      kindFilter.addEventListener('change', renderTable);
+      searchBox.addEventListener('input', renderTable);
+      renderTable();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+{
+  "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+  "@type": "SoftwareSourceCode",
+  "name": "Glitchling",
+  "version": "2.4.0",
+  "dateCreated": "2026-11-01",
+  "dateModified": "2026-11-26",
+  "datePublished": "2026-11-26",
+  "description": "Multi-layer artificial-life (A-Life) flaw-resilience testbed, live 3D soft-body Geodesic Biodome, independent exact-arithmetic/complex-Kronecker Python reference oracles, and 72 pure zero-Mathlib Lean 4.35.0 formal proofs verified across 6 independent kernels.",
+  "codeRepository": "https://github.com/0thernes/glitchling-jam",
+  "url": "https://0thernes.github.io/glitchling-jam/",
+  "issueTracker": "https://github.com/0thernes/glitchling-jam/issues",
+  "license": "https://github.com/0thernes/glitchling-jam/blob/main/LICENSE",
+  "programmingLanguage": [
+    "TypeScript",
+    "JavaScript",
+    "Lean 4",
+    "Python",
+    "TeX"
+  ],
+  "runtimePlatform": [
+    "Node.js >= 22",
+    "Bun >= 1.1",
+    "Python >= 3.11",
+    "Lean 4.35.0"
+  ],
+  "keywords": [
+    "artificial-life",
+    "formal-verification",
+    "lean4",
+    "kochen-specker",
+    "reed-solomon",
+    "poincare-disk",
+    "open-quantum-systems",
+    "reproducibility",
+    "statistical-falsification"
+  ],
+  "author": [
+    {
+      "@type": "Person",
+      "@id": "https://orcid.org/0009-0006-8168-9648",
+      "givenName": "Alexander Stephen",
+      "familyName": "Donahue",
+      "email": "0_0@0thernes.art",
+      "affiliation": {
+        "@type": "Organization",
+        "name": "Independent Researcher, Spokane, WA, USA"
+      }
+    }
+  ],
+  "developmentStatus": "active",
+  "referencePublication": "https://github.com/0thernes/glitchling-jam/blob/main/dist/Donahue_2026_glitchling_alife_verification.pdf"
+}

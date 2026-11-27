@@ -1,14 +1,16 @@
+module
+
 /-
-  GLITCHLING (v2.2.0) — Standalone Kernel Axiom Audit (`Lean 4.35.0`).
-  Audits ALL exported theorems in `GlitchlingProofs` and `Solution` via `#print axioms`.
+  GLITCHLING (v2.4.0) — Standalone Kernel Axiom Audit (`Lean 4.35.0`).
+  Audits ALL 76 exported theorems in `GlitchlingProofs` and `Solution` via `#print axioms`.
   Every theorem must depend strictly on a subset of `[propext, Classical.choice, Quot.sound]`
   (or no axioms at all) with zero `sorryAx`, zero `native_decide`, and zero custom axioms.
 -/
 
-import GlitchlingProofs
-import Solution
+public import GlitchlingProofs
+public import Solution
 
--- Module 1: First-Law 11-Pool Energy Conservation, Closed N/C Mass Ledger & Clausius (14 theorems)
+-- Module 1: First-Law 11-Pool Energy Conservation, Closed N/C Mass Ledger & Clausius Numerator (16 theorems)
 #print axioms Glitchling.sumFin11_add_at
 #print axioms Glitchling.sumFin11_sub_at
 #print axioms Glitchling.transferEnergy_preserves_sum
@@ -22,10 +24,11 @@ import Solution
 #print axioms Glitchling.sumFin4_sub_at
 #print axioms Glitchling.fluxSoil_preserves_mass
 #print axioms Glitchling.transferSoil_preserves_mass
+#print axioms Glitchling.runMassOps_preserves_mass
 #print axioms Glitchling.clausius_entropy_nonneg
 #print axioms Glitchling.clausius_entropy_strict_pos
 
--- Module 2: CEGA-18 Kochen-Specker Uncolorability, CHSH LHV & No-Signaling (11 theorems)
+-- Module 2: CEGA-18 Kochen-Specker Uncolorability, CHSH LHV & Bell-Diagonal Partial Trace (13 theorems)
 #print axioms Glitchling.cega18_rays_nonzero
 #print axioms Glitchling.cega18_contexts_orthogonal
 #print axioms Glitchling.cega18_every_ray_in_two_contexts
@@ -37,10 +40,13 @@ import Solution
 #print axioms Glitchling.chsh_lhv_bound
 #print axioms Glitchling.chsh_game_classical_max_three
 #print axioms Glitchling.bell_diagonal_exact_no_signaling
+#print axioms Glitchling.bell_diagonal_partial_trace_eq_half_I2
 #print axioms Glitchling.c3_cubic_trace_gap
 
--- Module 3: GF(2^4) Finite Field, RS[15,11], HEPTARCH Anti-Monarchy & NESTOR SR (15 theorems)
+-- Module 3: Complete GF(2^4) Finite Field, RS Singleton Arithmetic, HEPTARCH Caps & NESTOR Identities (17 theorems)
 #print axioms Glitchling.gf16_add_self
+#print axioms Glitchling.gf16_add_zero
+#print axioms Glitchling.gf16_add_assoc
 #print axioms Glitchling.gf16_add_comm
 #print axioms Glitchling.gf16_mul_comm
 #print axioms Glitchling.gf16_mul_assoc

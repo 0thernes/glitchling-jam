@@ -3,8 +3,8 @@
 > Canonical agent instruction entry point (`A32` of Build Standard `v1.2.0`). `CLAUDE.md`, `GEMINI.md`, and `.cursor/rules/build-standard.mdc` reference this file.
 
 ## 1. Project Identity & Scope
-- **Project:** **Glitchling** (`0thernes/glitchling-jam`, `v2.2.0`) — a deliberately broken baby clone of A-Life Creature #1 (`glitchling.ts` + frozen `core/`), 2D browser port (`play/`), 3D soft-body & spiking-brain Geodesic Biodome (`live/`), pure Lean 4.35.0 formal core (`lean/`), independent exact Python oracle (`reference/`), and AMS-LaTeX preprint (`paper/`, `dist/`).
-- **Author & Affiliation:** Alexander Stephen Donahue (`Alexander S. Donahue`), ORCID [`0009-0006-8168-9648`](https://orcid.org/0009-0006-8168-9648), **Independent Researcher, Spokane, WA, USA** (`0_0@0thernes.art`, `https://0thernes.art`, `https://github.com/0thernes`). Do not assert `"0thernes LLC"` as a legal affiliation in new manuscripts or metadata.
+- **Project:** **Glitchling** (`0thernes/glitchling-jam`, `v2.4.0`) — a deliberately broken baby clone of A-Life Creature #1 (`glitchling.ts` + frozen `core/`), 2D browser port (`play/`), 3D soft-body & spiking-brain Geodesic Biodome (`live/`), pure 6-kernel Lean 4.35.0 formal core (`lean/`), interactive Blueprint (`blueprint/`), independent exact Python oracle (`reference/`), and AMS-LaTeX preprint (`paper/`, `dist/`).
+- **Author & Affiliation:** Alexander Stephen Donahue (`Alexander S. Donahue`), ORCID [`0009-0006-8168-9648`](https://orcid.org/0009-0006-8168-9648), **Independent Researcher, Spokane, WA, USA** (`0_0@0thernes.art`, `https://0thernes.art`, `https://github.com/0thernes`). Do not assert an unformed LLC entity as a legal affiliation in manuscripts or active metadata.
 - **License:** `COSMOGONIC LICENSE — NON-COMMERCIAL RESEARCH & PLAY` ([`LICENSE`](LICENSE)), byte-identical to `0thernes/CQM2`. Do not modify `LICENSE`.
 
 ## 2. Hard Rules (Non-Negotiable — Build Standard R1–R8 + Repo Boundaries)
@@ -16,7 +16,7 @@
 - **R5 — Ten-Class Finding Taxonomy:** Tag every audit finding with exactly one of: `bug`, `error`, `issue`, `problem`, `concern`, `dilemma`, `conflict`, `gap`, `hole`, `blindspot`.
 - **R6 — Never Fabricate / Zero Hype:** Never claim consciousness, sentience, feelings, AGI, physical quantum effects, or solved Mega-Atlas problems (`0 / 1,900` solved). Always label `MEGA`/`GIGA` synapse totals as **nominal** alongside stored counts.
 - **R7 — Lean 4 Kernel Integrity:** Zero `sorry`, `admit`, `axiom`, `native_decide`, `unsafe`, `implemented_by`, or `@[extern` in `lean/GlitchlingProofs*.lean` and `lean/Solution.lean` (`lean/Challenge.lean` intentionally holds specification `sorry`s matched by `lake comparator --paranoid`). All audited axioms strictly inside `[propext, Classical.choice, Quot.sound]`.
-- **R8 — Preserve Author Identity & License:** Keep `VERSION` (`2.2.0`), `LICENSE`, and ORCID `0009-0006-8168-9648` synchronized everywhere.
+- **R8 — Preserve Author Identity & License:** Keep `VERSION` (`2.4.0`), `LICENSE`, and ORCID `0009-0006-8168-9648` synchronized everywhere (enforced by `scripts/check_versions.py`).
 
 ## 3. Repository Map
 
@@ -25,7 +25,8 @@
 | `glitchling.ts`, `core/` | TypeScript reference sim (frozen `core/` Creature #1 copy; run with `BUN_JSC_useConcurrentJIT=0`) |
 | `live/` | Live 3D Bio-Observatory, spiking brains (`S..GIGA`), HEPTARCH v0.2, NESTOR, Biodome, & probes (`live/test/`) |
 | `play/`, `site/`, `brain-viz/` | Zero-build static browser pages (2D port, jam showcase, real activation playback) |
-| `lean/` | Pure Lean 4.35.0 formal core (0 Mathlib, 59 audited decls, isolated `Challenge`/`Solution` comparator) |
+| `lean/` | Pure Lean 4.35.0 formal core (0 Mathlib, 11 Palomar `module` files, 72 audited decls, 6-kernel `lake check` & `Challenge`/`Solution` comparator) |
+| `blueprint/` | Interactive Lean 4 Proof Blueprint & dependency graph deployed on GitHub Pages (`/blueprint/`, verified by `scripts/check_blueprint_decls.py`) |
 | `reference/`, `tests/` | Independent exact-arithmetic / Kronecker Python oracle (`glitchling_oracle.py`) + `pytest`/`hypothesis` suite |
 | `scripts/`, `tools/` | `tools/check.mjs`, `tools/results_stats.mjs`, `scripts/{verify_exact.py,bench.mjs,generate_figures.py,package_dist.py,check_readme_axioms.py,Audit-Repo.ps1,audit-repo.sh}` |
 | `paper/`, `dist/` | AMS-LaTeX white paper (`main.tex`, `refs.bib`, `WHITE_PAPER.md`), vector figures, frozen PDF & arXiv tarball |

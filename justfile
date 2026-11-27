@@ -1,4 +1,4 @@
-# Glitchling (v2.2.0) — Canonical Task Runner (`justfile`, Build Standard A31/A36/B01)
+# Glitchling (v2.4.0) — Canonical Task Runner (`justfile`, Build Standard A31/A36/B01)
 set shell := ["bash", "-euo", "pipefail", "-c"]
 set windows-shell := ["pwsh", "-NoProfile", "-Command"]
 
@@ -35,9 +35,17 @@ oracle:
 stats:
     npm run stats
 
-# Build & audit pure Lean 4.35.0 formal core (59 decls + leanchecker)
+# Build & audit pure Lean 4.35.0 formal core (72 decls + leanchecker + live negative tamper + blueprint checkdecls)
 lean:
     cd lean && lake build GlitchlingProofs Challenge Solution && lake env lean VerifyAxioms.lean && lake env leanchecker --fresh GlitchlingProofs && lake env leanchecker --fresh Solution
+    python3 scripts/test_lean_negative.py || python scripts/test_lean_negative.py
+    python3 scripts/check_blueprint_decls.py || python scripts/check_blueprint_decls.py
+
+# Schema, version, citation & timestamp consistency audit
+versions:
+    python3 scripts/check_versions.py || python scripts/check_versions.py
+    python3 scripts/audit_citations.py --verify-offline || python scripts/audit_citations.py --verify-offline
+    python3 scripts/timestamp_checksums.py --verify-only || python scripts/timestamp_checksums.py --verify-only
 
 # Rebuild vector figures, zero-warning AMS-LaTeX PDF, and standalone-verified arXiv tarball
 paper:

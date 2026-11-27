@@ -1,11 +1,11 @@
 # Volume 5 — Embodied Cortex, Colony, CQM Biodome & Simulation Verification
 
 > **Source PDFs Distilled in This Volume (Browser / Website / SaaS Stripped):**
-> - **PDF 18:** `gigachad-browser/docs/reports/GIGACHAD_Browser_Master_Technical_Encyclopedia.pdf` (18 pp. · Embodied biophysical cortex, zero-GC 7-tier precision arena, 14-brain pantheon, bioelectric regeneration, infotaxis, burst-coded Neuralese — *100% of Chromium/DOM/browser/proxy shell stripped*)
-> - **PDF 19:** `gigachad-browser/docs/reports/GIGACHAD_Frontier_Cybernetic_Browser_White_Paper.pdf` (12 pp. · Governing equations (1)–(20), mathematical proofs, comparative ALife benchmarks, validity boundaries — *browser shell stripped*)
-> - **PDF 20:** `GIGACHAD_Browser_Deep_Dive_Guide.pdf` (16 pp. · 0-LLM 60 Hz organism runtime, codec math, Glitchling Brain #2 cerebellar un-mirroring, 5-caste mitosis colony, N13 Free-Won't veto, SWS replay, anti-theater lessons — *browser shell stripped*)
+> - **PDF 18:** Internal archived technical report — Embodied Cortex Master Technical Encyclopedia (18 pp. · Embodied biophysical cortex, zero-GC 7-tier precision arena, 14-brain pantheon, bioelectric regeneration, infotaxis, burst-coded Neuralese — *100% of Chromium/DOM/browser/proxy shell stripped*)
+> - **PDF 19:** Internal archived technical report — Frontier Cybernetic Architecture White Paper (12 pp. · Governing equations (1)–(20), mathematical proofs, comparative ALife benchmarks, validity boundaries — *browser shell stripped*)
+> - **PDF 20:** Internal archived technical report — Cybernetic Runtime Deep-Dive Guide (16 pp. · 0-LLM 60 Hz organism runtime, codec math, Glitchling Brain #2 cerebellar un-mirroring, 5-caste mitosis colony, N13 Free-Won't veto, SWS replay, anti-theater lessons — *browser shell stripped*)
 > - **PDF 21:** `Cosmogonic Quantum Mechalogodrom/docs/alife/cqm-alife-audit.pdf` (40 pp. · CQM v0.23.0 Biodome ecosystem, species/entities/beings inventory, closed nutrient loop, Sanctuary Refuges, V4 causal audit)
-> - **PDF 28:** `grade-a-standard/handbook/Grade-A-MVP-Standard-2.2.0.pdf` (467 pp. · Extracted `SIM`, `AGENT`, and `NATIVE` numerical determinism, conservation, stability, soak, and anti-stub verification gates — *100% of SaaS/Stripe/auth/billing/corporate boilerplate stripped*)
+> - **PDF 28:** Internal engineering handbook — Grade-A MVP Standard 2.2.0 (467 pp. · Extracted `SIM`, `AGENT`, and `NATIVE` numerical determinism, conservation, stability, soak, and anti-stub verification gates — *100% of SaaS/Stripe/auth/billing/corporate boilerplate stripped*)
 > - **PDF 29:** `f15620.pdf` (3 pp. · Blank IRS Form 15620 Rev. 4-2025 Section 83(b) tax election — *non-technical document; excluded from Glitchling & Dome architecture*)
 
 ---

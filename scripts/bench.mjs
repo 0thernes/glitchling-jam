@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Glitchling v2.2.0 — Honest Warmed Micro-Benchmark Harness (B26, B27)
+// Glitchling v2.4.0 — Honest Warmed Micro-Benchmark Harness (B26, B27)
 // Measures median, IQR, p95, min, max across key simulation kernels and writes results/perf-benchmarks.json.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -86,7 +86,7 @@ results.push(bench('poincare_mobius_add', 100, 30, 10000, () => poincareMobiusAd
 results.push(bench('c3_cospectral_cached', 10, 20, 1000, () => evalCospectralTwins()));
 
 const payload = {
-  version: '2.2.0',
+  version: fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim(),
   timestamp_utc: new Date().toISOString(),
   environment: {
     node: process.version,

@@ -33,7 +33,7 @@
 ## 1. Executive brief
 
 **What Glitchling is.** Glitchling is a deliberately broken baby clone of **Creature #1**, Alex's A-Life organism. Specifically:
-- `core/` is a **copy** of Creature #1's organism code, taken from `Asmodensius-v40/creatures/001/organism`. The copied files are organism.ts, affect.ts, develop.ts, v40mods.ts, substrate.ts, tsotchke.ts and fp/. The only edits were rewriting absolute imports to relative ones and dropping the diag/trace files that needed the test suite.
+- `core/` is a **copy** of Creature #1's organism code, taken from the private parent Creature #1 repository (`creatures/001/organism`). The copied files are organism.ts, affect.ts, develop.ts, v40mods.ts, substrate.ts, tsotchke.ts and fp/. The only edits were rewriting absolute imports to relative ones and dropping the diag/trace files that needed the test suite.
 - `glitchling.ts` (54 lines, about 8 KB, so the lines are very dense) subclasses `Organism` and adds **four switchable flaws**: `scramble`, `leaky`, `backwards` and `misfire`.
 - The brain has **272 rate neurons in 14 regions**. It sits on a full metabolism (gut → blood → liver/fat → ATP), a layered affect system and a grown (developmental-genome) connectome.
 - The world is a **16-site foraging ring**: 4 colours × 4 shapes, with reward p = 0.05 + 0.25·cv[c] + 0.25·sv[s] (from the `SITES` comment in core/organism.ts).
@@ -66,7 +66,7 @@
 
 > 🚨 **Read these before touching anything.** They are Alex's standing rules for this project and they carry over to you.
 
-1. **Never modify Alex's real repos or sites.** This covers CQM / Cosmogonic Quantum Mechalogodrom, `Asmodensius*`, the 0thernes.art site source, the Creature #1 repo, and anything else of his on the Z: drive outside `glitchling-jam`.
+1. **Never modify Alex's real repos or sites.** This covers CQM / Cosmogonic Quantum Mechalogodrom, the private Creature #1 repositories, the 0thernes.art site source, the Creature #1 repo, and anything else of his on the Z: drive outside `glitchling-jam`.
 2. **Never push, deploy, post, publish or email.** No `git push`, no Vercel/Netlify/Cloudflare deploys, no social posts, no newsletters, no PRs. Everything is local. Showcase pages are viewed through `python -m http.server` on localhost only.
 3. **Work lives in `glitchling-jam/`.** On the shared box that is `/workspace/glitchling-jam`. On Alex's MSI it is `Z:\[Vibe Coded (AI)]\CLAUDECODE\glitchling-jam`, if the copy finished.
 4. **`cqm-copy/` is a local, no-remote shallow clone of CQM** (HEAD `4ceed2d`, 2026-11-01; `git remote -v` is empty). Treat it as **read/reference only** for CQM originals. The Artificial Life bot already added files to it (listed in §3). Put new studio/render work in **new files**, ideally outside cqm-copy or in a clearly new file, and never edit the original CQM modules. Never add a remote.
@@ -185,7 +185,7 @@ Root: `/workspace/glitchling-jam/` (box) ≙ `Z:\[Vibe Coded (AI)]\CLAUDECODE\gl
 | Where | What |
 |---|---|
 | `/workspace/creature-1/` (box) | Creature #1 v3 harness: README, PREREGISTRATION*.md, HARNESS_CHANGES.md, run.ts, run1–6.txt, results.json. This is the parent organism's science track. |
-| `/workspace/Asmodensius-v40/creatures/001/organism` | Source of `core/`. |
+| `<private-creature-1-repo>/creatures/001/organism` | Source of `core/`. |
 | `/workspace/cqw/` | CQM working copy that the AL bot referenced (`docs/MINI-WORLD-AND-SANDBOX.md`, Playwright in node_modules). Not ours. |
 | `Z:\[Vibe Coded (AI)]\CLAUDECODE\` (MSI) | Alex's vibe-coded root: CQM (Cosmogonic Quantum Mechalogodrom; its `scripts/launch-oppengrok.ps1` opens 4 Windows Terminal windows × 10 "OPPENGROK" tabs), the 0thernes.art site, the **ANTIGRAVITY** folder (your stack; contents UNKNOWN to me) and glitchling-jam. |
 

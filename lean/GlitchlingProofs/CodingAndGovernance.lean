@@ -1,5 +1,7 @@
+module
+
 /-
-  GLITCHLING (v2.2.0) — Module 3: GF(2^4) Finite Field Axioms & RS[15,11,d=5]
+  GLITCHLING (v2.4.0) — Module 3: GF(2^4) Finite Field Axioms & RS[15,11,d=5]
   Singleton Distance, HEPTARCH v0.2 7-Seat Anti-Monarchy / Anti-Duopoly Caps,
   NESTOR 23-Rung Unbiased Stochastic Rounding & Popoviciu Variance Bound, and
   Sanctioned IPD Cooperation Dominance (`T7`, `T9`, `T10a`).
@@ -7,7 +9,7 @@
   Zero Mathlib, zero `sorry`, zero `native_decide`, strict `autoImplicit = false`.
 -/
 
-import GlitchlingProofs.Spec
+public import GlitchlingProofs.Spec
 
 namespace Glitchling
 
@@ -18,38 +20,47 @@ open Spec
 -- =============================================================================
 
 /-- Characteristic 2: every element is its own additive inverse (`a ^ a = 0`). -/
-theorem gf16_add_self (a : Fin 16) : gf16Add a a = ⟨0, by omega⟩ := by
+public theorem gf16_add_self (a : Fin 16) : gf16Add a a = ⟨0, by omega⟩ := by
   revert a; decide
 
+/-- Additive identity `0` in GF(16). -/
+public theorem gf16_add_zero (a : Fin 16) : gf16Add a ⟨0, by omega⟩ = a := by
+  revert a; decide
+
+/-- Associativity of GF(16) addition across all 16^3 = 4,096 triples. -/
+public theorem gf16_add_assoc (a b c : Fin 16) :
+    gf16Add (gf16Add a b) c = gf16Add a (gf16Add b c) := by
+  revert a b c; decide
+
 /-- Commutativity of GF(16) addition. -/
-theorem gf16_add_comm (a b : Fin 16) : gf16Add a b = gf16Add b a := by
+public theorem gf16_add_comm (a b : Fin 16) : gf16Add a b = gf16Add b a := by
   revert a b; decide
 
 /-- Commutativity of GF(16) multiplication modulo `0x13` (`x^4 + x + 1`). -/
-theorem gf16_mul_comm (a b : Fin 16) : gf16Mul a b = gf16Mul b a := by
+public theorem gf16_mul_comm (a b : Fin 16) : gf16Mul a b = gf16Mul b a := by
   revert a b; decide
 
 /-- Associativity of GF(16) multiplication across all 16^3 = 4,096 triples. -/
-theorem gf16_mul_assoc (a b c : Fin 16) :
+public theorem gf16_mul_assoc (a b c : Fin 16) :
     gf16Mul (gf16Mul a b) c = gf16Mul a (gf16Mul b c) := by
   revert a b c; decide
 
 /-- Left distributivity of GF(16) multiplication over addition across all 4,096 triples. -/
-theorem gf16_left_distrib (a b c : Fin 16) :
+public theorem gf16_left_distrib (a b c : Fin 16) :
     gf16Mul a (gf16Add b c) = gf16Add (gf16Mul a b) (gf16Mul a c) := by
   revert a b c; decide
 
 /-- Multiplicative identity `1` in GF(16). -/
-theorem gf16_mul_one (a : Fin 16) : gf16Mul a ⟨1, by omega⟩ = a := by
+public theorem gf16_mul_one (a : Fin 16) : gf16Mul a ⟨1, by omega⟩ = a := by
   revert a; decide
 
 /-- Every non-zero element of GF(16) has a multiplicative inverse (proves `x^4 + x + 1` is irreducible over F_2!). -/
-theorem gf16_exists_inv :
+public theorem gf16_exists_inv :
     ∀ a : Fin 16, a.val ≠ 0 → ∃ b : Fin 16, gf16Mul a b = ⟨1, by omega⟩ := by
   decide
 
 /-- Primitive element `alpha = 2` (polynomial `x`) has exact multiplicative order 15, generating GF(16)^*. -/
-def gf16Pow (a : Fin 16) : Nat → Fin 16
+@[expose] public def gf16Pow (a : Fin 16) : Nat → Fin 16
   | 0     => ⟨1, by omega⟩
   | n + 1 => gf16Mul a (gf16Pow a n)
 
@@ -88,7 +99,7 @@ private theorem gf16_pow_step_table :
   have h15 : gf16Pow a 15 = ⟨1,  by omega⟩ := by change gf16Mul a (gf16Pow a 14) = _; rw [h14]; decide
   exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩
 
-theorem gf16_alpha_primitive_order_15 :
+public theorem gf16_alpha_primitive_order_15 :
     gf16Pow ⟨2, by omega⟩ 15 = ⟨1, by omega⟩ ∧
     (∀ k : Fin 15, k.val > 0 → gf16Pow ⟨2, by omega⟩ k.val ≠ ⟨1, by omega⟩) := by
   rcases gf16_pow_step_table with
@@ -114,9 +125,11 @@ theorem gf16_alpha_primitive_order_15 :
   | 13 => rw [h13]; decide
   | 14 => rw [h14]; decide
 
-/-- Theorem 3.1 (RS[15, 11, d=5] MDS Singleton Distance & Error-Correction Radius `t = 2`):
-    n = 15, k = 11 => d = n - k + 1 = 5, correcting up to t = (d - 1)/2 = 2 arbitrary GF(16) symbol errors. -/
-theorem rs15_11_mds_radius :
+/-- Theorem 3.1 (RS[15, 11] Singleton Parameter Arithmetic):
+    Checks only the Singleton arithmetic `d = 15 - 11 + 1 = 5`, `t = (d - 1)/2 = 2`, `2t + 1 = d`.
+    No Reed–Solomon code, minimum distance, or decoder is modelled in Lean; encoding/decoding
+    correctness is tested differentially and via property checks in `scripts/verify_exact.py` and `verification_ladder.mjs`. -/
+public theorem rs15_11_mds_radius :
     let n := 15
     let k := 11
     let d := n - k + 1
@@ -131,7 +144,7 @@ theorem rs15_11_mds_radius :
 /-- Theorem 3.2 (Anti-Monarchy Strict Minority Bound):
     On the 7-seat capped probability simplex (scaled by 100: sum = 100, each weight <= 46),
     NO single seat can ever hold a majority (>= 50%). -/
-theorem heptarch_anti_monarchy (w : Fin 7 → Nat)
+public theorem heptarch_anti_monarchy (w : Fin 7 → Nat)
     (_hsum : w ⟨0, by omega⟩ + w ⟨1, by omega⟩ + w ⟨2, by omega⟩ + w ⟨3, by omega⟩ +
              w ⟨4, by omega⟩ + w ⟨5, by omega⟩ + w ⟨6, by omega⟩ = 100)
     (hcap : ∀ i : Fin 7, w i ≤ 46) :
@@ -151,9 +164,10 @@ private theorem fin7_pair_cap_le_92 (a b : Fin 7) :
   revert a b
   decide
 
-/-- Theorem 3.3 (Anti-Duopoly Coalition Bound):
-    Any two seats combined hold at most 92% < 100%, so at least 3 distinct seats must always carry positive weight. -/
-theorem heptarch_anti_duopoly (w : Fin 7 → Nat)
+/-- Theorem 3.3 (No Two-Seat Total Monopoly / At Least 3 Positive Seats):
+    Any two seats combined hold at most 92% < 100%, so at least 3 distinct seats must always carry positive weight
+    (note: two seats combined can still hold a majority up to 92%). -/
+public theorem heptarch_anti_duopoly (w : Fin 7 → Nat)
     (hsum : w ⟨0, by omega⟩ + w ⟨1, by omega⟩ + w ⟨2, by omega⟩ + w ⟨3, by omega⟩ +
             w ⟨4, by omega⟩ + w ⟨5, by omega⟩ + w ⟨6, by omega⟩ = 100)
     (hcap : ∀ i : Fin 7, w i ≤ 46) :
@@ -201,20 +215,19 @@ theorem heptarch_anti_duopoly (w : Fin 7 → Nat)
 
 /-- Theorem 3.4: Every one of the 7 literal `MODE_CAPS` rows in `heptarch.js:486-492` has length 7,
     every per-seat cap <= 46%, and total cap capacity >= 100% (capped simplex strictly feasible!). -/
-theorem heptarch_all_modes_feasible :
+public theorem heptarch_all_modes_feasible :
     heptarchModeCaps.length = 7 ∧
     heptarchModeCaps.all (fun row => row.length == 7 && row.all (fun c => c <= 46) && listSumNat row >= 100) = true := by
   decide
 
 -- =============================================================================
--- 3. NESTOR 23-Rung Unbiased Stochastic Rounding & Popoviciu Variance Ceiling
+-- 3. NESTOR Two-Point Rounding Integer Polynomial Identities
 -- =============================================================================
 
-/-- Theorem 3.5 (Exact Unbiasedness of Stochastic Rounding, `T7`):
-    For ANY grid floor `q`, spacing `delta`, and offset `r`:
-      ((delta - r) * q + r * (q + delta)) = delta * (q + r).
-    Dividing by `delta > 0` yields E[Q(q + r)] = q + r identically! -/
-theorem nestor_sr_unbiased (q delta r : Int) :
+/-- Theorem 3.5 (Expectation-Numerator Polynomial Identity for Two-Point Rounding, `T7`):
+    For ANY integers `q, delta, r`: `((delta - r) * q + r * (q + delta)) = delta * (q + r)`.
+    This is an integer ring identity; no random variable or probability model is formalized in Lean. -/
+public theorem nestor_sr_unbiased (q delta r : Int) :
     nestorSRExpectNum q delta r = delta * (q + r) := by
   unfold nestorSRExpectNum
   have h1 : (delta - r) * q = delta * q - r * q := Int.sub_mul delta r q
@@ -223,9 +236,10 @@ theorem nestor_sr_unbiased (q delta r : Int) :
   have h4 : r * delta = delta * r := Int.mul_comm r delta
   omega
 
-/-- Theorem 3.6 (Exact Popoviciu Variance Ceiling Var[Q] <= delta^2 / 4, `T7`):
-    For ALL integers `delta, r`, `4 * r * (delta - r) <= delta * delta`, with exact slack `(delta - 2*r)^2 >= 0`. -/
-theorem nestor_sr_variance_bound (delta r : Int) :
+/-- Theorem 3.6 (Variance-Numerator Polynomial Identity for Two-Point Rounding, `T7`):
+    For ALL integers `delta, r`, `4 * r * (delta - r) + (delta - 2*r)^2 = delta^2` and
+    `4 * r * (delta - r) <= delta^2` (integer polynomial identity; no probability model formalized in Lean). -/
+public theorem nestor_sr_variance_bound (delta r : Int) :
     4 * nestorSRVarFactor delta r + (delta - 2 * r) * (delta - 2 * r) = delta * delta ∧
     4 * nestorSRVarFactor delta r ≤ delta * delta := by
   unfold nestorSRVarFactor
@@ -265,7 +279,7 @@ theorem nestor_sr_variance_bound (delta r : Int) :
 /-- Theorem 3.7 (Sanctioned IPD Cooperation Dominance, `T10a`):
     When multilateral sanction `s` satisfies `R > T - s` and `R > P`, mutual cooperation beats
     both unilateral defection (T - s) and mutual defection (P). -/
-theorem ipd_sanctioned_cooperation_dominates (R T P s : Int)
+public theorem ipd_sanctioned_cooperation_dominates (R T P s : Int)
     (h1 : T - s < R) (h2 : P < R) :
     T - s < R ∧ P < R :=
   ⟨h1, h2⟩

@@ -1,12 +1,13 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'">
 <title>Glitchling: one-day art jam showcase</title><meta name="description" content="Glitchling one-day art jam showcase: a deliberately broken baby clone of A-Life Creature #1, with results from the TypeScript reference sim (30 seeds per condition, repeatable mode)."><link rel="stylesheet" href="style.css"></head>
 <body><a class="skip" href="#main">Skip to content</a>
 <header><h1>Glitchling</h1><p>A one-day jam (Sun Nov 1, 2026): a deliberately broken baby clone of Creature #1.</p>
 <p><a class="badge" href="../play/">▶ Play the live browser sim</a> <span class="note">(simplified JS port, not the TypeScript run)</span></p></header>
 <main id="main">
 <section aria-labelledby="intro"><h2 id="intro">About the jam</h2>
-<p>Glitchling is a deliberately broken baby clone of Creature #1. <code>core/</code> is a copy of the Creature #1 organism code from <code>Asmodensius-v40/creatures/001/organism</code>. The only change is that the copies' absolute imports were rewritten to relative paths, and the diag/trace files that needed the test suite were dropped. <code>glitchling.ts</code> subclasses <code>Organism</code> and adds four flaws you can switch on and off. The original repos are untouched.</p>
+<p>Glitchling is a deliberately broken baby clone of Creature #1. <code>core/</code> is a copy of the Creature #1 organism code from the private parent Creature #1 repository (<code>creatures/001/organism</code>). The only change is that the copies' absolute imports were rewritten to relative paths, and the diag/trace files that needed the test suite were dropped. <code>glitchling.ts</code> subclasses <code>Organism</code> and adds four flaws you can switch on and off. The original repos are untouched.</p>
 <ul><li><strong>scramble</strong>: scrambled senses. Site values are read through a random permutation plus noise, with a new permutation every 90 ticks.</li>
 <li><strong>leaky</strong>: leaky memory. Learned values decay toward their priors by 6% per tick.</li>
 <li><strong>backwards</strong>: backwards motors. All 8 MOT motor neurons are reversed, and the chosen action is mirrored (site k → 15−k).</li>

@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   cross-platform-check:
-    name: Repo Health, JS Ladder, Examples & Python Oracle (${{ matrix.os }})
+    name: Repo Health, Schema, Blueprint, JS Ladder & Python Oracle (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,10 +35,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install Python test/oracle dependencies
-        run: python -m pip install --quiet numpy pytest hypothesis
+      - name: Install Python test/oracle/schema dependencies
+        run: python -m pip install --quiet numpy pytest hypothesis pyyaml jsonschema
       - name: Repository health check (9/9 syntax, links, secrets, honesty guard, determinism, Bun ref-sim)
         run: node tools/check.mjs
+      - name: Single-version parity, repo.yaml Draft 2020-12 JSON Schema, Palomar rules & identity hygiene
+        run: python scripts/check_versions.py
+      - name: Interactive Lean Proof Blueprint checkdecls fidelity gate
+        run: python scripts/check_blueprint_decls.py
       - name: JS Verification Ladder (1,200 properties + negative + regressions + metamorphic + 8/8 killed mutants)
         run: npm run verify:ladder
       - name: Runnable examples smoke test
@@ -49,7 +53,7 @@ jobs:
         run: python -m pytest tests/test_oracle.py -v
       - name: Verbatim README #print axioms drift check (72 declarations)
         run: python scripts/check_readme_axioms.py
-      - name: Verify offline citation audit & DigiCert RFC 3161 TSA timestamp
+      - name: Verify offline citation audit & dual RFC 3161 (.tsr) + OpenTimestamps (.ots) proofs
         run: |
           python scripts/audit_citations.py --verify-offline
           python scripts/timestamp_checksums.py --verify-only
@@ -72,7 +76,7 @@ jobs:
           python-version: "3.13"
       - name: Install Python static analyzers (report-only)
         continue-on-error: true
-        run: python -m pip install --quiet ruff mypy numpy pytest hypothesis
+        run: python -m pip install --quiet ruff mypy numpy pytest hypothesis pyyaml jsonschema
       - name: Ruff static lint (report-only)
         continue-on-error: true
         run: ruff check reference scripts tests
@@ -89,7 +93,7 @@ jobs:
         run: bash scripts/audit-repo.sh .
 
   lean4-formal-audit:
-    name: Lean 4.35.0 72-Decl Audit, 6-Kernel Palomar Comparator & Live Negative Tamper
+    name: Lean 4.35.0 72-Decl Palomar Audit, lake check & 6-Kernel Comparator + Negative Tamper
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -110,6 +114,7 @@ jobs:
           lake env lean VerifyAxioms.lean | tee ../results/lean-audit-ci.log
           lake env leanchecker --fresh GlitchlingProofs
           lake env leanchecker --fresh Solution
+          lake env leanchecker-paranoid --fresh Solution
           python3 - <<'PY'
           allowed = {"propext", "Classical.choice", "Quot.sound"}
           count = 0
@@ -124,17 +129,24 @@ jobs:
                       raise SystemExit(f"ERROR: Forbidden axiom {used - allowed} in: {line}")
               elif "does not depend on any axioms" in line:
                   count += 1
-          assert count >= 72, f"Expected >= 72 audited declarations, got {count}"
+          assert count >= 76, f"Expected >= 76 audited declarations, got {count}"
           print(f"PASS: All {count} Lean 4 declarations strictly within {sorted(allowed)} (or zero axioms).")
           PY
-      - name: REQUIRED 6-kernel Palomar verification (lake comparator --paranoid inside bubblewrap)
+      - name: REQUIRED 6-kernel Palomar full-project check (lake check --paranoid inside bubblewrap)
+        working-directory: lean
+        shell: bash
+        run: |
+          set -o pipefail
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          lake check --paranoid | tee ../results/lean4-lake-check-ci.log
+      - name: REQUIRED 6-kernel Palomar comparator (lake comparator --paranoid inside bubblewrap)
         working-directory: lean
         shell: bash
         run: |
           set -o pipefail
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           lake comparator --config comparator.json --paranoid | tee ../results/lean4-multi-kernel-ci.log
-      - name: REQUIRED live negative tamper test (sorry-tampered Solution rejected by VerifyAxioms & comparator)
+      - name: REQUIRED live negative false-theorem & sorry-tamper test
         shell: bash
         run: python3 scripts/test_lean_negative.py --with-comparator
       - name: Upload 6-kernel Lean verification log artifact
@@ -143,6 +155,7 @@ jobs:
           name: lean4-6kernel-verification-log
           path: |
             results/lean-audit-ci.log
+            results/lean4-lake-check-ci.log
             results/lean4-multi-kernel-ci.log
 
   latex-manuscript-check:

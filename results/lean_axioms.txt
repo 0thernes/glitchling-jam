@@ -11,6 +11,7 @@
 'Glitchling.sumFin4_sub_at' depends on axioms: [propext, Quot.sound]
 'Glitchling.fluxSoil_preserves_mass' depends on axioms: [propext, Quot.sound]
 'Glitchling.transferSoil_preserves_mass' depends on axioms: [propext, Quot.sound]
+'Glitchling.runMassOps_preserves_mass' depends on axioms: [propext, Quot.sound]
 'Glitchling.clausius_entropy_nonneg' depends on axioms: [propext, Quot.sound]
 'Glitchling.clausius_entropy_strict_pos' depends on axioms: [propext, Quot.sound]
 'Glitchling.cega18_rays_nonzero' does not depend on any axioms
@@ -24,8 +25,11 @@
 'Glitchling.chsh_lhv_bound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Glitchling.chsh_game_classical_max_three' does not depend on any axioms
 'Glitchling.bell_diagonal_exact_no_signaling' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Glitchling.bell_diagonal_partial_trace_eq_half_I2' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Glitchling.c3_cubic_trace_gap' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Glitchling.gf16_add_self' depends on axioms: [propext, Quot.sound]
+'Glitchling.gf16_add_zero' depends on axioms: [propext, Quot.sound]
+'Glitchling.gf16_add_assoc' depends on axioms: [propext, Quot.sound]
 'Glitchling.gf16_add_comm' depends on axioms: [propext, Quot.sound]
 'Glitchling.gf16_mul_comm' depends on axioms: [propext, Quot.sound]
 'Glitchling.gf16_mul_assoc' depends on axioms: [propext, Quot.sound]

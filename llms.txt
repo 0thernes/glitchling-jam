@@ -1,6 +1,6 @@
-# Glitchling (`0thernes/glitchling-jam`, v2.2.0)
+# Glitchling (`0thernes/glitchling-jam`, v2.4.0)
 
-> A deliberately broken baby clone of A-Life Creature #1, featuring a repeatable TypeScript reference simulation (`glitchling.ts`), a 3D spiking-brain Geodesic Biodome (`live/`), a pure zero-Mathlib Lean 4.35.0 formal core (`lean/`, 59 audited declarations), an independent exact Python reference oracle (`reference/`), and an AMS-LaTeX scientific preprint (`paper/`, `dist/`).
+> A deliberately broken baby clone of A-Life Creature #1, featuring a repeatable TypeScript reference simulation (`glitchling.ts`), a 3D spiking-brain Geodesic Biodome (`live/`), a pure zero-Mathlib 6-kernel Lean 4.35.0 formal core (`lean/`, 11 Palomar `module` files, 72 audited declarations), an interactive Proof Blueprint (`blueprint/`), an independent exact Python reference oracle (`reference/`), and an AMS-LaTeX scientific preprint (`paper/`, `dist/`).
 
 ## Author & Identity
 - Author: Alexander Stephen Donahue (Independent Researcher, Spokane, WA, USA; ORCID 0009-0006-8168-9648)

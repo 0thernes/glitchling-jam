@@ -1,0 +1,54 @@
+title: "Glitchling: Engineered Flaw Resilience, Multi-Cohort Artificial-Life Falsification, Independent Exact Oracles, and 72 Six-Kernel Pure Lean 4.35.0 Formal Proofs"
+repository: "https://github.com/0thernes/glitchling-jam"
+version: "2.4.0"
+date: "2026-11-26"
+rfc3161_timestamp: "data/timestamps/CHECKSUMS.sha256.tsr"
+opentimestamps_proof: "data/timestamps/CHECKSUMS.sha256.ots"
+license:
+  repository: "Cosmogonic License — Non-Commercial Research & Play (frozen LICENSE, byte-identical to 0thernes/CQM2 per F04/D4)"
+  osi_compatibility_note: "Non-commercial custom license preserved intentionally per owner decision D4; see docs/adr/0001-cosmogonic-license.md."
+authors:
+  - name: "Alexander Stephen Donahue"
+    orcid: "0009-0006-8168-9648"
+    affiliation: "Independent Researcher, Spokane, WA, USA"
+    credit_roles:
+      - "Conceptualization"
+      - "Methodology"
+      - "Formal analysis"
+      - "Project administration"
+      - "Resources"
+      - "Supervision"
+      - "Validation"
+      - "Writing - review & editing"
+lean_toolchain: "leanprover/lean4:v4.35.0"
+mathlib_dependencies: none
+palomar_module_headers: true
+lake_package_dir: "lean"
+challenge_module: "Challenge"
+solution_module: "Solution"
+comparator_config: "lean/comparator.json"
+axiom_audit_file: "lean/VerifyAxioms.lean"
+audited_declarations: 72
+comparator_targets: 9
+permitted_axioms:
+  - "propext"
+  - "Classical.choice"
+  - "Quot.sound"
+kernels_configured:
+  - "Lean 4.35.0 official C++ default kernel"
+  - "Lean 4.35.0 paranoid kernel (leanchecker-paranoid)"
+  - "lean4lean (v4.35.0)"
+  - "nanoda (v4.35.0 bundle)"
+  - "con-leche (v4.35.0)"
+  - "con-ron (v4.35.0)"
+automation:
+  origin: "AI-assisted formalization, code hardening, differential oracle verification, and manuscript drafting under direct human direction and acceptance responsibility."
+  models_used:
+    - "Anthropic Claude / Claude Code: initial 35-pass external audit (F01-F33), Results v3 repeatable Bun run, and earlier live/ hardening"
+    - "xAI Grok Bot: initial zero-build 2D browser port (play/)"
+    - "Google Gemini / Antigravity: 3-cycle deep hardening (F34-F52), pure zero-Mathlib Lean 4.35.0 72-decl 6-kernel suite, Python exact oracle, interactive Blueprint, Build Standard v1.2.0 & Playbook v1.3 upgrades, and AMS-LaTeX preprint"
+  human_line_by_line_review_recorded: false
+  statement_fidelity_table: "docs/statement-fidelity.md"
+  blueprint_url: "https://0thernes.github.io/glitchling-jam/blueprint/"
+review_status: "Independent computational-science and formal-verification preprint; NOT externally peer reviewed; NOT yet submitted to Palomar Registry, arXiv, or Zenodo."
+limitations: "Formalizes exact discrete integer/finite-field/algebraic/combinatorial/geometric invariants only; does NOT prove IEEE-754 floating-point roundoff bounds of the JavaScript runtime, solves 0/1,900 open problems in 0thernes/unsolved-problems-mega-atlas, and claims no consciousness, sentience, AGI, or physical quantum biology."
