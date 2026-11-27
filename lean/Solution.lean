@@ -49,7 +49,7 @@ public theorem target_thm4_gf16_and_rs15_11 :
     (∀ a b : Fin 16, gf16Mul a b = gf16Mul b a) ∧
     (∀ a b c : Fin 16, gf16Mul (gf16Mul a b) c = gf16Mul a (gf16Mul b c)) ∧
     (∀ a b c : Fin 16, gf16Mul a (gf16Add b c) = gf16Add (gf16Mul a b) (gf16Mul a c)) ∧
-    (∀ a : Fin 16, a.val ≠ 0 → ∃ b : Fin 16, gf16Mul a b = ⟨1, by omega⟩) ∧
+    (∀ a : Fin 16, a.val ≠ 0 → ∃ b : Fin 16, gf16Mul a b = (1 : Fin 16)) ∧
     (15 - 11 + 1 = 5 ∧ (5 - 1) / 2 = 2) :=
   ⟨Glitchling.gf16_mul_comm,
    Glitchling.gf16_mul_assoc,
@@ -59,8 +59,8 @@ public theorem target_thm4_gf16_and_rs15_11 :
 
 public theorem target_thm5_heptarch_anti_monarchy :
     (∀ w : Fin 7 → Nat,
-      w ⟨0, by omega⟩ + w ⟨1, by omega⟩ + w ⟨2, by omega⟩ + w ⟨3, by omega⟩ +
-      w ⟨4, by omega⟩ + w ⟨5, by omega⟩ + w ⟨6, by omega⟩ = 100 →
+      w (0 : Fin 7) + w (1 : Fin 7) + w (2 : Fin 7) + w (3 : Fin 7) +
+      w (4 : Fin 7) + w (5 : Fin 7) + w (6 : Fin 7) = 100 →
       (∀ i : Fin 7, w i ≤ 46) →
       (∀ i : Fin 7, w i < 50) ∧
       (∀ i j : Fin 7, ∃ k : Fin 7, k ≠ i ∧ k ≠ j ∧ w k > 0)) ∧
@@ -93,7 +93,7 @@ public theorem target_thm7_poincare_mobius_containment :
 public theorem target_thm8_flaws_and_nonvacuity :
     (∀ k : Nat, k < 16 → mirrorSite k < 16 ∧ mirrorSite (mirrorSite k) = k ∧ mirrorSite k ≠ k) ∧
     (∀ v p lam S : Int, leakyNextNum v p lam S - S * p = (S - lam) * (v - p)) ∧
-    (gf16Mul ⟨3, by omega⟩ ⟨5, by omega⟩ = ⟨15, by omega⟩ ∧
+    (gf16Mul (3 : Fin 16) (5 : Fin 16) = (15 : Fin 16) ∧
      clausiusEntropyNum 10 5 2 280 300 350 = 1064000 ∧
      mobiusDen 3 4 1 2 10 = 12325 ∧
      mirrorSite 0 = 15) :=
@@ -109,8 +109,8 @@ public theorem target_thm9_adversarial_and_nonvacuity :
     (¬ ∃ k : Nat, k < 16 ∧ mirrorSite k = k) ∧
     (∃ f : Fin 18 → Bool, (cegaContexts.filter (fun ctx => ctxTrueCount f ctx == 1)).length = 8 ∧
       ¬ isCEGAKSColoring f) ∧
-    (gf16Mul ⟨2, by omega⟩ ⟨9, by omega⟩ = ⟨1, by omega⟩ ∧
-     gf16Mul ⟨3, by omega⟩ ⟨14, by omega⟩ = ⟨1, by omega⟩) :=
+    (gf16Mul (2 : Fin 16) (9 : Fin 16) = (1 : Fin 16) ∧
+     gf16Mul (3 : Fin 16) (14 : Fin 16) = (1 : Fin 16)) :=
   ⟨Glitchling.at02_refute_cega18_noncontextual_nine,
    Glitchling.at03_refute_chsh_local_exceeds_two,
    Glitchling.at06_refute_mirror_fixed_point,
